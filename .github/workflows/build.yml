@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/MPVKit-Audio/dist
-          key: libmpv-${{ runner.os }}-${{ hashFiles('vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'scripts/build-mpvkit-audio.sh', '.github/workflows/build.yml') }}
+          key: libmpv-${{ runner.os }}-${{ hashFiles('vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'vendor/MPVKit-Audio/Sources/BuildScripts/**', 'vendor/MPVKit-Audio/Sources/BuildScripts/patch/**', 'scripts/build-mpvkit-audio.sh', '.github/workflows/build.yml') }}
           restore-keys: libmpv-${{ runner.os }}-
       - name: Verify cached engine
         id: mpvverify
