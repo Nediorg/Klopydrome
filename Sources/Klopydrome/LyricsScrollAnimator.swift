@@ -74,7 +74,11 @@ struct LyricsScrollAnimator: NSViewRepresentable {
 
             startOrigin = current
             targetOrigin = target
-            startTime = CACurrentMediaTime()
+            // Captured on the first driven frame, not here: the main thread is
+            // often busy with layout when animate() is called, and counting
+            // that stall against the duration would compress the visible glide
+            // (the follow would jump partway, then finish early).
+            startTime = 0
             self.duration = duration
 
             stopDrivers()
@@ -93,7 +97,10 @@ struct LyricsScrollAnimator: NSViewRepresentable {
             // fallback timer.
             fallbackTimer?.invalidate()
             fallbackTimer = nil
-            driveFrame(at: link.timestamp)
+            // Wall clock, not link.timestamp: startTime may have been captured
+            // by the fallback timer (or vice versa), and the two clocks must
+            // never mix inside one glide — the link only paces the ticks.
+            driveFrame(at: CACurrentMediaTime())
         }
 
         private func driveFrame(at now: CFTimeInterval) {
@@ -101,6 +108,7 @@ struct LyricsScrollAnimator: NSViewRepresentable {
                 stopDrivers()
                 return
             }
+            if startTime == 0 { startTime = now }
             let elapsed = now - startTime
             let progress = min(max(elapsed / duration, 0), 1)
             let eased = Self.easeInOutCubic(progress)
