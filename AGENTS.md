@@ -38,9 +38,8 @@
 - Write a concise, conventional commit message describing the change. Do not push unless explicitly asked.
 
 ## Release flow
-- Makefile targets: `make package`/`make dist` → `scripts/package-release.sh` (zip into `dist/`), `make publish` → `scripts/publish-release.sh` (Forgejo/GitHub), `make ship` → `scripts/release.sh` (bump `VERSION`, build, tag, publish).
-- CI (`.github/workflows/build.yml`, GitHub Actions, macOS 15): submodule checkout, cached Libmpv engine build, SwiftLint, `swift test`, app bundle + zip artifact on every push/PR. Pushing a `v*` tag additionally publishes a GitHub Release with the zip. Local `make ship` flow still targets Forgejo.
-- `.env` (gitignored; template `.env.example`) is auto-loaded by the publish scripts and holds `PUBLISH_TOKEN`, a personal access token for creating releases. `APP_NAME` defaults to `Klopydrome`.
+- Makefile targets: `make package`/`make dist` → `scripts/package-release.sh` (zip into `dist/`). There are no local publish scripts: releases are cut by pushing a `v*` tag (see below).
+- Release flow: bump `VERSION`, commit, tag `vX.Y.Z`, push branch + tag. CI (`.github/workflows/build.yml`, GitHub Actions, macOS 26) builds the release bundle, zips it, and publishes a GitHub Release with the zip. No `.env`/tokens needed.
 
 ## Cross-module gotchas
 - Shared types (`AuthMode`, `SubsonicConfig`, `SubsonicSong`, `SubsonicEnvelope`, `CacheManager`, `CacheKind`) are defined in the `NavidromeClient` module. Every file in `Sources/Klopydrome/` MUST `import NavidromeClient` to use them — otherwise you get "cannot find type in scope" (`LoginView.swift` was previously broken for exactly this reason).
@@ -66,7 +65,7 @@
 - Do not use the app brand name in locale strings. Use generic wording: e.g. "Кэш приложения" / "Application cache", not "Кэш Klopydrome" / "Klopydrome cache". Klopydrome is just one client for the Subsonic/Navidrome API — locales must not be tied to a specific client name.
 
 ## Pre-release commit hygiene
-- Before any release (`make ship`/`make package`/`make publish` or pushing to remote), audit the commit log since the last tag/release: look for duplicate commits, probable regressions, and throwaway fixup commits (especially `Revert` commits that just undo a previous attempt). Use `explore`/`general` subagents to help with the audit when the history is long.
+- Before any release (bumping `VERSION`/pushing a `v*` tag), audit the commit log since the last tag/release: look for duplicate commits, probable regressions, and throwaway fixup commits (especially `Revert` commits that just undo a previous attempt). Use `explore`/`general` subagents to help with the audit when the history is long.
 - Report all findings to the user and get explicit approval before proceeding — either "ship as-is" or "clean up first". Remember: intermediate commits exist only for local rollback; the history pushed to remote must be clean (squashed/fixup-ed, no revert-noise).
 
 ## User reference materials
