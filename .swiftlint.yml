@@ -1,0 +1,34 @@
+# Code-size fragment — complexity/size thresholds for agent-written Swift.
+# These are built-in, default-enabled SwiftLint rules; brownfield adoption:
+# existing violations are frozen in .swiftlint-baseline.json and only NEW ones
+# gate (see scripts/lint.sh). Fix baselined functions opportunistically and
+# regenerate the baseline in the same commit.
+
+# Paths excluded from linting (build artifacts, 3rd-party upstream docs and
+# the user-maintained misc/ workspace with reference materials and snippets).
+excluded:
+  - .build
+  - dist
+  - vendor
+  - .swiftpm
+  - misc
+
+cyclomatic_complexity:
+  warning: 10
+  error: 20
+
+function_body_length:
+  warning: 50
+  error: 100
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 500
+  error: 1000
+
+function_parameter_count:
+  warning: 5
+  error: 8

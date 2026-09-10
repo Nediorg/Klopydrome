@@ -1,0 +1,104 @@
+name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Tahoe generation: the Xcode project is objectVersion 77 (local Xcode 26),
+    # which Xcode 16 on macos-15 runners refuses to open at all. Same
+    # generation also keeps Swift/SDK/SourceKit identical to local dev.
+    runs-on: macos-26
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Xcode toolchain
+        # Pin every Apple tool (xcrun, swift, sourcekitd via lint.sh) to one
+        # Xcode instead of each resolving its own default.
+        run: |
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          xcodebuild -version
+      - name: Install build tools
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: brew install nasm meson ninja cmake pkg-config wget
+      - name: Restore Libmpv build
+        id: mpvcache
+        uses: actions/cache@v4
+        with:
+          path: vendor/MPVKit-Audio/dist
+          key: libmpv-${{ runner.os }}-${{ hashFiles('vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'scripts/build-mpvkit-audio.sh', '.github/workflows/build.yml') }}
+          restore-keys: libmpv-${{ runner.os }}-
+      - name: Verify cached engine
+        id: mpvverify
+        # A failed engine build must never poison the cache: the artifacts
+        # below either all exist (reusable) or the engine rebuilds.
+        run: |
+          F=vendor/MPVKit-Audio/dist/libmpv/macos/Libmpv.framework/Versions/A/Libmpv
+          X=vendor/MPVKit-Audio/dist/release/xcframework/Libmpv.xcframework
+          Z=vendor/MPVKit-Audio/dist/release/Libmpv.xcframework.zip
+          if [ -f "$F" ] && [ -d "$X" ] && [ -f "$Z" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Build audio engine
+        if: steps.mpvcache.outputs.cache-hit != 'true' || steps.mpvverify.outputs.ok != 'true'
+        run: ./scripts/build-mpvkit-audio.sh
+      - name: Restore build cache
+        # SPM artifacts only: xcode-derived and the app bundle are rebuilt
+        # clean by build-app.sh every run, caching them is pure bandwidth.
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            !.build/xcode-derived
+            !.build/app
+          key: build-${{ runner.os }}-${{ hashFiles('Package.swift', 'Klopydrome.xcodeproj/project.pbxproj', '.github/workflows/build.yml') }}
+          restore-keys: build-${{ runner.os }}-
+      - name: Install SwiftLint
+        # Pinned to the local version (0.65.0): unpinned brew would float to
+        # newer rules and trip the baseline gate that is green locally.
+        # Portable zip (verified layout: `swiftlint` binary at archive root),
+        # no installer/PATH guessing.
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL -o /tmp/sl.zip https://github.com/realm/SwiftLint/releases/download/0.65.0/portable_swiftlint.zip
+          unzip -o -q -d "$HOME/.local/bin" /tmp/sl.zip 'swiftlint'
+          chmod +x "$HOME/.local/bin/swiftlint"
+          swiftlint version
+      - name: Lint
+        run: ./scripts/lint.sh
+      - name: Test
+        run: swift test
+      - name: Build app (release)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ./scripts/build-app.sh --release --no-test --no-lint
+      - name: Build app (debug)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: ./scripts/build-app.sh --no-test --no-lint
+      - name: Package
+        run: ./scripts/package-release.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Klopydrome-macos
+          path: dist/*.zip
+      - name: Publish GitHub release
+        # Idempotent: re-runs upload over the existing release instead of
+        # failing on "already exists".
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/*.zip --clobber

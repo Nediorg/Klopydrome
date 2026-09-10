@@ -1,0 +1,4 @@
+[submodule "vendor/MPVKit-Audio"]
+	path = vendor/MPVKit-Audio
+	url = https://github.com/Nediorg/MPVKit-audio.git
+	branch = audio-only

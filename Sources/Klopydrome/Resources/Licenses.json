@@ -1,0 +1,30 @@
+[
+  {
+    "id": "klopydrome",
+    "title": "Klopydrome",
+    "subtitle": "MIT",
+    "urlString": "https://github.com/Nediorg/Klopydrome",
+    "linkTitle": "Source"
+  },
+  {
+    "id": "mpvkit",
+    "title": "MPVKit-Audio",
+    "subtitle": "LGPL v3",
+    "urlString": "https://github.com/Nediorg/Klopydrome/tree/main/vendor",
+    "linkTitle": "Source"
+  },
+  {
+    "id": "libmpv",
+    "title": "libmpv",
+    "subtitle": "GPL v2",
+    "urlString": "https://github.com/mpv-player/mpv",
+    "linkTitle": "Source"
+  },
+  {
+    "id": "ffmpeg",
+    "title": "FFmpeg",
+    "subtitle": "LGPL / GPL",
+    "urlString": "https://ffmpeg.org",
+    "linkTitle": "ffmpeg.org"
+  }
+]

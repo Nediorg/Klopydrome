@@ -1,0 +1,32 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+.build/
+dist/
+
+# Scratch / notes (docs & info dropped here for the assistant)
+misc/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~
+._*
+
+# Xcode / user state
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+
+# Editor / agent config (local only)
+.opencode/
+
+# Test audio fixtures (large binaries, not source)
+Tests/NavidromeClientTests/Fixtures/

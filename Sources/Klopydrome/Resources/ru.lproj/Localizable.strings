@@ -1,0 +1,199 @@
+/* App name & generic */
+"Music" = "Музыка";
+"Home" = "Главная";
+"Apple Music" = "Apple Music";
+"Library" = "Медиатека";
+"Playlists" = "Плейлисты";
+"Recently Added" = "Недавно добавленные";
+"Artists" = "Исполнители";
+"Albums" = "Альбомы";
+"Songs" = "Песни";
+"Favorites" = "Избранное";
+"Search" = "Поиск";
+"All Playlists" = "Все плейлисты";
+"Nothing Playing" = "Ничего не играет";
+"Now Playing" = "Сейчас играет";
+
+/* Transport / toolbar */
+"Play" = "Слушать";
+"Play/Pause" = "Играть/Пауза";
+"Pause" = "Пауза";
+"Previous" = "Назад";
+"Next" = "Вперёд";
+"Next Track" = "Следующий трек";
+"Previous Track" = "Предыдущий трек";
+"Shuffle" = "Перемешать";
+"Repeat" = "Повтор";
+"Repeat Off" = "Повтор выключен";
+"Repeat All" = "Повтор всего";
+"Repeat One" = "Повтор трека";
+"Volume" = "Громкость";
+"Back" = "Назад";
+"Up Next" = "Дальше";
+"Playback" = "Воспроизведение";
+
+/* Now Playing screen */
+"Lyrics" = "Текст";
+"Panel" = "Панель";
+"Nothing in the queue." = "В очереди пусто.";
+"No lyrics found for this song." = "Текст песни не найден.";
+"Loading lyrics…" = "Загрузка текста…";
+
+/* Song actions */
+"Play Next" = "Слушать следующей";
+"Add to Playlist…" = "Добавить в плейлист…";
+"Add to Playlist" = "Добавить в плейлист";
+"More actions" = "Ещё";
+"Unknown" = "Неизвестно";
+"No playlists yet. Create one below." = "Плейлистов пока нет — создайте первый.";
+"New playlist name" = "Название нового плейлиста";
+"Create" = "Создать";
+"Remove from Playlist" = "Убрать из плейлиста";
+
+/* Home / sections */
+"Couldn't load" = "Не удалось загрузить";
+"Try Again" = "Повторить";
+"Album Name" = "Название альбома";
+"Artist" = "Исполнитель";
+
+/* Search */
+"Nothing matched your search." = "Ничего не найдено по вашему запросу.";
+
+/* Empty states */
+"Your library doesn't have any albums yet." = "В вашей медиатеке пока нет альбомов.";
+"Your library doesn't have any songs yet." = "В вашей медиатеке пока нет песен.";
+"Your library doesn't have any artists yet." = "В вашей медиатеке пока нет исполнителей.";
+"Albums added to your library will appear here." = "Альбомы, добавленные в медиатеку, появятся здесь.";
+"Star songs, albums and artists to see them here." = "Отмечайте песни, альбомы и исполнителей звёздочкой, чтобы видеть их здесь.";
+"No Playlists" = "Нет плейлистов";
+"Create a playlist to group your music." = "Создайте плейлист в меню раздела «Все плейлисты» в сайдбаре.";
+"New Playlist" = "Новый плейлист";
+"Rename Playlist" = "Переименовать плейлист";
+"Rename…" = "Переименовать…";
+"Rename" = "Переименовать";
+"Name" = "Название";
+"Delete" = "Удалить";
+"Cancel" = "Отмена";
+"Playlist Unavailable" = "Плейлист недоступен";
+"Playlist" = "Плейлист";
+"Public" = "Публичный";
+"Playlist name" = "Название плейлиста";
+
+/* Artist detail */
+"Play artist" = "Слушать исполнителя";
+"Latest Release" = "Последний релиз";
+"Top Songs" = "Лучшие песни";
+
+/* Queue panel */
+"History" = "История";
+"Queue Tab" = "Вкладка очереди";
+"Clear" = "Очистить";
+
+/* Login */
+"Navidrome" = "Navidrome";
+"Sign in to your music server" = "Войдите на ваш музыкальный сервер";
+"Server address" = "Адрес сервера";
+"Username" = "Имя пользователя";
+"Password" = "Пароль";
+"Show password" = "Показать пароль";
+"Signing in…" = "Вход…";
+"Sign In" = "Войти";
+"Authentication" = "Авторизация";
+"Token (recommended)" = "Токен (рекомендуется)";
+"Password (legacy)" = "Пароль (устаревший)";
+"Advanced" = "Дополнительно";
+
+/* Settings — General */
+"General" = "Общие";
+"Streaming" = "Потоковая передача";
+"Codec" = "Кодек";
+"Original (server decides)" = "Оригинальный (решает сервер)";
+"Transcoding bitrate" = "Битрейт транскодинга";
+"Original" = "Оригинал";
+"Auto-scrobble" = "Авто-скробблинг";
+"Format the server should transcode streams/downloads to. 'Original' preserves the source file." = "Формат, в который сервер будет транскодировать потоки/загрузки. «Оригинальный» сохраняет исходный файл.";
+"Applies to streaming and cached downloads. Codec/bitrate require the server to support transcoding." = "Применяется к потокам и загруженному кэшу. Кодек/битрейт требуют поддержки транскодирования на сервере.";
+
+/* Settings — Cache */
+"Cache" = "Кэш";
+"Behaviour" = "Поведение";
+"Cache songs while playing" = "Кэшировать песни при прослушивании";
+"Songs you play are saved for offline listening and reused next time." = "Прослушанные песни сохраняются для офлайн-прослушивания и используются повторно.";
+"Size limits" = "Лимиты размера";
+"Audio cache limit" = "Лимит аудиокэша";
+"Total cache limit" = "Общий лимит кэша";
+"Each chosen codec/bitrate is cached separately." = "Каждый выбранный кодек/битрейт кэшируется отдельно.";
+"Use default limit" = "Использовать лимит по умолчанию";
+"MB" = "МБ";
+"Storage" = "Хранилище";
+"Covers" = "Обложки";
+"Streams" = "Потоки";
+"Metadata" = "Метаданные";
+"Total used" = "Использовано";
+"Clear Cache" = "Очистить кэш";
+"Clear the entire cache?" = "Очистить весь кэш?";
+
+/* Dynamic user-facing strings. */
+"format.album.delete.confirmation" = "Удалить «%@»?";
+"format.album.moreByArtist" = "Ещё от %@";
+"format.album.play" = "Воспроизвести «%@»";
+"format.album.shuffle" = "Перемешать «%@»";
+"format.crossfade.accessibility" = "Выполняется %@";
+"format.crossfade.remaining" = "Плавный переход · %ld с";
+"format.duration.seconds" = "%ld с";
+"format.gain.decibels" = "%+.0f дБ";
+"format.genre" = "Жанр: %@";
+"format.mpv.openFailure" = "MPV не смог открыть аудиопоток (код %ld).";
+"format.player.failure" = "Этот аудиофайл не удалось воспроизвести: %@";
+"format.rating.outOfFive" = "%ld из 5";
+"format.rating.rate" = "Оценка %ld из 5";
+"format.rule.count" = "%ld правил";
+"format.smartPlaylist.all" = "Все: %@";
+"format.smartPlaylist.and" = "И (%@)";
+"format.smartPlaylist.any" = "Любое: %@";
+"format.smartPlaylist.delete.warning" = "«%@» будет удалён без возможности восстановления.";
+"format.smartPlaylist.or" = "ИЛИ (%@)";
+"format.smartPlaylist.playCount" = "Прослушано %ld+";
+"format.smartPlaylist.rating" = "Оценка %ld+";
+"format.smartPlaylist.songs" = "· %ld песен";
+"format.storage.accessibilityValue" = "%@ из %@";
+"format.storage.automaticLimit" = "Автоматически до %@";
+"format.storage.limit" = "Лимит: %@";
+"format.storage.limitTitle" = "Лимит %@";
+"format.storage.used" = "Используется: %@ из %@";
+"plural.album.one" = "альбом";
+"plural.album.few" = "альбома";
+"plural.album.many" = "альбомов";
+"plural.song.one" = "песня";
+"plural.song.few" = "песни";
+"plural.song.many" = "песен";
+"plural.star.one" = "звезда";
+"plural.star.few" = "звезды";
+"plural.star.many" = "звезд";
+"plural.track.one" = "трек";
+"plural.track.few" = "трека";
+"plural.track.many" = "треков";
+"format.playlist.copyName" = "%@ — копия";
+"format.playlist.delete.confirmation" = "Удалить «%@»?";
+"format.playlist.play" = "Воспроизвести «%@»";
+"format.playlist.shuffle" = "Перемешать «%@»";
+"plural.album.other" = "альбомов";
+"plural.song.other" = "песен";
+"plural.star.other" = "звезд";
+"plural.track.other" = "треков";
+"format.player.unavailable" = "Этот аудиофайл не удалось воспроизвести. Возможно, серверу нужно транскодировать его в другой формат.";
+
+"action.volume.mute" = "Выключить звук";
+"action.volume.maximum" = "Максимальная громкость";
+
+"Invalid server URL." = "Некорректный адрес сервера.";
+"The connection is not secure. Add https:// to the server address, or explicitly allow plain HTTP." = "Соединение небезопасно. Добавьте https:// к адресу сервера или явно разрешите обычный HTTP.";
+"HTTP error %lld." = "Ошибка HTTP %lld.";
+"Authentication failed. Check your username and password." = "Не удалось авторизоваться. Проверьте имя пользователя и пароль.";
+"Subsonic error %1$lld: %2$@" = "Ошибка Subsonic %1$lld: %2$@";
+"Could not parse the server response: %@" = "Не удалось разобрать ответ сервера: %@";
+"The server returned no data." = "Сервер не вернул данные.";
+"Could not store the password (Keychain error %lld)." = "Не удалось сохранить пароль (ошибка связки ключей %lld).";
+"Welcome" = "Добро пожаловать";
+"To continue, sign in to your account" = "Чтобы продолжить, войдите в свой аккаунт";
+"Nothing playing" = "Нет воспроизведения";
