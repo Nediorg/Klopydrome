@@ -36,10 +36,7 @@ let package = Package(
             dependencies: [
                 "NavidromeClient"
             ],
-            path: "Tests/NavidromeClientTests",
-            resources: [
-                .process("Fixtures")
-            ]
+            path: "Tests/NavidromeClientTests"
         ),
         .testTarget(
             name: "KlopydromeTests",
