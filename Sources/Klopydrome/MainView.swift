@@ -17,36 +17,29 @@ struct MainView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
         } detail: {
-            DetailColumn(path: $path)
-                // Detail-column limiter: with no floor the split divider can
-                // squeeze the content to a sliver once the sidebar hits its
-                // max (300), and then keep dragging the window itself below
-                // the toolbar width. This floor stops both.
-                .navigationSplitViewColumnWidth(
-                    min: LayoutMetrics.detailColumnMinWidth,
-                    ideal: 640,
-                    max: .infinity
-                )
+            DetailColumn(
+                path: $path,
+                showDownloads: $showDownloads,
+                isMiniPlayerVisible: isMiniPlayerVisible
+            )
+            // Detail-column limiter: with no floor the split divider can
+            // squeeze the content to a sliver once the sidebar hits its
+            // max (300), and then keep dragging the window itself below
+            // the toolbar width. This floor stops both.
+            .navigationSplitViewColumnWidth(
+                min: LayoutMetrics.detailColumnMinWidth,
+                ideal: 700,
+                max: .infinity
+            )
         }
         .navigationSplitViewStyle(.balanced)
-        .toolbar { playerToolbar }
-        .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
-        // The lyrics/queue panel is a FLOATING overlay over the whole window
-        // (Apple Music-style): it slides in from the trailing edge on top of
-        // the sidebar and content, so the Home shelves show through the blur.
-        .overlay(alignment: .trailing) {
-            if app.queuePanelVisible {
-                PlayerPanelView()
-                    .transition(.move(edge: .trailing))
-                    .zIndex(2)
-            }
-        }
+        .toolbar { }
         .background(AMColor.background)
         .overlay(alignment: .topTrailing) {
             if debugShowPlayerState {
                 MiniPlayerDebugOverlay(app: app)
                     .allowsHitTesting(false)
-                    .padding(.top, 8)
+                    .padding(.top, 60)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .miniPlayerDidOpen)) { _ in
@@ -73,25 +66,43 @@ struct MainView: View {
 // MARK: - Detail column
 
 /// The right-hand column: the navigable content region. The player bar lives in
-/// the real window toolbar and the lyrics/queue panel floats as an overlay over
-/// the whole window (see `MainView`).
+/// the top safe area inset of this column, matching Apple Music.
 struct DetailColumn: View {
     @Environment(AppState.self) private var app
     @Binding var path: NavigationPath
+    @Binding var showDownloads: Bool
+    var isMiniPlayerVisible: Bool
 
     var body: some View {
-        DetailView(path: $path)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AMColor.background)
-            .onKeyPress(.escape) {
-                if app.queuePanelVisible {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                        app.queuePanelVisible = false
-                    }
-                    return .handled
-                }
-                return .ignored
+        ZStack(alignment: .topTrailing) {
+            DetailView(path: $path)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if app.queuePanelVisible {
+                PlayerPanelView()
+                    .transition(.move(edge: .trailing))
             }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            PlayerHeaderBar(
+                path: $path,
+                showDownloads: $showDownloads,
+                isMiniPlayerVisible: isMiniPlayerVisible
+            )
+            .zIndex(100)
+        }
+        .ignoresSafeArea(edges: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AMColor.background)
+        .onKeyPress(.escape) {
+            if app.queuePanelVisible {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    app.queuePanelVisible = false
+                }
+                return .handled
+            }
+            return .ignored
+        }
     }
 }
 

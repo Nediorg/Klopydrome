@@ -23,6 +23,11 @@ struct PlayerPanelView: View {
         .frame(width: LayoutMetrics.inspectorIdealWidth)
         .frame(maxHeight: .infinity)
         .background(.ultraThinMaterial)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(AMColor.divider)
+                .frame(width: 0.5)
+        }
     }
 }
 

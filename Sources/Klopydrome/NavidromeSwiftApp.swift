@@ -178,17 +178,12 @@ struct ContentView: View {
         window.isOpaque = false
         window.backgroundColor = NSColor.clear
         window.tabbingMode = .disallowed
-        // Compact player toolbar without changing unrelated windows (Settings
-        // relies on normal toolbar labels and system menus).
         if let toolbar = window.toolbar {
             toolbar.allowsUserCustomization = false
             toolbar.autosavesConfiguration = false
             toolbar.displayMode = .iconOnly
         }
-        // The window toolbar lives above the LCD. Its own right-click menu
-        // ("Icon and Text") would shadow the LCD's NowPlaying contextMenu,
-        // so clear any toolbar view's menu recursively (async: the toolbar
-        // may still be installing at join time).
+        window.titlebarSeparatorStyle = .none
         DispatchQueue.main.async { [weak window] in
             func clearMenuRecursively(in view: NSView) {
                 if String(describing: type(of: view)).contains("Toolbar") {

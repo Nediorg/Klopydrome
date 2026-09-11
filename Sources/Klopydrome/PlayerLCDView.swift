@@ -50,6 +50,7 @@ struct PlayerLCDView: View {
     private var lcdBlock: some View {
         ZStack {
             lcdContent
+                .frame(maxWidth: .infinity)
                 .frame(height: 42)
                 .background {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -65,9 +66,11 @@ struct PlayerLCDView: View {
                             // mirror MinimalScrubber.hitHeight (18 hovered / 12 idle).
                             // onHover BEFORE padding: padding area must not track
                             // (it leaked onto the cover zone 0–42).
-                            .frame(width: 360 - 42, height: nowHovered ? 18 : 12, alignment: .bottom)
+                            .frame(maxWidth: .infinity, alignment: .bottom)
+                            .frame(height: nowHovered ? 18 : 12)
                             .onHover { hoverScrubber = $0 }
                             .padding(.leading, 42)
+                            .padding(.trailing, 2)
                             .transition(.opacity)
                     }
                 }
@@ -88,16 +91,13 @@ struct PlayerLCDView: View {
                         .allowsHitTesting(false)
                 }
         }
+        .frame(height: 42)
     }
 
     private var lcdContent: some View {
         ZStack(alignment: .leading) {
             textColumn
-            HStack(spacing: 6) {
-                coverButton
-                Spacer(minLength: 0)
-            }
-            .frame(width: 360 - LayoutMetrics.topTrailingSlotWidth, alignment: .leading)
+            coverButton
         }
         .overlay(alignment: .topTrailing) {
             TopTrailingControlsView(

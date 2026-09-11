@@ -78,45 +78,25 @@ enum AMFont {
 /// inspector column stay consistent at any window size.
 enum LayoutMetrics {
     /// Minimum width of the now-playing block (downloads icon + LCD) in the
-    /// player toolbar. The LCD is the flexible centered `.principal` element,
-    /// so this is roughly the narrowest the transport+LCD+volume chain can be
-    /// before it must compress. 344 = ~310pt of PlayerLCDView + the 26pt
-    /// downloads icon + 8pt gap; 310 keeps the cover, two text lines and the
-    /// star/ellipsis slot readable at the narrowest window (see `toolbarMinWidth`)
-    /// so no item is pushed into the overflow menu.
-    static let playerBarMinWidth: CGFloat = 344
-    /// Maximum width for the LCD block: fraction of the toolbar width. Used as
-    /// the `idealWidth` of the `.principal` toolbar item, so the LCD actually
-    /// grows with the window (a bare `frame(minWidth:maxWidth:)` without
-    /// `idealWidth` would stay pinned to its minimum — NSToolbar asks for the
-    /// item's ideal size, not the available space).
-    static let playerBarMaxFraction: CGFloat = 0.35
+    /// player bar. The LCD is the flexible centered element, so this is
+    /// roughly the narrowest the LCD can be before it must compress.
+    static let playerBarMinWidth: CGFloat = 200
+    /// Maximum width for the LCD block: fraction of the header width.
+    static let playerBarMaxFraction: CGFloat = 0.45
     /// Hard ceiling for the LCD block width so it never grows unbounded on very
     /// wide windows even though the fraction would allow more.
-    static let playerBarMaxWidth: CGFloat = 400
-    /// The toolbar's total minimum budget: leading (152) + principal (344) +
-    /// trailing (200) plus the traffic-light inset (~70) and edge margins. It
-    /// is used to derive the window floor:
-    /// `windowMinWidth = toolbarMinWidth + sidebarMaxWidth` (800 + 300 = 1100).
-    /// 800 is padded above the summed item widths: the sidebar (300) also
-    /// needs room at the narrowest window, and NSToolbar sizes against the
-    /// content area (`window − sidebar`), so the sidebar must be counted at
-    /// its maximum, not its minimum.
-    static let toolbarMinWidth: CGFloat = 800
+    static let playerBarMaxWidth: CGFloat = 520
+    /// The toolbar's total minimum budget: leading (152) + principal (320) +
+    /// trailing (200).
+    static let toolbarMinWidth: CGFloat = 660
     /// Reserved width for the star + ellipsis trailing controls embedded in the
     /// LCD, so song/album text truncates before them rather than being overlaid.
     static let topTrailingSlotWidth: CGFloat = 48
     /// Minimum width of the leading toolbar group (back + transport row ≈ 212
-    /// with the back button). Floors like this stop NSToolbar from COMPRESSING
-    /// a group's members when the window is at its narrowest — the group keeps
-    /// its natural size and overflows into the chevron as a whole instead of
-    /// collapsing buttons (paired with `.fixedSize(horizontal:)` in MainView).
-    /// 152 is the always-present transport row; the back button (32) adds on
-    /// top when it is shown.
+    /// with the back button).
     static let toolbarLeadingMinWidth: CGFloat = 152
     /// Minimum width of the trailing toolbar group (volume slider + lyrics/
-    /// queue buttons ≈ 200). Same rationale as `toolbarLeadingMinWidth`: the
-    /// slider and the 36pt buttons never shrink below their hit targets.
+    /// queue buttons ≈ 200).
     static let toolbarTrailingMinWidth: CGFloat = 200
     /// Vertical padding under the traffic lights that the sidebar needs to
     /// keep the first row from sitting under them.
@@ -125,31 +105,17 @@ enum LayoutMetrics {
     static let sidebarMinWidth: CGFloat = 200
     /// Ideal resting width of the sidebar column.
     static let sidebarIdealWidth: CGFloat = 220
-    /// Maximum width of the sidebar column (see `SidebarView`). The main
-    /// window floor reserves the toolbar capacity required at this width.
+    /// Maximum width of the sidebar column (see `SidebarView`).
     static let sidebarMaxWidth: CGFloat = 300
-    /// Minimum width of the DETAIL column. The sidebar already has its own
-    /// 200–300 cap, but the detail column had no floor: once the divider
-    /// reaches the sidebar's maximum, a further drag squeezes the detail to a
-    /// sliver (or, once the sidebar hits its min, drags the whole window below
-    /// the toolbar floor via the split-divider→window-resize path). 480 keeps
-    /// grids/tables usable; summed with the sidebar min (200) it totals 680,
-    /// comfortably under `windowMinWidth`.
-    static let detailColumnMinWidth: CGFloat = 480
+    /// Minimum width of the DETAIL column. Accommodates min leading controls (200)
+    /// + min LCD (200) + min trailing controls (206) + spacers (32) = 638.
+    static let detailColumnMinWidth: CGFloat = 660
     /// Inspector column sizing.
     static let inspectorMinWidth: CGFloat = 320
     static let inspectorIdealWidth: CGFloat = 360
-    /// Narrowest usable window width. Derived from the layout budget:
-    /// `toolbarMinWidth` (800) + `sidebarMaxWidth` (300) = 1100. The sidebar
-    /// must be counted at its MAXIMUM, not its minimum: NSToolbar in a
-    /// `NavigationSplitView` sizes against the content area, so the toolbar
-    /// only ever sees `window − sidebar`. With a wide sidebar the toolbar
-    /// budget would silently shrink below its floor and fold items into the
-    /// overflow chevron. Below this value NSToolbar has no API to disable the
-    /// chevron, so the window must never be resizable narrower. Enforced both
-    /// via `.frame(minWidth:)` and, at the AppKit level, via
-    /// `window.contentMinSize` + `window.minSize` (see `configureWindowToolbar`).
-    static let windowMinWidth: CGFloat = LayoutMetrics.toolbarMinWidth + LayoutMetrics.sidebarMaxWidth
+    /// Narrowest usable window width: guarantees detail column never shrinks
+    /// below 660 even if sidebar is at maximum width 300.
+    static let windowMinWidth: CGFloat = 960
     /// The mini-player window has no window-toolbar items, so its minimum is
     /// only the content (artwork + inspector column + padding), independent of
     /// `windowMinWidth`'s toolbar math.

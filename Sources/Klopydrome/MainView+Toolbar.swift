@@ -1,65 +1,104 @@
+import AppKit
+import NavidromeClient
 import SwiftUI
 
-// Moved from MainView.swift to keep that file under the size gate.
+// MARK: - Native Window Dragging Background
 
-extension MainView {
-    // MARK: Native window toolbar — Apple Music style transport + LCD + volume
-    //
-    // Three groups: leading (back+transport), center LCD (principal), trailing
-    // (volume+panels). The LCD is fixed 360×42 in the principal slot.
+struct WindowDragBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowDragView {
+        WindowDragView()
+    }
 
-    @ToolbarContentBuilder
-    var playerToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            let showBack = !path.isEmpty || app.nav.selectedPlaylist != nil
-            HStack(spacing: 8) {
-                backButton
-                    .opacity(showBack ? 1 : 0)
-                    .allowsHitTesting(showBack)
-                    .accessibilityHidden(!showBack)
-                if !isMiniPlayerVisible {
-                    TransportControls(style: .toolbar)
-                }
-            }
-            .padding(.trailing, 4)
-            .frame(minWidth: isMiniPlayerVisible ? 0 : LayoutMetrics.toolbarLeadingMinWidth)
-            .fixedSize(horizontal: true, vertical: false)
-            .layoutPriority(1)
-        }
-                ToolbarItem(placement: .principal) {
-            if !isMiniPlayerVisible {
-                PlayerLCDView(path: $path)
-                    .frame(width: 360, height: 42)
-            }
-        }
-        ToolbarItemGroup(placement: .primaryAction) {
-            if !isMiniPlayerVisible {
-                rightControls
-                    .frame(minWidth: LayoutMetrics.toolbarTrailingMinWidth)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(1)
-            }
+    func updateNSView(_ nsView: WindowDragView, context: Context) {}
+}
+
+final class WindowDragView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            window?.zoom(nil)
+        } else {
+            window?.performDrag(with: event)
         }
     }
 }
 
-// MARK: - Player toolbar content
+// MARK: - Detail Player Header Bar (Apple Music style)
 
-/// The player toolbar's three placement groups (transport left, LCD center,
-/// volume/actions right) plus the individual controls. These live in the real
-/// window toolbar, declared on `MainView` so they share its toolbar-group
-/// builder and lifted navigation path.
-extension MainView {
-    /// The LCD + downloads icon that sit in the toolbar's principal + leading
-    /// groups. Both are extracted child views (see `PlayerLCDView.swift`) so the
-    /// player-state reads inside them are tracked at their own scope rather than
-    /// at `MainView.body` — otherwise every track change would rebuild the whole
-    /// toolbar.
-    func nowPlayingGroup(path: Binding<NavigationPath>) -> some View {
-        HStack(spacing: 8) {
-            DownloadsToolbarButton(showDownloads: $showDownloads)
-            PlayerLCDView(path: path)
-            CrossfadeToolbarIndicator()
+/// The player header bar that lives at the top of the detail column: transport
+/// controls, adaptive LCD, volume, and lyrics/queue buttons.
+struct PlayerHeaderBar: View {
+    @Environment(AppState.self) private var app
+    @Binding var path: NavigationPath
+    @Binding var showDownloads: Bool
+    var isMiniPlayerVisible: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let windowX = geo.frame(in: .global).minX
+            // When the sidebar is collapsed (minX < 120), leave room for the window traffic lights and sidebar toggle.
+            let trafficLightOffset = windowX < 120 ? max(0, 104 - windowX) : 0
+
+            HStack(spacing: 0) {
+                // Leading edge / traffic light offset
+                Spacer(minLength: 8)
+                    .frame(width: max(16, trafficLightOffset))
+
+                // Leading group: [back] [media]
+                if !isMiniPlayerVisible {
+                    HStack(spacing: 8) {
+                        let showBack = !path.isEmpty || app.nav.selectedPlaylist != nil
+                        backButton
+                            .opacity(showBack ? 1 : 0)
+                            .allowsHitTesting(showBack)
+                            .accessibilityHidden(!showBack)
+                        TransportControls(style: .toolbar)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+
+                // Flexible spacer between transport and center LCD
+                Spacer(minLength: 8)
+
+                // Center group: [downloads?] [lcd] [crossfade?]
+                if !isMiniPlayerVisible {
+                    HStack(spacing: 8) {
+                        if app.hasDownloadContent {
+                            DownloadsToolbarButton(showDownloads: $showDownloads)
+                        }
+                        PlayerLCDView(path: $path)
+                            .frame(
+                                minWidth: LayoutMetrics.playerBarMinWidth,
+                                maxWidth: LayoutMetrics.playerBarMaxWidth
+                            )
+                        CrossfadeToolbarIndicator()
+                    }
+                    .layoutPriority(1)
+                }
+
+                // Flexible spacer between center LCD and right controls
+                Spacer(minLength: 8)
+
+                // Trailing group: [volume / lyrics / queue]
+                if !isMiniPlayerVisible {
+                    rightControls
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+
+                // Trailing edge spacer
+                Spacer(minLength: 8)
+                    .frame(width: 16)
+            }
+            .frame(height: 52)
+        }
+        .frame(height: 52)
+        .background(WindowDragBackground())
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AMColor.divider)
+                .frame(height: 0.5)
         }
     }
 
@@ -94,8 +133,6 @@ extension MainView {
                     Image(systemName: "quote.bubble")
                         .font(.system(size: 18))
                         .foregroundStyle(app.queuePanelVisible && app.showLyrics ? Color.accentColor : Color.secondary)
-                        // Label = the hit box: frame + hoverFill inside the
-                        // label so the whole rectangle is clickable.
                         .frame(width: 36, height: 36)
                         .hoverFill()
                 }
