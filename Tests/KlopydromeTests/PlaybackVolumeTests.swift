@@ -198,6 +198,44 @@ final class PlaybackVolumeTests: XCTestCase {
         }
         XCTAssertFalse(sliderAfterBack.isHiddenOrHasHiddenAncestor, "Slider must be visible after navigating back")
     }
+
+    @MainActor
+    func testPlayerHeaderBarControlsStayWithinWindowBoundsAtVariousWidths() {
+        let app = AppState()
+        for width: CGFloat in [850, 960, 1180] {
+            let hostingView = NSHostingView(rootView: MainView().environment(app).frame(width: width, height: 700))
+            hostingView.frame = NSRect(x: 0, y: 0, width: width, height: 700)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: width, height: 700),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            window.contentView = hostingView
+            window.makeKeyAndOrderFront(nil)
+            window.layoutIfNeeded()
+            hostingView.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+
+            guard let contentView = window.contentView,
+                  let slider = findVolumeSlider(in: contentView) else {
+                XCTFail("VolumeSliderNSView must exist at width \(width)")
+                continue
+            }
+            XCTAssertFalse(slider.isHiddenOrHasHiddenAncestor)
+            let sliderFrame = slider.convert(slider.bounds, to: nil)
+            XCTAssertLessThanOrEqual(
+                sliderFrame.maxX,
+                width - 12,
+                "Slider right edge must not overflow window at width \(width)"
+            )
+            XCTAssertGreaterThanOrEqual(
+                sliderFrame.minY,
+                window.frame.height - 54,
+                "Slider must be in header at width \(width)"
+            )
+        }
+    }
     @MainActor
     private func makePlayerBarWindow() -> (NSWindow, VolumeSliderNSView?) {
         let app = AppState()

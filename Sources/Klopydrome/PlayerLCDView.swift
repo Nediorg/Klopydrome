@@ -95,19 +95,23 @@ struct PlayerLCDView: View {
     }
 
     private var lcdContent: some View {
-        ZStack(alignment: .leading) {
-            textColumn
+        HStack(spacing: 0) {
             coverButton
-        }
-        .overlay(alignment: .topTrailing) {
-            TopTrailingControlsView(
-                song: app.player.displaySong,
-                nowHovered: nowHovered
-            )
-            .frame(width: LayoutMetrics.topTrailingSlotWidth, alignment: .trailing)
-            .frame(maxHeight: .infinity, alignment: .topTrailing)
-            .contentShape(Rectangle())
-            .onHover { hoverTrailing = $0 }
+
+            textColumn
+                .padding(.leading, 8)
+                .padding(.trailing, app.player.displaySong != nil ? 4 : 8)
+
+            if app.player.displaySong != nil {
+                TopTrailingControlsView(
+                    song: app.player.displaySong,
+                    nowHovered: nowHovered
+                )
+                .frame(width: LayoutMetrics.topTrailingSlotWidth, alignment: .trailing)
+                .frame(maxHeight: .infinity, alignment: .topTrailing)
+                .contentShape(Rectangle())
+                .onHover { hoverTrailing = $0 }
+            }
         }
     }
 
@@ -177,27 +181,22 @@ struct PlayerLCDView: View {
     }
 
     private var textColumn: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 1) {
             FadeTruncatedLabel(
-                text: app.player.displaySong?.displayTitle ?? "",
-                leadingInset: Self.coverTextInset,
-                trailingInset: titleTrailingInset
+                text: app.player.displaySong?.displayTitle ?? ""
             )
             FadeTruncatedLabel(
                 text: app.player.displaySong?.displaySubtitle ?? "",
-                color: .secondary,
-                leadingInset: Self.coverTextInset + (nowHovered ? Self.timeMarkerTextWidth - 2 : 0),
-                trailingInset: nowHovered ? Self.timeMarkerTextWidth : 4
+                color: .secondary
             )
+            .padding(.horizontal, nowHovered ? 18 : 0)
         }
-        // Full LCD height: a hugging VStack would leave the top strip above
-        // the text untracked. Content stays vertically centered as before.
+        // Full LCD height: content stays vertically centered.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .clipped()
         .contentShape(Rectangle())
         // Directly on the VStack (real Text content): transparent layers do
-        // not install tracking on Tahoe principal. Overlaps resolve by
-        // frontmost delivery (cover/trailing/scrubber sit above).
+        // not install tracking on Tahoe principal.
         .onHover { hoverText = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(app.player.displaySong?.displayTitle ?? "")
@@ -212,16 +211,6 @@ struct PlayerLCDView: View {
                 showGoToMenu(for: song, app: app)
             }
         }
-    }
-
-    private static let coverTextInset: CGFloat = 48
-    /// The 8-point monospaced timer plus its horizontal padding needs 24 pt.
-    /// Keep no extra visual gap: text should disappear only at the timer itself.
-    private static let timeMarkerTextWidth: CGFloat = 24
-
-    private var titleTrailingInset: CGFloat {
-        let buttonCount = nowHovered && app.player.displaySong != nil ? 2 : 1
-        return CGFloat(buttonCount) * TopTrailingControlsView.actionButtonSide + 6
     }
 }
 

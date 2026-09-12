@@ -78,26 +78,25 @@ enum AMFont {
 /// inspector column stay consistent at any window size.
 enum LayoutMetrics {
     /// Minimum width of the now-playing block (downloads icon + LCD) in the
-    /// player bar. The LCD is the flexible centered element, so this is
-    /// roughly the narrowest the LCD can be before it must compress.
-    static let playerBarMinWidth: CGFloat = 220
-    /// Maximum width for the LCD block: fraction of the header width.
-    static let playerBarMaxFraction: CGFloat = 0.45
+    /// player bar. Guarantees that track title, artist, and trailing controls
+    /// have ample room without aggressive truncation.
+    static let playerBarMinWidth: CGFloat = 320
+    /// Desired width for the LCD block as a fraction of the header width.
+    static let playerBarMaxFraction: CGFloat = 0.42
     /// Hard ceiling for the LCD block width so it never grows unbounded on very
     /// wide windows even though the fraction would allow more.
-    static let playerBarMaxWidth: CGFloat = 520
-    /// The toolbar's total minimum budget: leading (152) + principal (320) +
-    /// trailing (200).
-    static let toolbarMinWidth: CGFloat = 660
+    static let playerBarMaxWidth: CGFloat = 500
+    /// The toolbar's total minimum budget: leading (208) + LCD (320) +
+    /// trailing (199) + margins (24) ≈ 750.
+    static let toolbarMinWidth: CGFloat = 750
     /// Reserved width for the star + ellipsis trailing controls embedded in the
     /// LCD, so song/album text truncates before them rather than being overlaid.
     static let topTrailingSlotWidth: CGFloat = 48
-    /// Minimum width of the leading toolbar group (back + transport row ≈ 212
-    /// with the back button).
-    static let toolbarLeadingMinWidth: CGFloat = 152
+    /// Minimum width of the leading toolbar group (back + transport row ≈ 208).
+    static let toolbarLeadingMinWidth: CGFloat = 208
     /// Minimum width of the trailing toolbar group (volume slider + lyrics/
-    /// queue buttons ≈ 200).
-    static let toolbarTrailingMinWidth: CGFloat = 200
+    /// queue buttons ≈ 199).
+    static let toolbarTrailingMinWidth: CGFloat = 199
     /// Vertical padding under the traffic lights that the sidebar needs to
     /// keep the first row from sitting under them.
     static let trafficLightInset: CGFloat = 28
@@ -107,15 +106,15 @@ enum LayoutMetrics {
     static let sidebarIdealWidth: CGFloat = 220
     /// Maximum width of the sidebar column (see `SidebarView`).
     static let sidebarMaxWidth: CGFloat = 300
-    /// Minimum width of the DETAIL column. Accommodates min leading controls (200)
-    /// + min LCD (220) + min trailing controls (215) + spacers (25) = 660.
-    static let detailColumnMinWidth: CGFloat = 660
+    /// Minimum width of the DETAIL column. Accommodates leading controls (208)
+    /// + centered LCD (320) + trailing controls (199) + spacers (24) = 751.
+    static let detailColumnMinWidth: CGFloat = 750
     /// Inspector column sizing.
     static let inspectorMinWidth: CGFloat = 320
     static let inspectorIdealWidth: CGFloat = 360
     /// Narrowest usable window width: guarantees detail column never shrinks
-    /// below 660 even if sidebar is at maximum width 300.
-    static let windowMinWidth: CGFloat = 960
+    /// below 750 even with standard sidebar.
+    static let windowMinWidth: CGFloat = 1000
     /// The mini-player window has no window-toolbar items, so its minimum is
     /// only the content (artwork + inspector column + padding), independent of
     /// `windowMinWidth`'s toolbar math.

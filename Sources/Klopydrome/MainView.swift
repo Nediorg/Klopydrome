@@ -73,19 +73,18 @@ struct DetailColumn: View {
     var body: some View {
         DetailView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .trailing) {
+                if app.queuePanelVisible {
+                    PlayerPanelView()
+                        .transition(.move(edge: .trailing))
+                        .zIndex(2)
+                }
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 PlayerHeaderBar(
                     showDownloads: $showDownloads,
                     isMiniPlayerVisible: isMiniPlayerVisible
                 )
-            }
-            .overlay(alignment: .trailing) {
-                if app.queuePanelVisible {
-                    PlayerPanelView()
-                        .padding(.top, 52)
-                        .transition(.move(edge: .trailing))
-                        .zIndex(2)
-                }
             }
             .ignoresSafeArea(edges: .top)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

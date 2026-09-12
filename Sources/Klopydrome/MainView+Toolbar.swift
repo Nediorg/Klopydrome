@@ -13,61 +13,54 @@ struct PlayerHeaderBar: View {
 
     var body: some View {
         GeometryReader { geo in
+            let totalWidth = geo.size.width
             let windowX = geo.frame(in: .global).minX
             // When the sidebar is collapsed (minX < 120), leave room for the window traffic lights and sidebar toggle.
             let trafficLightOffset = windowX < 120 ? max(0, 104 - windowX) : 0
+            let leadingInset = max(16, trafficLightOffset)
+            let trailingInset: CGFloat = 12
 
-            HStack(spacing: 0) {
-                // Leading edge / traffic light offset
-                Spacer(minLength: 8)
-                    .frame(width: max(16, trafficLightOffset))
+            let leadingWidth: CGFloat = 208
+            let trailingWidth: CGFloat = 199
+            let maxWing = max(leadingInset + leadingWidth, trailingInset + trailingWidth)
 
-                // Leading group: [back] [media]
+            let downloadsWidth: CGFloat = app.hasDownloadContent ? 36 : 0
+            let crossfadeWidth: CGFloat = app.player.crossfadeStatusText != nil ? 34 : 0
+            let extraCenterWidth = downloadsWidth + crossfadeWidth
+
+            // Space available for centered LCD without overlapping leading/trailing wings
+            let maxCenteredSpace = max(0, (totalWidth / 2 - maxWing - 12) * 2 - extraCenterWidth)
+
+            let desiredLCDWidth = totalWidth * LayoutMetrics.playerBarMaxFraction
+            let targetLCDWidth = min(
+                LayoutMetrics.playerBarMaxWidth,
+                max(LayoutMetrics.playerBarMinWidth, desiredLCDWidth)
+            )
+            let finalLCDWidth: CGFloat = max(240, min(targetLCDWidth, maxCenteredSpace))
+
+            ZStack {
+                // Center layer: strictly centered in the detail column
                 if !isMiniPlayerVisible {
-                    HStack(spacing: 8) {
-                        let showBack = !app.nav.history.isEmpty || app.nav.selectedPlaylist != nil
-                        backButton
-                            .opacity(showBack ? 1 : 0)
-                            .allowsHitTesting(showBack)
-                            .accessibilityHidden(!showBack)
-                        TransportControls(style: .toolbar)
+                    centerGroup(width: finalLCDWidth)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+
+                // Edges layer: Leading controls docked left, Trailing controls docked right
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0).frame(width: leadingInset)
+
+                    if !isMiniPlayerVisible {
+                        leadingControls
                     }
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(2)
-                }
 
-                // Flexible spacer between transport and center LCD
-                Spacer(minLength: 8)
+                    Spacer(minLength: 12)
 
-                // Center group: [downloads?] [lcd] [crossfade?]
-                if !isMiniPlayerVisible {
-                    HStack(spacing: 8) {
-                        if app.hasDownloadContent {
-                            DownloadsToolbarButton(showDownloads: $showDownloads)
-                        }
-                        PlayerLCDView()
-                            .frame(
-                                minWidth: LayoutMetrics.playerBarMinWidth,
-                                maxWidth: LayoutMetrics.playerBarMaxWidth
-                            )
-                        CrossfadeToolbarIndicator()
+                    if !isMiniPlayerVisible {
+                        rightControls
                     }
-                    .layoutPriority(1)
+
+                    Spacer(minLength: 0).frame(width: trailingInset)
                 }
-
-                // Flexible spacer between center LCD and right controls
-                Spacer(minLength: 8)
-
-                // Trailing group: [volume / lyrics / queue]
-                if !isMiniPlayerVisible {
-                    rightControls
-                        .fixedSize(horizontal: true, vertical: false)
-                        .layoutPriority(2)
-                }
-
-                // Trailing edge spacer
-                Spacer(minLength: 8)
-                    .frame(width: 12)
             }
             .frame(height: 52)
         }
@@ -77,6 +70,29 @@ struct PlayerHeaderBar: View {
             Rectangle()
                 .fill(AMColor.divider)
                 .frame(height: 0.5)
+        }
+    }
+
+    private var leadingControls: some View {
+        HStack(spacing: 8) {
+            let showBack = !app.nav.history.isEmpty || app.nav.selectedPlaylist != nil
+            backButton
+                .opacity(showBack ? 1 : 0)
+                .allowsHitTesting(showBack)
+                .accessibilityHidden(!showBack)
+            TransportControls(style: .toolbar)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func centerGroup(width: CGFloat) -> some View {
+        HStack(spacing: 8) {
+            if app.hasDownloadContent {
+                DownloadsToolbarButton(showDownloads: $showDownloads)
+            }
+            PlayerLCDView()
+                .frame(width: width)
+            CrossfadeToolbarIndicator()
         }
     }
 
@@ -129,6 +145,7 @@ struct PlayerHeaderBar: View {
                 .accessibilityLabel("Дальше")
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// Inline "back" chevron at the player bar's leading edge (Apple Music

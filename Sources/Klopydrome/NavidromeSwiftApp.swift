@@ -202,6 +202,12 @@ struct ContentView: View {
         let floor = NSSize(width: LayoutMetrics.windowMinWidth, height: 600)
         window.contentMinSize = floor
         window.minSize = floor
+        if window.frame.width < floor.width || window.frame.height < floor.height {
+            var frame = window.frame
+            frame.size.width = max(frame.size.width, floor.width)
+            frame.size.height = max(frame.size.height, floor.height)
+            window.setFrame(frame, display: true)
+        }
     }
 
     /// Music.app behaviour: space toggles play/pause unless typing in a text field
@@ -283,5 +289,11 @@ private final class WindowMinSizeView: NSView {
         guard let window else { return }
         window.contentMinSize = minSize
         window.minSize = minSize
+        if window.frame.width < minSize.width || window.frame.height < minSize.height {
+            var frame = window.frame
+            frame.size.width = max(frame.size.width, minSize.width)
+            frame.size.height = max(frame.size.height, minSize.height)
+            window.setFrame(frame, display: true)
+        }
     }
 }
