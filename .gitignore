@@ -26,6 +26,7 @@ xcuserdata/
 
 # Editor / agent config (local only)
 .opencode/
+.agents
 
 # Test audio fixtures (large binaries, not source)
 Tests/NavidromeClientTests/Fixtures/

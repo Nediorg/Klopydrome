@@ -12,6 +12,7 @@ excluded:
   - vendor
   - .swiftpm
   - misc
+  - .agents
 
 cyclomatic_complexity:
   warning: 10

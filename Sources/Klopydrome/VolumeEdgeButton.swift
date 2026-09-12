@@ -6,6 +6,7 @@ struct VolumeEdgeButton: View {
 
     let systemImage: String
     let label: String
+    var symbolOffset: CGFloat = 0
     let action: () -> Void
 
     @State private var isHovering = false
@@ -15,6 +16,7 @@ struct VolumeEdgeButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 11))
                 .foregroundStyle(isHovering ? Color.primary.opacity(0.9) : Color.secondary)
+                .offset(x: symbolOffset)
                 // Both edge actions use the same larger rectangular hit area.
                 .frame(width: Self.hitBoxSide, height: Self.hitBoxSide)
                 .contentShape(Rectangle())

@@ -39,6 +39,7 @@ struct PlayerLCDView: View {
         // body-hover breaks Tahoe principal (see bisect A/B). Keep only
         // contextMenu on the body; hover is tracked interiorly.
         lcdBlock
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .contextMenu {
                 if let song = app.player.displaySong {
@@ -91,6 +92,7 @@ struct PlayerLCDView: View {
                         .allowsHitTesting(false)
                 }
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 42)
     }
 

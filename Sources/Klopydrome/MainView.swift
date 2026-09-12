@@ -74,35 +74,33 @@ struct DetailColumn: View {
     var isMiniPlayerVisible: Bool
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            DetailView(path: $path)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if app.queuePanelVisible {
-                PlayerPanelView()
-                    .transition(.move(edge: .trailing))
+        DetailView(path: $path)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                PlayerHeaderBar(
+                    path: $path,
+                    showDownloads: $showDownloads,
+                    isMiniPlayerVisible: isMiniPlayerVisible
+                )
             }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            PlayerHeaderBar(
-                path: $path,
-                showDownloads: $showDownloads,
-                isMiniPlayerVisible: isMiniPlayerVisible
-            )
-            .zIndex(100)
-        }
-        .ignoresSafeArea(edges: .top)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AMColor.background)
-        .onKeyPress(.escape) {
-            if app.queuePanelVisible {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                    app.queuePanelVisible = false
+            .overlay(alignment: .trailing) {
+                if app.queuePanelVisible {
+                    PlayerPanelView()
+                        .padding(.top, 52)
+                        .transition(.move(edge: .trailing))
                 }
-                return .handled
             }
-            return .ignored
-        }
+            .ignoresSafeArea(edges: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AMColor.background)
+            .onKeyPress(.escape) {
+                if app.queuePanelVisible {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                        app.queuePanelVisible = false
+                    }
+                    return .handled
+                }
+                return .ignored
+            }
     }
 }
 

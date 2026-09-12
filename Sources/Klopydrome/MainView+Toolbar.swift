@@ -2,28 +2,6 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-// MARK: - Native Window Dragging Background
-
-struct WindowDragBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> WindowDragView {
-        WindowDragView()
-    }
-
-    func updateNSView(_ nsView: WindowDragView, context: Context) {}
-}
-
-final class WindowDragView: NSView {
-    override var mouseDownCanMoveWindow: Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 {
-            window?.zoom(nil)
-        } else {
-            window?.performDrag(with: event)
-        }
-    }
-}
-
 // MARK: - Detail Player Header Bar (Apple Music style)
 
 /// The player header bar that lives at the top of the detail column: transport
@@ -56,6 +34,7 @@ struct PlayerHeaderBar: View {
                         TransportControls(style: .toolbar)
                     }
                     .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
                 }
 
                 // Flexible spacer between transport and center LCD
@@ -84,16 +63,16 @@ struct PlayerHeaderBar: View {
                 if !isMiniPlayerVisible {
                     rightControls
                         .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(2)
                 }
 
                 // Trailing edge spacer
                 Spacer(minLength: 8)
-                    .frame(width: 16)
+                    .frame(width: 12)
             }
             .frame(height: 52)
         }
         .frame(height: 52)
-        .background(WindowDragBackground())
         .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -103,20 +82,17 @@ struct PlayerHeaderBar: View {
     }
 
     private var rightControls: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 VolumeEdgeButton(
                     systemImage: "speaker.fill",
-                    label: L10n.text("action.volume.mute")
+                    label: L10n.text("action.volume.mute"),
+                    symbolOffset: 7
                 ) {
                     app.player.volume = 0
                 }
-                Slider(value: Bindable(app).player.volume, in: 0...1)
-                    .frame(width: 75)
-                    .controlSize(.mini)
-                    // Match the NowPlaying scrubber's progress fill color.
-                    .tint(.secondary)
-                    .accessibilityLabel("Громкость")
+                ToolbarVolumeSlider(value: Bindable(app).player.volume)
+                    .frame(width: 75, height: 52)
                     .help("Громкость")
                 VolumeEdgeButton(
                     systemImage: "speaker.wave.3.fill",
@@ -126,14 +102,14 @@ struct PlayerHeaderBar: View {
                 }
             }
 
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Button {
                     app.togglePlayerPanel(.lyrics)
                 } label: {
                     Image(systemName: "quote.bubble")
-                        .font(.system(size: 18))
+                        .font(.system(size: 16))
                         .foregroundStyle(app.queuePanelVisible && app.showLyrics ? Color.accentColor : Color.secondary)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .hoverFill()
                 }
                 .buttonStyle(.plain)
@@ -144,9 +120,9 @@ struct PlayerHeaderBar: View {
                     app.togglePlayerPanel(.queue)
                 } label: {
                     Image(systemName: "list.bullet")
-                        .font(.system(size: 18))
+                        .font(.system(size: 16))
                         .foregroundStyle(app.queuePanelVisible && !app.showLyrics ? Color.accentColor : Color.secondary)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .hoverFill()
                 }
                 .buttonStyle(.plain)

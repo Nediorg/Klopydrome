@@ -80,7 +80,7 @@ enum LayoutMetrics {
     /// Minimum width of the now-playing block (downloads icon + LCD) in the
     /// player bar. The LCD is the flexible centered element, so this is
     /// roughly the narrowest the LCD can be before it must compress.
-    static let playerBarMinWidth: CGFloat = 200
+    static let playerBarMinWidth: CGFloat = 220
     /// Maximum width for the LCD block: fraction of the header width.
     static let playerBarMaxFraction: CGFloat = 0.45
     /// Hard ceiling for the LCD block width so it never grows unbounded on very
@@ -108,7 +108,7 @@ enum LayoutMetrics {
     /// Maximum width of the sidebar column (see `SidebarView`).
     static let sidebarMaxWidth: CGFloat = 300
     /// Minimum width of the DETAIL column. Accommodates min leading controls (200)
-    /// + min LCD (200) + min trailing controls (206) + spacers (32) = 638.
+    /// + min LCD (220) + min trailing controls (215) + spacers (25) = 660.
     static let detailColumnMinWidth: CGFloat = 660
     /// Inspector column sizing.
     static let inspectorMinWidth: CGFloat = 320
