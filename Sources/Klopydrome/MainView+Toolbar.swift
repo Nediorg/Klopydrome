@@ -8,7 +8,6 @@ import SwiftUI
 /// controls, adaptive LCD, volume, and lyrics/queue buttons.
 struct PlayerHeaderBar: View {
     @Environment(AppState.self) private var app
-    @Binding var path: NavigationPath
     @Binding var showDownloads: Bool
     var isMiniPlayerVisible: Bool
 
@@ -26,7 +25,7 @@ struct PlayerHeaderBar: View {
                 // Leading group: [back] [media]
                 if !isMiniPlayerVisible {
                     HStack(spacing: 8) {
-                        let showBack = !path.isEmpty || app.nav.selectedPlaylist != nil
+                        let showBack = !app.nav.history.isEmpty || app.nav.selectedPlaylist != nil
                         backButton
                             .opacity(showBack ? 1 : 0)
                             .allowsHitTesting(showBack)
@@ -46,7 +45,7 @@ struct PlayerHeaderBar: View {
                         if app.hasDownloadContent {
                             DownloadsToolbarButton(showDownloads: $showDownloads)
                         }
-                        PlayerLCDView(path: $path)
+                        PlayerLCDView()
                             .frame(
                                 minWidth: LayoutMetrics.playerBarMinWidth,
                                 maxWidth: LayoutMetrics.playerBarMaxWidth
@@ -137,12 +136,7 @@ struct PlayerHeaderBar: View {
     /// a tab) or, when a sidebar playlist is open, returns to "All Playlists".
     private var backButton: some View {
         Button {
-            if !path.isEmpty {
-                path.removeLast()
-            } else if app.nav.selectedPlaylist != nil {
-                app.nav.selected = .playlists
-                app.nav.selectedPlaylist = nil
-            }
+            app.navigateBack()
         } label: {
             Image(systemName: "chevron.left")
                 .font(.system(size: 12, weight: .semibold))

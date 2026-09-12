@@ -30,7 +30,9 @@ struct ArtistsView: View {
                     ForEach(indexes, id: \.name) { index in
                         Section(index.name) {
                             ForEach(index.artist ?? []) { artist in
-                                NavigationLink(value: artist) {
+                                Button {
+                                    app.openArtistInLibrary(artist)
+                                } label: {
                                     HStack {
                                         CircularArtistArt(name: artist.name, imageURL: artist.artistImageUrl)
                                         Text(artist.name)
@@ -41,7 +43,9 @@ struct ArtistsView: View {
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                                 .contextMenu {
                                     ArtistContextMenuItems(artist: artist)
                                 }

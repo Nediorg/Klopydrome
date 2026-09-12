@@ -19,8 +19,6 @@ import AppKit
 struct PlayerLCDView: View {
     @Environment(AppState.self) private var app
 
-    @Binding var path: NavigationPath
-
     @State private var coverHovered = false
     @State private var hoverText = false
     @State private var hoverTrailing = false
@@ -43,7 +41,7 @@ struct PlayerLCDView: View {
             .contentShape(Rectangle())
             .contextMenu {
                 if let song = app.player.displaySong {
-                    NowPlayingActionMenuItems(song: song, path: $path)
+                    NowPlayingActionMenuItems(song: song)
                 }
             }
     }
@@ -104,8 +102,7 @@ struct PlayerLCDView: View {
         .overlay(alignment: .topTrailing) {
             TopTrailingControlsView(
                 song: app.player.displaySong,
-                nowHovered: nowHovered,
-                path: $path
+                nowHovered: nowHovered
             )
             .frame(width: LayoutMetrics.topTrailingSlotWidth, alignment: .trailing)
             .frame(maxHeight: .infinity, alignment: .topTrailing)
@@ -170,7 +167,7 @@ struct PlayerLCDView: View {
         }
         .contextMenu {
             if let song = app.player.displaySong {
-                NowPlayingActionMenuItems(song: song, path: $path)
+                NowPlayingActionMenuItems(song: song)
             }
         }
         .animation(.snappy(duration: 0.15), value: coverHovered)
@@ -239,7 +236,6 @@ struct TopTrailingControlsView: View {
 
     let song: SubsonicSong?
     let nowHovered: Bool
-    @Binding var path: NavigationPath
 
     private var isCurrentStarred: Bool {
         song.map { app.isStarred($0) } ?? false
@@ -248,7 +244,7 @@ struct TopTrailingControlsView: View {
     var body: some View {
         HStack(spacing: 0) {
             if let song {
-                NowPlayingEllipsisMenu(song: song, path: $path)
+                NowPlayingEllipsisMenu(song: song)
                     .opacity(nowHovered ? 1 : 0)
                     .transition(.opacity)
                     .animation(.snappy(duration: 0.12), value: nowHovered)
@@ -285,11 +281,10 @@ struct TopTrailingControlsView: View {
 /// playback-bar actions match the rows' right-click and hover menus.
 struct NowPlayingEllipsisMenu: View {
     let song: SubsonicSong
-    @Binding var path: NavigationPath
 
     var body: some View {
         Menu {
-            NowPlayingActionMenuItems(song: song, path: $path)
+            NowPlayingActionMenuItems(song: song)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 9, weight: .medium))
@@ -315,7 +310,7 @@ struct NowPlayingActionMenuItems: View {
     @Environment(AppState.self) private var app
 
     let song: SubsonicSong
-    @Binding var path: NavigationPath
+    var path: Binding<NavigationPath>?
     /// True when hosted by the mini-player panel: that window has no
     /// navigation stack and no sheet attachments, so surface-dependent actions
     /// route through the main window instead of acting locally.
@@ -330,11 +325,7 @@ struct NowPlayingActionMenuItems: View {
             Label("Создать станцию", systemImage: "dot.radiowaves.left.and.right")
         }
         Button {
-            if inMiniPlayer {
-                app.openSongDetails(song)
-            } else {
-                path.append(song)
-            }
+            app.openSongDetails(song)
         } label: {
             Label("Сведения", systemImage: "info.circle")
         }

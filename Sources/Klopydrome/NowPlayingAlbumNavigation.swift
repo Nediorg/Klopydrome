@@ -48,23 +48,24 @@ extension AppState {
     func openAlbumInLibrary(_ album: SubsonicAlbum) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.selectedPlaylist = nil
-        nav.selected = .albums
-        nav.pendingAlbum = album
+        nav.history.append(.album(album))
+        nav.navVersion += 1
     }
 
     /// Opens the song-detail page in the main library from a surface outside
     /// the main navigation stack (the mini-player panel has no stack of its
-    /// own). `DetailView` consumes `nav.pendingSong` once the window is front.
+    /// own).
     func openSongDetails(_ song: SubsonicSong) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.pendingSong = song
+        nav.history.append(.song(song))
+        nav.navVersion += 1
     }
 
     func openArtistInLibrary(_ artist: Artist) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.selectedPlaylist = nil
-        nav.selected = .artists
-        nav.pendingArtist = artist
+        nav.history.append(.artist(artist))
+        nav.navVersion += 1
     }
 
     /// Shows the playlists view — used as the “go to playlist” fallback from a
@@ -72,6 +73,7 @@ extension AppState {
     func openPlaylistsLibrary() {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.selectedPlaylist = nil
+        nav.history.removeAll()
         nav.selected = .playlists
         nav.navVersion += 1
     }
@@ -79,8 +81,25 @@ extension AppState {
     /// Reveals a concrete playlist in the main library.
     func openPlaylist(_ playlist: PlaylistSummary) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.selectedPlaylist = playlist
-        nav.selected = .playlists
+        nav.history.append(.playlist(playlist))
+        nav.navVersion += 1
+    }
+
+    /// Reveals a smart playlist in the main library.
+    func openSmartPlaylist(_ playlist: SmartPlaylist) {
+        MiniPlayerPanelController.shared.closeForLibraryNavigation()
+        nav.history.append(.smartPlaylist(playlist))
+        nav.navVersion += 1
+    }
+
+    /// Pops the current sub-page from history or returns to All Playlists.
+    func navigateBack() {
+        if !nav.history.isEmpty {
+            nav.history.removeLast()
+        } else if nav.selectedPlaylist != nil {
+            nav.selected = .playlists
+            nav.selectedPlaylist = nil
+        }
         nav.navVersion += 1
     }
 

@@ -47,6 +47,7 @@ struct PlaylistDetailView: View {
                 } description: {
                     Text(loadError)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 28) {

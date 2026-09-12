@@ -103,7 +103,6 @@ final class PlaybackVolumeTests: XCTestCase {
     func testPlayerHeaderBarAndVolumeSliderInAlbumDetail() {
         let app = AppState()
         struct FullWindowWithAlbum: View {
-            @State var path = NavigationPath([SubsonicAlbum(id: "test-album", title: "Burial", artist: "Burial")])
             @State var showDownloads = false
 
             var body: some View {
@@ -111,7 +110,6 @@ final class PlaybackVolumeTests: XCTestCase {
                     SidebarView()
                 } detail: {
                     DetailColumn(
-                        path: $path,
                         showDownloads: $showDownloads,
                         isMiniPlayerVisible: false
                     )
@@ -120,6 +118,8 @@ final class PlaybackVolumeTests: XCTestCase {
                 .toolbar { }
             }
         }
+
+        app.openAlbumInLibrary(SubsonicAlbum(id: "test-album", title: "Burial", artist: "Burial"))
 
         let window = makeTestWindow(rootView: FullWindowWithAlbum().environment(app))
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
@@ -139,6 +139,65 @@ final class PlaybackVolumeTests: XCTestCase {
         XCTAssertLessThanOrEqual(sliderInWindow.maxY, window.frame.height, "Slider must stay in window")
     }
 
+    @MainActor
+    func testRealAppAlbumNavigation() {
+        let app = AppState()
+        let hostingView = NSHostingView(rootView: MainView().environment(app).frame(width: 1180, height: 700))
+        hostingView.frame = NSRect(x: 0, y: 0, width: 1180, height: 700)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1180, height: 700),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isOpaque = false
+        window.backgroundColor = NSColor.clear
+        window.titlebarSeparatorStyle = .none
+        window.contentView = hostingView
+        let toolbar = NSToolbar(identifier: "TestToolbar")
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
+        window.makeKeyAndOrderFront(nil)
+        window.layoutIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+        window.layoutIfNeeded()
+
+        guard let contentView = window.contentView,
+              let sliderBefore = findVolumeSlider(in: contentView) else {
+            XCTFail("VolumeSliderNSView must exist before navigation")
+            return
+        }
+        XCTAssertFalse(sliderBefore.isHiddenOrHasHiddenAncestor, "Slider must be visible before navigation")
+        let frameBefore = sliderBefore.convert(sliderBefore.bounds, to: nil)
+        XCTAssertGreaterThanOrEqual(frameBefore.minY, window.frame.height - 54)
+
+        // Navigate to album
+        app.openAlbumInLibrary(SubsonicAlbum(id: "test", title: "Burial", artist: "Burial"))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        window.layoutIfNeeded()
+
+        guard let sliderAfter = findVolumeSlider(in: contentView) else {
+            XCTFail("VolumeSliderNSView must remain mounted after navigating to album")
+            return
+        }
+        XCTAssertFalse(sliderAfter.isHiddenOrHasHiddenAncestor, "Slider must be visible after navigating to album")
+        let frameAfter = sliderAfter.convert(sliderAfter.bounds, to: nil)
+        XCTAssertGreaterThanOrEqual(frameAfter.minY, window.frame.height - 54)
+
+        // Navigate back
+        app.navigateBack()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        window.layoutIfNeeded()
+
+        guard let sliderAfterBack = findVolumeSlider(in: contentView) else {
+            XCTFail("VolumeSliderNSView must remain mounted after navigating back")
+            return
+        }
+        XCTAssertFalse(sliderAfterBack.isHiddenOrHasHiddenAncestor, "Slider must be visible after navigating back")
+    }
     @MainActor
     private func makePlayerBarWindow() -> (NSWindow, VolumeSliderNSView?) {
         let app = AppState()

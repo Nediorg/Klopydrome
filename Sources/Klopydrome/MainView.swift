@@ -8,7 +8,6 @@ struct MainView: View {
     @Environment(AppState.self) var app
     @AppStorage("debugShowPlayerState") private var debugShowPlayerState = false
 
-    @State var path = NavigationPath()
     @State var showDownloads = false
     @State var isMiniPlayerVisible = false
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -18,7 +17,6 @@ struct MainView: View {
             SidebarView()
         } detail: {
             DetailColumn(
-                path: $path,
                 showDownloads: $showDownloads,
                 isMiniPlayerVisible: isMiniPlayerVisible
             )
@@ -69,15 +67,14 @@ struct MainView: View {
 /// the top safe area inset of this column, matching Apple Music.
 struct DetailColumn: View {
     @Environment(AppState.self) private var app
-    @Binding var path: NavigationPath
     @Binding var showDownloads: Bool
     var isMiniPlayerVisible: Bool
 
     var body: some View {
-        DetailView(path: $path)
+        DetailView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .top, spacing: 0) {
                 PlayerHeaderBar(
-                    path: $path,
                     showDownloads: $showDownloads,
                     isMiniPlayerVisible: isMiniPlayerVisible
                 )
@@ -87,6 +84,7 @@ struct DetailColumn: View {
                     PlayerPanelView()
                         .padding(.top, 52)
                         .transition(.move(edge: .trailing))
+                        .zIndex(2)
                 }
             }
             .ignoresSafeArea(edges: .top)
@@ -106,49 +104,45 @@ struct DetailColumn: View {
 
 struct DetailView: View {
     @Environment(AppState.self) private var app
-    @Binding var path: NavigationPath
 
     var body: some View {
-        NavigationStack(path: $path) {
-            content
-                .navigationDestination(for: SubsonicAlbum.self) { AlbumDetailView(album: $0) }
-            .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
-            .navigationDestination(for: PlaylistSummary.self) { PlaylistDetailView(playlist: $0) }
-            .navigationDestination(for: SubsonicSong.self) { SongDetailView(song: $0) }
-            .navigationBarBackButtonHidden(true)
-        }
-        .navigationTitle("")
-        .background(AMColor.background)
-        // Every sidebar selection (via navVersion) pops the navigation stack,
-        // so clicking a tab always returns to that tab's root — even a
-        // sub-page like an album card is open, and even when the clicked item
-        // was already selected.
-        .onChange(of: app.nav.navVersion) { _, _ in
-            path = NavigationPath()
-        }
-        .onChange(of: app.nav.pendingAlbum) { _, album in
-            guard let album else { return }
-            path = NavigationPath()
-            path.append(album)
-            app.nav.pendingAlbum = nil
-        }
-        .onChange(of: app.nav.pendingSong) { _, song in
-            guard let song else { return }
-            path = NavigationPath()
-            path.append(song)
-            app.nav.pendingSong = nil
-        }
-        .onChange(of: app.nav.pendingArtist) { _, artist in
-            guard let artist else { return }
-            path = NavigationPath()
-            path.append(artist)
-            app.nav.pendingArtist = nil
-        }
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("")
+            .background(AMColor.background)
+            .onChange(of: app.nav.pendingAlbum) { _, album in
+                guard let album else { return }
+                app.openAlbumInLibrary(album)
+                app.nav.pendingAlbum = nil
+            }
+            .onChange(of: app.nav.pendingSong) { _, song in
+                guard let song else { return }
+                app.openSongDetails(song)
+                app.nav.pendingSong = nil
+            }
+            .onChange(of: app.nav.pendingArtist) { _, artist in
+                guard let artist else { return }
+                app.openArtistInLibrary(artist)
+                app.nav.pendingArtist = nil
+            }
     }
 
     @ViewBuilder
     private var content: some View {
-        if let playlist = app.nav.selectedPlaylist {
+        if let current = app.nav.history.last {
+            switch current {
+            case .album(let album):
+                AlbumDetailView(album: album)
+            case .playlist(let playlist):
+                PlaylistDetailView(playlist: playlist)
+            case .smartPlaylist(let smart):
+                SmartPlaylistDetailView(playlist: smart)
+            case .artist(let artist):
+                ArtistDetailView(artist: artist)
+            case .song(let song):
+                SongDetailView(song: song)
+            }
+        } else if let playlist = app.nav.selectedPlaylist {
             PlaylistDetailView(playlist: playlist)
         } else {
             switch app.nav.selected {

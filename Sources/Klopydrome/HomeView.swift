@@ -99,7 +99,9 @@ struct HomeView: View {
             retryRow(shelf, error: error)
         } else {
             ForEach(albums) { album in
-                NavigationLink(value: album) {
+                Button {
+                    app.openAlbumInLibrary(album)
+                } label: {
                     AlbumCard(album: album)
                 }
                 .buttonStyle(.plain)

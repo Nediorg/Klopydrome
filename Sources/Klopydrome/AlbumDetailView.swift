@@ -42,6 +42,7 @@ struct AlbumDetailView: View {
                 }
             } else {
                 ContentUnavailableView("Альбом недоступен", systemImage: "rectangle.slash")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: LoadID(albumID: album.id, offlineSession: app.isOfflineSession)) {
@@ -119,7 +120,9 @@ struct AlbumDetailView: View {
         let artist = detail.artist ?? album.artist ?? ""
         let artistId = detail.artistId ?? album.artistId ?? ""
         if !artistId.isEmpty {
-            NavigationLink(value: Artist(id: artistId, name: artist)) {
+            Button {
+                app.openArtistInLibrary(Artist(id: artistId, name: artist))
+            } label: {
                 Text(artist)
                     .font(.title3.weight(.medium))
                     .foregroundStyle(AMColor.accent)
@@ -274,7 +277,9 @@ private struct MoreByArtist: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            NavigationLink(value: Artist(id: artistId, name: artistName)) {
+            Button {
+                app.openArtistInLibrary(Artist(id: artistId, name: artistName))
+            } label: {
                 HStack(spacing: 6) {
                     Text(L10n.format("format.album.moreByArtist", artistName))
                         .font(.title2.bold())
@@ -292,7 +297,9 @@ private struct MoreByArtist: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(albums) { album in
-                            NavigationLink(value: album) {
+                            Button {
+                                app.openAlbumInLibrary(album)
+                            } label: {
                                 AlbumCard(album: album, width: 160)
                             }
                             .buttonStyle(.plain)

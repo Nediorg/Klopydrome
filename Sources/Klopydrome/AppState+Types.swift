@@ -78,13 +78,22 @@ struct NavigationState {
         var isSidebarRow: Bool { self != .search }
     }
 
+    enum Destination: Hashable {
+        case album(SubsonicAlbum)
+        case playlist(PlaylistSummary)
+        case smartPlaylist(SmartPlaylist)
+        case artist(Artist)
+        case song(SubsonicSong)
+    }
+
     var selected: Section = .home
     /// Monotonic counter bumped whenever the user explicitly selects a sidebar
-    /// row, even the one already active. The detail view observes this to pop
-    /// its navigation stack to the selected section's root on every click —
-    /// without it, re-clicking "Главная" (or a playlist) while a sub-page such
-    /// as an album card is open would leave the stack untouched.
+    /// row, even the one already active.
     var navVersion = 0
+    /// Sub-pages opened in the detail column (albums, artists, playlists, songs).
+    /// Pushed pages stack on top of each other and can be popped via the back button
+    /// or cleared by clicking a sidebar item.
+    var history: [Destination] = []
     /// Album requested by a surface outside the main navigation stack, such as
     /// the mini-player. `DetailView` consumes this request exactly once.
     var pendingAlbum: SubsonicAlbum?

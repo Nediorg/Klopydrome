@@ -58,7 +58,9 @@ struct SearchResultsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(artists) { artist in
-                        NavigationLink(value: artist) {
+                        Button {
+                            app.openArtistInLibrary(artist)
+                        } label: {
                             VStack(spacing: 6) {
                                 CircularArtistArt(name: artist.name, imageURL: artist.artistImageUrl, size: 80)
                                 Text(artist.name)
@@ -85,7 +87,9 @@ struct SearchResultsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(albums) { album in
-                        NavigationLink(value: album) {
+                        Button {
+                            app.openAlbumInLibrary(album)
+                        } label: {
                             AlbumCard(album: album)
                         }
                         .buttonStyle(.plain)

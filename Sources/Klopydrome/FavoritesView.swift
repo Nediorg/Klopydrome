@@ -69,7 +69,9 @@ struct FavoritesView: View {
             VStack(spacing: 0) {
                 ForEach(Array(followedPlaylists.enumerated()), id: \.element.id) { idx, playlist in
                     HStack {
-                        NavigationLink(value: playlist) {
+                        Button {
+                            app.openPlaylist(playlist)
+                        } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "music.note.list")
                                     .foregroundStyle(.secondary)
@@ -109,7 +111,9 @@ struct FavoritesView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(artists) { artist in
-                        NavigationLink(value: artist) {
+                        Button {
+                            app.openArtistInLibrary(artist)
+                        } label: {
                             VStack(spacing: 6) {
                                 CircularArtistArt(name: artist.name, imageURL: artist.artistImageUrl, size: 90)
                                 Text(artist.name).font(.caption).lineLimit(2).frame(width: 90)
@@ -133,8 +137,12 @@ struct FavoritesView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(albums) { album in
-                        NavigationLink(value: album) { AlbumCard(album: album) }
-                            .buttonStyle(.plain)
+                        Button {
+                            app.openAlbumInLibrary(album)
+                        } label: {
+                            AlbumCard(album: album)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.vertical, 8)

@@ -16,14 +16,18 @@ struct SongDetailView: View {
                 VStack(spacing: 4) {
                     Text(song.displayTitle).font(.title.bold()).multilineTextAlignment(.center)
                     if let artistId = song.artistId, let artistName = song.artist {
-                        NavigationLink(value: Artist(id: artistId, name: artistName)) {
+                        Button {
+                            app.openArtistInLibrary(Artist(id: artistId, name: artistName))
+                        } label: {
                             Text(artistName).foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
                         .hoverBrighten()
                     }
                     if let albumId = song.albumId, let albumName = song.album {
-                        NavigationLink(value: SubsonicAlbum(id: albumId, album: albumName)) {
+                        Button {
+                            app.openAlbumInLibrary(SubsonicAlbum(id: albumId, album: albumName))
+                        } label: {
                             Text(albumName).foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)

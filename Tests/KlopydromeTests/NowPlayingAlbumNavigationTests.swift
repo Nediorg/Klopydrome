@@ -45,9 +45,8 @@ final class NowPlayingAlbumNavigationTests: XCTestCase {
 
         app.openAlbumInLibrary(album)
 
-        XCTAssertEqual(app.nav.selected, .albums)
+        XCTAssertEqual(app.nav.history.last, .album(album))
         XCTAssertNil(app.nav.selectedPlaylist)
-        XCTAssertEqual(app.nav.pendingAlbum, album)
     }
 
     @MainActor
@@ -58,7 +57,7 @@ final class NowPlayingAlbumNavigationTests: XCTestCase {
 
         app.openSongDetails(song)
 
-        XCTAssertEqual(app.nav.pendingSong, song)
+        XCTAssertEqual(app.nav.history.last, .song(song))
         XCTAssertNotNil(app.nav.selectedPlaylist)
     }
 }

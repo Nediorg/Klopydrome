@@ -139,7 +139,9 @@ struct ArtistDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Последний релиз".localized)
                 .font(.title2.bold())
-            NavigationLink(value: latest) {
+            Button {
+                app.openAlbumInLibrary(latest)
+            } label: {
                 HStack(spacing: 16) {
                     CoverArtView(coverArt: latest.coverArt, size: 150, shadow: true)
                     VStack(alignment: .leading, spacing: 6) {
@@ -177,7 +179,9 @@ struct ArtistDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(appearsOn) { album in
-                        NavigationLink(value: album) {
+                        Button {
+                            app.openAlbumInLibrary(album)
+                        } label: {
                             AlbumCard(album: album, width: 150, showsYear: true, reservesTitleLines: true)
                         }
                         .buttonStyle(.plain)
@@ -348,7 +352,9 @@ private extension ArtistDetailView {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 12) {
                         ForEach(albums) { album in
-                            NavigationLink(value: album) {
+                            Button {
+                                app.openAlbumInLibrary(album)
+                            } label: {
                                 AlbumCard(album: album, width: 150, showsYear: true, reservesTitleLines: true)
                             }
                             .buttonStyle(.plain)
@@ -368,7 +374,9 @@ private extension ArtistDetailView {
     var albumsGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
             ForEach(albums) { album in
-                NavigationLink(value: album) {
+                Button {
+                    app.openAlbumInLibrary(album)
+                } label: {
                     AlbumCard(album: album, width: 150, showsYear: true, reservesTitleLines: true)
                 }
                 .buttonStyle(.plain)

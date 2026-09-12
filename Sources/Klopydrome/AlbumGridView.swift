@@ -133,7 +133,9 @@ struct AlbumGridView: View {
                         ScrollView {
                             LazyVGrid(columns: cols, spacing: gap) {
                                 ForEach(processedAlbums) { album in
-                                    NavigationLink(value: album) {
+                                    Button {
+                                        app.openAlbumInLibrary(album)
+                                    } label: {
                                         AlbumCard(album: album, width: cardWidth, reservesTitleLines: true)
                                     }
                                     .buttonStyle(.plain)

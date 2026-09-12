@@ -181,6 +181,7 @@ struct SidebarView: View {
     private func select(_ newValue: Selection) {
         selection = newValue
         applySelection(newValue)
+        app.nav.history.removeAll()
         app.nav.navVersion += 1
     }
 
@@ -248,6 +249,7 @@ struct SidebarView: View {
         guard !query.isEmpty else { return }
         app.nav.selected = .search
         app.nav.selectedPlaylist = nil
+        app.nav.history.removeAll()
         // Bump the nav version so a repeated submit re-runs the search even when
         // the query is unchanged (the search view keys its load task on
         // `navVersion`) and pops any pushed detail page so the fresh results are

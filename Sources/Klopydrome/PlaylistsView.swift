@@ -56,7 +56,9 @@ struct PlaylistsView: View {
 
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
                             ForEach(playlists) { playlist in
-                                NavigationLink(value: playlist) {
+                                Button {
+                                    app.openPlaylist(playlist)
+                                } label: {
                                     PlaylistTile(playlist: playlist)
                                 }
                                 .buttonStyle(.plain)
@@ -80,7 +82,6 @@ struct PlaylistsView: View {
             }
         }
         .task(id: app.isConnected) { await loadIfNeeded() }
-        .navigationDestination(for: SmartPlaylist.self) { SmartPlaylistDetailView(playlist: $0) }
         .confirmationDialog(
             "Удалить плейлист?",
             isPresented: Binding(
@@ -158,7 +159,9 @@ struct PlaylistsView: View {
                 .foregroundStyle(.secondary)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
                 ForEach(app.smartPlaylists) { smart in
-                    NavigationLink(value: smart) {
+                    Button {
+                        app.openSmartPlaylist(smart)
+                    } label: {
                         SmartPlaylistTile(playlist: smart)
                     }
                     .buttonStyle(.plain)
