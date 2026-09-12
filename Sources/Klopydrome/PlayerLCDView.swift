@@ -23,7 +23,7 @@ struct PlayerLCDView: View {
     @State private var hoverText = false
     @State private var hoverTrailing = false
     @State private var hoverScrubber = false
-    private var nowHovered: Bool { hoverText || hoverTrailing || hoverScrubber }
+    private var nowHovered: Bool { coverHovered || hoverText || hoverTrailing || hoverScrubber }
 
     private var isTahoeOrLater: Bool {
         if #available(macOS 26, *) {
@@ -73,6 +73,16 @@ struct PlayerLCDView: View {
                             .transition(.opacity)
                     }
                 }
+                .overlay(alignment: .topTrailing) {
+                    if app.player.displaySong != nil {
+                        TopTrailingControlsView(
+                            song: app.player.displaySong,
+                            nowHovered: nowHovered
+                        )
+                        .contentShape(Rectangle())
+                        .onHover { hoverTrailing = $0 }
+                    }
+                }
                 .overlay(alignment: .bottomLeading) {
                     if let error = app.player.lastError {
                         Text(error)
@@ -95,23 +105,10 @@ struct PlayerLCDView: View {
     }
 
     private var lcdContent: some View {
-        HStack(spacing: 0) {
-            coverButton
-
+        ZStack(alignment: .leading) {
             textColumn
-                .padding(.leading, 8)
-                .padding(.trailing, app.player.displaySong != nil ? 4 : 8)
 
-            if app.player.displaySong != nil {
-                TopTrailingControlsView(
-                    song: app.player.displaySong,
-                    nowHovered: nowHovered
-                )
-                .frame(width: LayoutMetrics.topTrailingSlotWidth, alignment: .trailing)
-                .frame(maxHeight: .infinity, alignment: .topTrailing)
-                .contentShape(Rectangle())
-                .onHover { hoverTrailing = $0 }
-            }
+            coverButton
         }
     }
 
@@ -181,18 +178,25 @@ struct PlayerLCDView: View {
     }
 
     private var textColumn: some View {
-        VStack(spacing: 1) {
+        VStack(alignment: .leading, spacing: 1) {
             FadeTruncatedLabel(
-                text: app.player.displaySong?.displayTitle ?? ""
+                text: app.player.displaySong?.displayTitle ?? "",
+                font: .system(size: 12, weight: .medium),
+                color: .primary,
+                minLeading: 50,
+                minTrailing: nowHovered ? 42 : 24
             )
+
             FadeTruncatedLabel(
                 text: app.player.displaySong?.displaySubtitle ?? "",
-                color: .secondary
+                font: .system(size: 12),
+                color: .secondary,
+                minLeading: nowHovered ? 68 : 50,
+                minTrailing: nowHovered ? 38 : 24
             )
-            .padding(.horizontal, nowHovered ? 18 : 0)
         }
-        // Full LCD height: content stays vertically centered.
-        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        // Full LCD height: content stays vertically centered, left aligned.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .leading)
         .clipped()
         .contentShape(Rectangle())
         // Directly on the VStack (real Text content): transparent layers do
@@ -231,14 +235,11 @@ struct TopTrailingControlsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 2) {
             if let song {
                 NowPlayingEllipsisMenu(song: song)
                     .opacity(nowHovered ? 1 : 0)
-                    .transition(.opacity)
-                    .animation(.snappy(duration: 0.12), value: nowHovered)
                     .allowsHitTesting(nowHovered)
-                    .accessibilityHidden(false)
             }
 
             Button {
@@ -260,7 +261,7 @@ struct TopTrailingControlsView: View {
             .allowsHitTesting(song != nil)
         }
         .frame(height: 28)
-        .padding(.trailing, 6)
+        .padding(.trailing, 4)
         .offset(y: -2)
     }
 }

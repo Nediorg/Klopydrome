@@ -1,28 +1,30 @@
 import SwiftUI
 
-/// Single-line centered text that dissolves its trailing edge with a gradient
-/// fade instead of a hard ellipsis when it overflows the available width.
+/// Single-line text label that centers when fitting, docks to leading when overflowing,
+/// and smoothly shifts right on hover when overflowing to clear time markers above the scrubber.
 ///
 /// Text remains centered and fully visible when it fits. When overflowing,
-/// it aligns to the leading edge with a subtle gradient fade at the trailing edge,
-/// and after a 3-second reading pause it smoothly scrolls across the available width.
+/// it aligns to the leading edge with 100% solid opacity (no gradient masks),
+/// smoothly clears the lower-left time marker on hover, and after a 3-second
+/// reading pause, marquee scrolls across the available width.
 struct FadeTruncatedLabel: View {
     let text: String
     var font: Font = .system(size: 12)
     var color: Color = .primary
-    var leadingInset: CGFloat = 0
-    var trailingInset: CGFloat = 0
+
+    var minLeading: CGFloat = 8
+    var minTrailing: CGFloat = 24
 
     @State private var idealWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var marqueeOffset: CGFloat = 0
 
     private var availableWidth: CGFloat {
-        max(0, containerWidth - leadingInset - trailingInset)
+        max(0, containerWidth - minLeading - minTrailing)
     }
 
     private var isOverflowing: Bool {
-        availableWidth > 20 && idealWidth > availableWidth + 1
+        containerWidth > 0 && availableWidth > 0 && idealWidth > availableWidth + 1
     }
 
     private var marqueeDistance: CGFloat {
@@ -33,54 +35,62 @@ struct FadeTruncatedLabel: View {
         max(4, TimeInterval(marqueeDistance / 24))
     }
 
+    private var leadingSpace: CGFloat {
+        guard containerWidth > 0, idealWidth > 0 else { return minLeading }
+        if isOverflowing {
+            return minLeading
+        }
+        let centered = (containerWidth - idealWidth) / 2
+        let clampedLeading = max(minLeading, centered)
+        if clampedLeading + idealWidth > containerWidth - minTrailing {
+            return max(minLeading, containerWidth - minTrailing - idealWidth)
+        }
+        return clampedLeading
+    }
+
     var body: some View {
-        ZStack(alignment: isOverflowing ? .leading : .center) {
-            Text(text)
-                .font(font)
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .offset(x: isOverflowing ? -marqueeOffset : 0)
-                .background {
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(width: leadingSpace, height: 1)
+
+            ZStack(alignment: .leading) {
+                if isOverflowing && marqueeOffset > 0 {
                     Text(text)
                         .font(font)
+                        .foregroundStyle(color)
+                        .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
-                            idealWidth = $0
-                        }
+                        .offset(x: -marqueeOffset)
+                        .transition(.identity)
+                } else {
+                    Text(text)
+                        .font(font)
+                        .foregroundStyle(color)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .transition(.identity)
+                }
+            }
+            .frame(maxWidth: isOverflowing ? availableWidth : nil, alignment: .leading)
+            .clipped()
+
+            Spacer(minLength: minTrailing)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            Text(text)
+                .font(font)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                    idealWidth = $0
                 }
         }
-        .frame(maxWidth: .infinity, alignment: isOverflowing ? .leading : .center)
-        .padding(.leading, leadingInset)
-        .padding(.trailing, trailingInset)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
             containerWidth = $0
-        }
-        .mask {
-            if isOverflowing {
-                HStack(spacing: 0) {
-                    if marqueeOffset > 4 {
-                        LinearGradient(
-                            colors: [.clear, .black],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: 12)
-                    }
-                    Color.black
-                    LinearGradient(
-                        colors: [.black, .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: 12)
-                }
-                .padding(.leading, leadingInset)
-                .padding(.trailing, trailingInset)
-            } else {
-                Color.black
-            }
         }
         .task(id: MarqueeKey(text: text, idealWidth: idealWidth, availableWidth: availableWidth)) {
             await runMarquee()

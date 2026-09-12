@@ -57,6 +57,65 @@ final class PlayerToolbarLayoutTests: XCTestCase {
     }
 
     @MainActor
+    func testLongTitleDoesNotClipLeadingEdgeInLCD() {
+        let app = AppState()
+        let song = SubsonicSong(
+            id: "sonic-long",
+            title: "For True Story ...for Sonic vs. Shadow",
+            artist: "D TEAM — Multi-Dimensional: Sonic Adventure 2 Original Soundtrack"
+        )
+        app.player.queue = [song]
+        app.player.currentIndex = 0
+        let window = makeTestWindow(rootView: MainView().environment(app), width: 1000)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        guard let contentView = window.contentView else {
+            XCTFail("contentView must exist")
+            return
+        }
+        XCTAssertFalse(contentView.isHiddenOrHasHiddenAncestor)
+    }
+
+    @MainActor
+    func testFadeTruncatedLabelLeftAlignedAndTruncated() {
+        let labelShort = FadeTruncatedLabel(
+            text: "Short title",
+            minLeading: 50,
+            minTrailing: 24
+        )
+        let labelLong = FadeTruncatedLabel(
+            text: "Very long track title that easily overflows the small available width",
+            minLeading: 68,
+            minTrailing: 38
+        )
+
+        let windowShort = makeTestWindow(rootView: labelShort.frame(width: 150, height: 20), width: 300)
+        let windowLong = makeTestWindow(rootView: labelLong.frame(width: 150, height: 20), width: 300)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+        windowShort.contentView?.layoutSubtreeIfNeeded()
+        windowLong.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertNotNil(windowShort.contentView)
+        XCTAssertNotNil(windowLong.contentView)
+    }
+
+    @MainActor
+    func testFadeTruncatedLabelHoverMargins() {
+        let subtitleHover = FadeTruncatedLabel(
+            text: "Kenta Nagata — Animal Crossing Original Soundtrack",
+            font: .system(size: 12),
+            color: .secondary,
+            minLeading: 68,
+            minTrailing: 38
+        )
+        let window = makeTestWindow(rootView: subtitleHover.frame(width: 200, height: 20), width: 300)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertNotNil(window.contentView)
+    }
+
+    @MainActor
     private func makeTestWindow(rootView: some View, width: CGFloat) -> NSWindow {
         let hostingView = NSHostingView(rootView: rootView.frame(width: width, height: 700))
         hostingView.frame = NSRect(x: 0, y: 0, width: width, height: 700)

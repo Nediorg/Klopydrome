@@ -218,7 +218,8 @@ struct MinimalScrubber: View {
                     }
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundStyle(AMColor.secondaryText)
-                    .padding(.horizontal, 4)
+                    .padding(.leading, 2)
+                    .padding(.trailing, 4)
                     .padding(.bottom, trackHeight)
                     .allowsHitTesting(false)
                     .transition(.opacity)
