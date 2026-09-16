@@ -105,7 +105,6 @@ struct PlayerLCDView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 42)
-        .background(NonDraggableBackground())
     }
 
     private var lcdContent: some View {

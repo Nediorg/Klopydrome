@@ -38,6 +38,30 @@ enum TitlebarPassThrough {
     @MainActor
     static func install(on window: NSWindow? = nil) {
         installGlobal()
+        if let window {
+            configureWindow(window)
+        }
+    }
+
+    @MainActor
+    static func configureWindow(_ window: NSWindow) {
+        installGlobal()
+
+        let selDisable = Selector(("_setModeDisablesServerSideDrag:"))
+        if window.responds(to: selDisable) {
+            typealias SetDragModeFunction = @convention(c) (AnyObject, Selector, Bool) -> Void
+            let imp = class_getMethodImplementation(type(of: window), selDisable)
+            let setterFunction = unsafeBitCast(imp, to: SetDragModeFunction.self)
+            setterFunction(window, selDisable, true)
+        }
+
+        let selUpdate = Selector(("_updateWindowCanServerSideDrag"))
+        if window.responds(to: selUpdate) {
+            typealias UpdateDragFunction = @convention(c) (AnyObject, Selector) -> Void
+            let imp = class_getMethodImplementation(type(of: window), selUpdate)
+            let updateFunction = unsafeBitCast(imp, to: UpdateDragFunction.self)
+            updateFunction(window, selUpdate)
+        }
     }
 
     private static func swizzleThemeFrameDrag(on themeFrameClass: AnyClass) {
@@ -167,6 +191,10 @@ final class HeaderBarWindowDragView: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
 
     override func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
+        if event.clickCount == 2 {
+            window?.zoom(nil)
+        } else {
+            window?.performDrag(with: event)
+        }
     }
 }

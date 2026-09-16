@@ -185,7 +185,7 @@ struct ContentView: View {
             toolbar.displayMode = .iconOnly
         }
         window.titlebarSeparatorStyle = .none
-        TitlebarPassThrough.install(on: window)
+        TitlebarPassThrough.configureWindow(window)
         DispatchQueue.main.async { [weak window] in
             func clearMenuRecursively(in view: NSView) {
                 if String(describing: type(of: view)).contains("Toolbar") {
