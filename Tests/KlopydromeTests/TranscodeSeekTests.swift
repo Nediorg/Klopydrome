@@ -43,4 +43,25 @@ final class TranscodeSeekTests: XCTestCase {
         XCTAssertFalse(Player.isRemoteTranscodeStreamURL(nil))
         XCTAssertFalse(Player.isRemoteTranscodeStreamURL(URL(fileURLWithPath: "/tmp/song.opus")))
     }
+
+    @MainActor
+    func testSeekNeedsTranscodeRestartBehavior() throws {
+        let player = Player()
+        XCTAssertFalse(player.seekNeedsTranscodeRestart(to: 30))
+
+        // Direct stream (no format param)
+        player.automix.currentSourceURL = URL(string: "http://host/rest/stream?id=abc")
+        XCTAssertFalse(player.seekNeedsTranscodeRestart(to: 30))
+
+        // Remote transcode stream (format=opus)
+        player.automix.currentSourceURL = URL(string: "http://host/rest/stream?id=abc&format=opus")
+        player.mpvStreamOffset = 10
+        // Real position = 10 + 0 = 10
+        // Target 15 -> distance 5 >= 1.0 -> needs restart
+        XCTAssertTrue(player.seekNeedsTranscodeRestart(to: 15))
+        // Target 10.4 -> distance 0.4 < 1.0 -> no restart
+        XCTAssertFalse(player.seekNeedsTranscodeRestart(to: 10.4))
+        // Target 0 -> distance 10 >= 1.0 -> needs restart
+        XCTAssertTrue(player.seekNeedsTranscodeRestart(to: 0))
+    }
 }

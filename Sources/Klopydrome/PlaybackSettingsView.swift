@@ -68,10 +68,7 @@ struct PlaybackSettingsView: View {
                 Text("Плеер".localized)
             } footer: {
                 if playbackEngineBinding.wrappedValue == .avFoundation {
-                    Text(
-                        "В режиме AVFoundation плавный переход, ReplayGain, " +
-                            "обрезка тишины и предзагрузка треков недоступны.".localized
-                    )
+                    Text("В режиме AVFoundation часть функций воспроизведения недоступна.".localized)
                 }
             }
 

@@ -90,6 +90,13 @@ extension Player {
             completeAutomixCrossfade(active)
             return
         }
+        let expected = trackDuration
+        if expected > 0, currentTime + 3 < expected {
+            if currentSourceIsRemoteTranscode {
+                performTranscodeRestart(at: currentTime)
+                return
+            }
+        }
         onTrackEnded?()
     }
 

@@ -30,7 +30,7 @@ extension Player {
                 currentTime = clamped
                 return
             }
-            if mpvSeekRestartActive || seekNeedsTranscodeRestart(to: clamped) {
+            if currentSourceIsRemoteTranscode {
                 setTranscodeSeek(to: clamped)
                 return
             }
@@ -45,7 +45,7 @@ extension Player {
         }
         // Remote transcodes are not seekable via AVPlayer's range requests;
         // restart the server stream at the target (timeOffset) instead.
-        if mpvSeekRestartActive || avSeekNeedsTranscodeRestart(to: clamped) {
+        if currentSourceIsRemoteTranscode {
             heldSeekTarget = clamped
             setAVPTranscodeSeek(to: clamped)
             return
@@ -85,10 +85,13 @@ extension Player {
     func scrub(to time: Double) {
         let clamped = max(0, time)
         currentTime = clamped
-        guard engineKind != .mpv else {
+        guard engineKind != .mpv, !currentSourceIsRemoteTranscode else {
             // mpv seeks are cheap range requests, so while scrubbing we only
             // move the preview; `endScrub` commits the real reposition.
-            if !mpvEngine.isLoaded { pendingSeekTime = clamped }
+            // On remote transcodes, live scrubbing against a non-seekable pipe
+            // is not supported; hold the preview and commit on release.
+            if engineKind == .mpv, !mpvEngine.isLoaded { pendingSeekTime = clamped }
+            if engineKind != .mpv, avPlayer.currentItem == nil { pendingSeekTime = clamped }
             return
         }
         guard avPlayer.currentItem != nil else {

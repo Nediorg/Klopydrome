@@ -17,10 +17,11 @@ import Foundation
 /// engine's pipe-relative time and that offset; otherwise the display would
 /// snap back to 0 and run N seconds behind the real track position.
 extension Player {
-    /// How many seconds of audio libmpv keeps buffered around the playback
-    /// position (matches the MPV engine's `cache-secs=10`). A seek crossing
-    /// that range on a live transcode cannot be read from the buffer.
-    private var transcodedSeekCushion: Double { 10 }
+    /// Minimum distance for a seek on a live transcode to request a fresh
+    /// stream from the server. Navidrome serves transcodes as live chunked
+    /// pipes with integer second timeOffset resolution. Small sub-second
+    /// differences are left alone to avoid flushing the demuxer buffer.
+    private var transcodedSeekCushion: Double { 1.0 }
 
     /// True when the current source is a remote transcode (its URL carries a
     /// server `format` parameter instead of being a local file).
@@ -47,32 +48,17 @@ extension Player {
         avPlayer.currentItem?.seekableTimeRanges.isEmpty ?? true
     }
 
-    /// First-time decision: a seek needs a server restart when the current
-    /// source is a remote transcode whose pipe mpv cannot range-seek (a live
-    /// transcode has no Content-Length and no accept-ranges, so libmpv reports
-    /// it non-seekable and can only move within what it already downloaded).
-    /// mpv's `duration` for such a pipe is meaningless (0/inf/NaN), so the
-    /// decision rests on `seekable`, not on the reported duration. Once a
-    /// restart has happened (`mpvSeekRestartActive`) the pipe is known
-    /// non-seekable and the decision is made regardless of any duration the
-    /// engine reports later.
+    /// A seek on a live remote transcode always requires a server restart when
+    /// the target moves by at least the cushion distance, because live pipes
+    /// lack HTTP range headers and cannot be range-seeked.
     func seekNeedsTranscodeRestart(to target: Double) -> Bool {
         currentSourceIsRemoteTranscode &&
-            !mpvSeekRestartActive &&
-            !mpvEngine.isSeekable &&
-            abs(target - mpvRealPosition) > transcodedSeekCushion
+            abs(target - mpvRealPosition) >= transcodedSeekCushion
     }
 
     func avSeekNeedsTranscodeRestart(to target: Double) -> Bool {
-        guard currentSourceIsRemoteTranscode else { return false }
-        // AVPlayer exposes seekability via seekableTimeRanges; a live
-        // transcode has empty ranges or an indefinite duration.
-        let item = avPlayer.currentItem
-        let seekableEmpty = item?.seekableTimeRanges.isEmpty ?? true
-        let duration = item?.duration
-        let indefinite = duration == nil || duration!.isIndefinite || (duration?.seconds ?? 0) <= 0
-        let notSeekable = seekableEmpty || indefinite
-        return notSeekable && abs(target - avRealPosition) > transcodedSeekCushion
+        currentSourceIsRemoteTranscode &&
+            abs(target - avRealPosition) >= transcodedSeekCushion
     }
 
     func setAVPTranscodeSeek(to target: Double) {
@@ -81,7 +67,7 @@ extension Player {
             currentTime = target
             return
         }
-        let crossesBuffer = abs(target - avRealPosition) > transcodedSeekCushion
+        let crossesBuffer = abs(target - avRealPosition) >= transcodedSeekCushion
         guard !crossesBuffer else {
             if mpvSeekRestartActive && isBuffering {
                 pendingSeekTime = target
@@ -89,24 +75,6 @@ extension Player {
             }
             performAVPTranscodeRestart(at: target)
             return
-        }
-        if mpvSeekRestartActive && isBuffering {
-            pendingSeekTime = target
-            return
-        }
-        // In-buffer nudge: try a normal AVPlayer seek; if the pipe is not
-        // seekable it will be caught on the next seek as a cross-buffer jump.
-        isSeekInFlight = true
-        seekRequestID += 1
-        let requestID = seekRequestID
-        currentTime = target
-        heldSeekTarget = target
-        let cmTarget = CMTime(seconds: target - mpvStreamOffset, preferredTimescale: 600)
-        avPlayer.seek(to: cmTarget, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.seekRequestID == requestID else { return }
-                self.isSeekInFlight = false
-            }
         }
     }
 
@@ -117,7 +85,7 @@ extension Player {
         mpvStreamOffset = offset
         mpvSeekRestartActive = true
         mpvRestartStepped = false
-        transcodeRestartResidual = target - offset
+        transcodeRestartResidual = nil
         duration = 0
         currentTime = target
         heldSeekTarget = target
@@ -137,19 +105,17 @@ extension Player {
         }
     }
 
-    /// Commits a seek on a live transcode, measuring distance from the real
-    /// engine position. Small seeks are served by libmpv's local buffer; only
-    /// a target past the buffered range restarts the server stream. While a
-    /// restarted pipe is still buffering, further seeks are coalesced into
-    /// `pendingSeekTime` (last wins) and applied once a time tick observes the
-    /// pipe settled, so rapid scrubs never overlap two server restarts.
+    /// Commits a seek on a live transcode. Seeks that move by at least 1s
+    /// trigger a clean server restart via `timeOffset`. While a restarted pipe
+    /// is buffering, further seeks coalesce into `pendingSeekTime` (last wins)
+    /// and apply once settled, so rapid scrubs never overlap restarts.
     func setTranscodeSeek(to target: Double) {
         guard mpvEngine.isLoaded else {
             pendingSeekTime = target
             currentTime = target
             return
         }
-        let crossesBuffer = abs(target - mpvRealPosition) > transcodedSeekCushion
+        let crossesBuffer = abs(target - mpvRealPosition) >= transcodedSeekCushion
         guard !crossesBuffer else {
             if mpvSeekRestartActive && mpvEngine.isBuffering {
                 pendingSeekTime = target
@@ -158,33 +124,23 @@ extension Player {
             performTranscodeRestart(at: target)
             return
         }
-        // In-buffer nudge. During a restart's buffering window even a small
-        // seek is deferred until the pipe is actually playing again.
-        if mpvSeekRestartActive && mpvEngine.isBuffering {
-            pendingSeekTime = target
-            return
-        }
-        let pipeTarget = target - mpvStreamOffset
-        currentTime = mpvEngine.seek(to: max(0, pipeTarget))
     }
 
     /// Reloads the current stream via the Subsonic `timeOffset` parameter, so
     /// the server opens a fresh transcode starting at `target`. Audio is
     /// stopped first: while the old pipe runs, libmpv keeps reporting its
     /// pre-restart position, which fights the painted target. Playback is
-    /// resumed by the load completion only once the fresh pipe is loaded and
-    /// stepped onto the target. `mpvStreamOffset` is recorded before the load
-    /// so the clock math stays consistent, and `pendingSeekTime` is left
-    /// alone — a seek issued while the new pipe buffers is re-decided after it
-    /// settles.
-    private func performTranscodeRestart(at target: Double) {
+    /// resumed by the load completion only once the fresh pipe is loaded.
+    /// `mpvStreamOffset` is recorded before the load so clock math stays
+    /// consistent.
+    func performTranscodeRestart(at target: Double) {
         guard let url = automix.currentSourceURL,
               let offsetURL = Self.transcodedSeekURL(from: url, at: target) else { return }
         let offset = Double(max(0, Int(target)))
         mpvStreamOffset = offset
         mpvSeekRestartActive = true
         mpvRestartStepped = false
-        transcodeRestartResidual = target - offset
+        transcodeRestartResidual = nil
         duration = 0
         currentTime = target
         heldSeekTarget = target

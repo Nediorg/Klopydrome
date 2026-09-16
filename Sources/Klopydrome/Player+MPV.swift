@@ -24,17 +24,12 @@ extension Player {
                     self.isBuffering = false
                     self.isLoading = false
                     if self.mpvSeekRestartActive {
-                        // A transcode seek restart: audio stopped at the old
-                        // position, so step the fractional remainder onto the
-                        // target while still frozen, then let playback resume
-                        // exactly where the user asked.
-                        var residual: Double = 0
-                        if let pending = self.transcodeRestartResidual {
-                            self.transcodeRestartResidual = nil
-                            residual = pending
-                            self.mpvEngine.seek(to: pending)
-                        }
-                        self.currentTime = self.mpvStreamOffset + residual
+                        // A transcode seek restart: the fresh pipe is already
+                        // streaming from the target offset on the server.
+                        // Do not issue an in-pipe seek onto an unbuffered live stream;
+                        // update currentTime and let playback resume smoothly.
+                        self.transcodeRestartResidual = nil
+                        self.currentTime = self.heldSeekTarget ?? self.mpvStreamOffset
                         self.mpvRestartStepped = true
                     }
                     // Respect a pause issued while the async load was in flight
@@ -95,7 +90,7 @@ extension Player {
                         // Hold a seeked target on screen until the real position
                         // catches up, so a fresh load or a restart can't snap the
                         // timeline back to 0 (or the pre-seek spot).
-                        if display >= held - 0.25 {
+                        if abs(display - held) <= 1.0 || display >= held {
                             self.heldSeekTarget = nil
                             self.currentTime = display
                         } else if self.currentTime < held {

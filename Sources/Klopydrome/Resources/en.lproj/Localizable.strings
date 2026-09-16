@@ -734,7 +734,7 @@
 "Сервер не поддерживает публикацию ссылок (EnableSharing выключен)." = "The server doesn't support link sharing (EnableSharing is off).";
 "Подключение к серверу не установлено." = "Not connected to the server.";
 
-"В режиме AVFoundation плавный переход, ReplayGain, обрезка тишины и предзагрузка треков недоступны." = "Crossfade, ReplayGain, silence trimming, and track preloading are unavailable with AVFoundation.";
+"В режиме AVFoundation часть функций воспроизведения недоступна." = "Some playback features are unavailable with AVFoundation.";
 "Заранее открывает следующий трек для воспроизведения без задержки." = "Pre-opens the next track to eliminate pauses between songs.";
 "Сохраняет позицию и список воспроизведения между запусками приложения." = "Saves playback position and queue across app launches.";
 "Следующая песня начинает звучать до окончания текущей." = "Fades into the next song before the current one ends.";

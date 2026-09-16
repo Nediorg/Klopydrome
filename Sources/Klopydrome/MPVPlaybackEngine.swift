@@ -107,7 +107,6 @@ final class MPVPlaybackEngine {
         // fallback title and replace the app's artwork in Control Center.
         mpv_set_option_string(mpv, "input-media-keys", "no")
         mpv_set_option_string(mpv, "gapless", "yes")
-        mpv_set_option_string(mpv, "force-seekable", "yes")
         mpv_set_option_string(mpv, "terminal", "no")
         mpv_set_option_string(mpv, "msg-level", "all=warn")
         for option in AutomixLoudness.mpvOptions(
