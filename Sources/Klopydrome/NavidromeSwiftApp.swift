@@ -146,27 +146,27 @@ struct ContentView: View {
         configureWindow(window)
     }
 
-    static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("MainWindow")
-
-    /// Returns `true` only for the main player window. Settings keeps its default
-    /// opaque background and standard titlebar; the mini-player panel configures
-    /// its own chrome.
+    /// Returns `true` only for the main player window. The marker is
+    /// `WindowMinSizeView`, which lives in `ContentView.background` and
+    /// therefore exists solely in the player window's hierarchy — never in
+    /// Settings or the mini-player panel.
     private func isMainPlayerWindow(_ window: NSWindow) -> Bool {
         guard !(window is NSPanel) else { return false }
-        if window.identifier == Self.mainWindowIdentifier { return true }
-        if let raw = window.identifier?.rawValue, raw.contains("main") {
-            window.identifier = Self.mainWindowIdentifier
+        if window.isMainPlayerWindow { return true }
+        if let content = window.contentView, containsMainWindowMarker(content) {
+            window.isMainPlayerWindow = true
             return true
         }
         return false
     }
 
+    private func containsMainWindowMarker(_ view: NSView) -> Bool {
+        if view is WindowMinSizeView { return true }
+        for sub in view.subviews where containsMainWindowMarker(sub) { return true }
+        return false
+    }
+
     private func configureWindow(_ window: NSWindow) {
-        // Only the main player window gets the chromeless treatment.
-        // Settings keeps its default opaque background and standard title
-        // bar; the mini-player panel configures its own chrome in
-        // `MiniPlayerPanelController.makePanel` (including a zero min size
-        // that the floor below must not override).
         guard isMainPlayerWindow(window) else { return }
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -275,7 +275,7 @@ private final class WindowMinSizeView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let window {
-            window.identifier = ContentView.mainWindowIdentifier
+            window.isMainPlayerWindow = true
         }
         apply()
         // Pass the window itself: at join time it may not be main/key/visible
@@ -294,6 +294,22 @@ private final class WindowMinSizeView: NSView {
             frame.size.width = max(frame.size.width, minSize.width)
             frame.size.height = max(frame.size.height, minSize.height)
             window.setFrame(frame, display: true)
+        }
+    }
+}
+
+private var isPlayerWindowKey: UInt8 = 0
+
+extension NSWindow {
+    fileprivate var isMainPlayerWindow: Bool {
+        get { (objc_getAssociatedObject(self, &isPlayerWindowKey) as? Bool) ?? false }
+        set {
+            objc_setAssociatedObject(
+                self,
+                &isPlayerWindowKey,
+                newValue ? true : nil,
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
         }
     }
 }
