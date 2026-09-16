@@ -3,8 +3,46 @@ import XCTest
 import NavidromeClient
 
 @MainActor
-final class PlayerShuffleTests: XCTestCase {
-    private func song(
+final class PlayerQueueTests: XCTestCase {
+
+    // MARK: - Successor Preloading
+
+    private func makeSong(_ id: String) -> SubsonicSong {
+        SubsonicSong(id: id, title: id, duration: 180)
+    }
+
+    private func makePreloadPlayer(
+        currentIndex: Int = 0,
+        repeatMode: Player.RepeatMode = .off
+    ) -> Player {
+        let player = Player()
+        player.queue = [makeSong("one"), makeSong("two"), makeSong("three")]
+        player.currentIndex = currentIndex
+        player.repeatMode = repeatMode
+        return player
+    }
+
+    func testPreloadSelectsImmediateQueueSuccessor() {
+        XCTAssertEqual(makePreloadPlayer().nextSongForPreloading?.id, "two")
+    }
+
+    func testPreloadWrapsAtQueueEndOnlyWhenRepeatAll() {
+        XCTAssertNil(makePreloadPlayer(currentIndex: 2).nextSongForPreloading)
+        XCTAssertEqual(
+            makePreloadPlayer(currentIndex: 2, repeatMode: .all).nextSongForPreloading?.id,
+            "one"
+        )
+    }
+
+    func testPreloadSkipsRepeatOneAndInvalidQueuePositions() {
+        XCTAssertNil(makePreloadPlayer(repeatMode: .one).nextSongForPreloading)
+        let invalid = makePreloadPlayer(currentIndex: 3)
+        XCTAssertNil(invalid.nextSongForPreloading)
+    }
+
+    // MARK: - Queue Shuffling
+
+    private func makeShuffleSong(
         _ id: String,
         album: String,
         artist: String
@@ -19,22 +57,22 @@ final class PlayerShuffleTests: XCTestCase {
         )
     }
 
-    private func makePlayer() -> Player {
+    private func makeShufflePlayer() -> Player {
         let player = Player()
         player.queue = [
-            song("a1", album: "A", artist: "Artist A"),
-            song("a2", album: "A", artist: "Artist A"),
-            song("b1", album: "B", artist: "Artist B"),
-            song("b2", album: "B", artist: "Artist B"),
-            song("c1", album: "C", artist: "Artist C"),
-            song("c2", album: "C", artist: "Artist C")
+            makeShuffleSong("a1", album: "A", artist: "Artist A"),
+            makeShuffleSong("a2", album: "A", artist: "Artist A"),
+            makeShuffleSong("b1", album: "B", artist: "Artist B"),
+            makeShuffleSong("b2", album: "B", artist: "Artist B"),
+            makeShuffleSong("c1", album: "C", artist: "Artist C"),
+            makeShuffleSong("c2", album: "C", artist: "Artist C")
         ]
         player.currentIndex = 0
         return player
     }
 
     func testModeCanBeSelectedBeforeShuffleIsEnabled() {
-        let player = makePlayer()
+        let player = makeShufflePlayer()
         player.setShuffleMode(.albums)
 
         XCTAssertFalse(player.shuffle)
@@ -42,7 +80,7 @@ final class PlayerShuffleTests: XCTestCase {
     }
 
     func testAlbumShuffleKeepsAlbumTracksContiguousAndRestoresQueue() {
-        let player = makePlayer()
+        let player = makeShufflePlayer()
         let original = player.queue.map(\.id)
         player.setShuffleMode(.albums)
         player.setShuffleEnabled(true)
@@ -58,7 +96,7 @@ final class PlayerShuffleTests: XCTestCase {
     }
 
     func testGroupShuffleKeepsArtistTracksContiguous() {
-        let player = makePlayer()
+        let player = makeShufflePlayer()
         player.setShuffleMode(.groups)
         player.setShuffleEnabled(true)
 
@@ -74,9 +112,9 @@ final class PlayerShuffleTests: XCTestCase {
         XCTAssertFalse(player.shuffle)
 
         let songs = [
-            song("a1", album: "A", artist: "Artist A"),
-            song("b1", album: "B", artist: "Artist B"),
-            song("c1", album: "C", artist: "Artist C")
+            makeShuffleSong("a1", album: "A", artist: "Artist A"),
+            makeShuffleSong("b1", album: "B", artist: "Artist B"),
+            makeShuffleSong("c1", album: "C", artist: "Artist C")
         ]
         player.setQueue(songs, autoPlay: false)
 

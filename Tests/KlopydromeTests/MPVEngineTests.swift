@@ -2,7 +2,11 @@ import Foundation
 import XCTest
 @testable import Klopydrome
 
-final class MPVFailureFallbackTests: XCTestCase {
+@MainActor
+final class MPVEngineTests: XCTestCase {
+
+    // MARK: - Failure Fallback
+
     func testArmedFallbackCanBeConsumedOnlyOnce() {
         let url = URL(fileURLWithPath: "/tmp/problem.mp3")
         var fallback = MPVFailureFallback()
@@ -28,5 +32,18 @@ final class MPVFailureFallbackTests: XCTestCase {
         fallback.clear()
 
         XCTAssertNil(fallback.takeURL())
+    }
+
+    // MARK: - Engine Runtime Failures
+
+    func testRuntimeFailureNotifiesOnce() {
+        let engine = MPVPlaybackEngine()
+        var messages: [String] = []
+        engine.onFailure = { messages.append($0) }
+
+        engine.handleTrackFailure(errorCode: -12)
+        engine.handleTrackFailure(errorCode: -12)
+
+        XCTAssertEqual(messages, ["MPV could not open the audio stream (code -12)."])
     }
 }

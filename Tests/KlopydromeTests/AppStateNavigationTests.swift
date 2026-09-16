@@ -2,7 +2,59 @@ import XCTest
 @testable import Klopydrome
 import NavidromeClient
 
-final class NowPlayingAlbumNavigationTests: XCTestCase {
+@MainActor
+final class AppStateNavigationTests: XCTestCase {
+
+    // MARK: - Album Sorting
+
+    private func album(
+        _ id: String,
+        title: String,
+        year: Int? = nil,
+        playCount: Int? = nil,
+        created: String? = nil
+    ) -> SubsonicAlbum {
+        SubsonicAlbum(id: id, title: title, playCount: playCount, created: created, year: year)
+    }
+
+    func testMissingYearsUseNameAsStableTieBreaker() {
+        let albums = [album("z", title: "Zulu"), album("a", title: "Alpha")]
+
+        XCTAssertEqual(sortedAlbums(albums, by: .release, descending: false).map(\.id), ["a", "z"])
+    }
+
+    func testMissingPlayCountsUseNameAsStableTieBreaker() {
+        let albums = [album("z", title: "Zulu"), album("a", title: "Alpha")]
+
+        XCTAssertEqual(sortedAlbums(albums, by: .playCount, descending: true).map(\.id), ["a", "z"])
+    }
+
+    func testMissingCreatedDatesUseNameAsStableTieBreaker() {
+        let albums = [album("z", title: "Zulu"), album("a", title: "Alpha")]
+
+        XCTAssertEqual(sortedAlbums(albums, by: .recentlyAdded, descending: false).map(\.id), ["a", "z"])
+    }
+
+    // MARK: - Ratings & Star Overrides
+
+    func testToggleStarWithoutClientKeepsOverride() {
+        let app = AppState()
+        let song = SubsonicSong(id: "s1")
+        app.toggleStar(song)
+        XCTAssertTrue(app.isStarred(song))
+        app.toggleStar(song)
+        XCTAssertFalse(app.isStarred(song))
+    }
+
+    func testSetRatingWithoutClientKeepsOverride() {
+        let app = AppState()
+        let song = SubsonicSong(id: "s1", userRating: 2)
+        app.setRating(5, for: song)
+        XCTAssertEqual(app.effectiveRating(for: song), 5)
+    }
+
+    // MARK: - Now Playing & Library Navigation
+
     func testNowPlayingSummaryPreservesAlbumHeaderMetadata() {
         let song = SubsonicSong(
             id: "song-1",
@@ -38,7 +90,6 @@ final class NowPlayingAlbumNavigationTests: XCTestCase {
         XCTAssertEqual(album.artist, "Track Artist")
     }
 
-    @MainActor
     func testOpenAlbumInLibraryPublishesMainNavigationIntent() {
         let app = AppState()
         let album = SubsonicAlbum(id: "album-1", title: "Album")
@@ -49,7 +100,6 @@ final class NowPlayingAlbumNavigationTests: XCTestCase {
         XCTAssertNil(app.nav.selectedPlaylist)
     }
 
-    @MainActor
     func testOpenSongDetailsPublishesPendingSongWithoutTouchingSidebarSelection() {
         let app = AppState()
         app.nav.selectedPlaylist = PlaylistSummary(id: "pl-1", name: "PL", songCount: 3)

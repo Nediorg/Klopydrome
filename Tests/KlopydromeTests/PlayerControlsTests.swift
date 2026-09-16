@@ -3,19 +3,22 @@ import XCTest
 import NavidromeClient
 
 @MainActor
-final class PlayerMenuCommandTests: XCTestCase {
-    private func song() -> SubsonicSong {
+final class PlayerControlsTests: XCTestCase {
+
+    // MARK: - Playback Volume & Stop Commands
+
+    private func mockSong() -> SubsonicSong {
         SubsonicSong(id: "song", title: "Song", duration: 180)
     }
 
-    private func player() -> Player {
+    private func makePlayer() -> Player {
         let player = Player()
-        player.queue = [song()]
+        player.queue = [mockSong()]
         return player
     }
 
     func testAdjustVolumeClampsToSupportedRange() {
-        let player = player()
+        let player = makePlayer()
         player.volume = 0.98
         player.adjustVolume(by: 0.05)
         XCTAssertEqual(player.volume, 1)
@@ -26,7 +29,7 @@ final class PlayerMenuCommandTests: XCTestCase {
     }
 
     func testStopRetainsQueueAndResetsPlaybackState() {
-        let player = player()
+        let player = makePlayer()
         player.currentTime = 42
         player.duration = 180
         player.isPlaying = true
@@ -45,6 +48,8 @@ final class PlayerMenuCommandTests: XCTestCase {
         XCTAssertEqual(player.currentTime, 0)
         XCTAssertEqual(player.duration, 0)
     }
+
+    // MARK: - Panel Exclusivity
 
     func testShowingLyricsReplacesVisibleQueuePanel() {
         let app = AppState()
@@ -84,5 +89,43 @@ final class PlayerMenuCommandTests: XCTestCase {
         app.togglePlayerPanel(.queue)
 
         XCTAssertEqual(app.visiblePlayerPanel, nil)
+    }
+
+    // MARK: - Exit Preferences Persistence
+
+    func testMissingPreferencesUseSafeDefaults() {
+        let defaults = UserDefaults(suiteName: "PlayerControlsExitPrefsTests")!
+        defaults.removePersistentDomain(forName: "PlayerControlsExitPrefsTests")
+        defer { defaults.removePersistentDomain(forName: "PlayerControlsExitPrefsTests") }
+
+        let preferences = PlaybackExitPreferences.load(from: defaults)
+
+        XCTAssertEqual(preferences.volume, 1, accuracy: 0.0001)
+        XCTAssertFalse(preferences.shuffleEnabled)
+    }
+
+    func testSaveRoundTripsVolumeAndShuffle() {
+        let defaults = UserDefaults(suiteName: "PlayerControlsExitPrefsTests")!
+        defaults.removePersistentDomain(forName: "PlayerControlsExitPrefsTests")
+        defer { defaults.removePersistentDomain(forName: "PlayerControlsExitPrefsTests") }
+
+        PlaybackExitPreferences(volume: 0.35, shuffleEnabled: true).save(to: defaults)
+
+        let preferences = PlaybackExitPreferences.load(from: defaults)
+        XCTAssertEqual(preferences.volume, 0.35, accuracy: 0.0001)
+        XCTAssertTrue(preferences.shuffleEnabled)
+    }
+
+    func testInvalidStoredVolumeIsClamped() {
+        let defaults = UserDefaults(suiteName: "PlayerControlsExitPrefsTests")!
+        defaults.removePersistentDomain(forName: "PlayerControlsExitPrefsTests")
+        defer { defaults.removePersistentDomain(forName: "PlayerControlsExitPrefsTests") }
+
+        defaults.set(4.0, forKey: PlaybackExitPreferences.volumeKey)
+        defaults.set(true, forKey: PlaybackExitPreferences.shuffleEnabledKey)
+
+        let preferences = PlaybackExitPreferences.load(from: defaults)
+        XCTAssertEqual(preferences.volume, 1, accuracy: 0.0001)
+        XCTAssertTrue(preferences.shuffleEnabled)
     }
 }

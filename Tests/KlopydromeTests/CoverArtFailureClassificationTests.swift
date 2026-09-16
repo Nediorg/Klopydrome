@@ -32,9 +32,4 @@ final class CoverArtFailureClassificationTests: XCTestCase {
         XCTAssertTrue(isDead(URLError(.badServerResponse)))
         XCTAssertTrue(isDead(NSError(domain: "test", code: 1)))
     }
-
-    func testInvalidateClearsWithoutCrashing() {
-        // No throw, no precondition: safe to call with an empty registry.
-        CoverArtStore.shared.invalidateFailedKeys()
-    }
 }
