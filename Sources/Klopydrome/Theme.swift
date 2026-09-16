@@ -82,10 +82,10 @@ enum LayoutMetrics {
     /// have ample room without aggressive truncation.
     static let playerBarMinWidth: CGFloat = 320
     /// Desired width for the LCD block as a fraction of the header width.
-    static let playerBarMaxFraction: CGFloat = 0.42
+    static let playerBarMaxFraction: CGFloat = 0.32
     /// Hard ceiling for the LCD block width so it never grows unbounded on very
     /// wide windows even though the fraction would allow more.
-    static let playerBarMaxWidth: CGFloat = 500
+    static let playerBarMaxWidth: CGFloat = 420
     /// The toolbar's total minimum budget: leading (208) + LCD (320) +
     /// trailing (199) + margins (24) ≈ 750.
     static let toolbarMinWidth: CGFloat = 750
