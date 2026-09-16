@@ -62,6 +62,8 @@ enum TitlebarPassThrough {
             let updateFunction = unsafeBitCast(imp, to: UpdateDragFunction.self)
             updateFunction(window, selUpdate)
         }
+
+        TitlebarButtonDragMonitor.install(on: window)
     }
 
     private static func swizzleThemeFrameDrag(on themeFrameClass: AnyClass) {
