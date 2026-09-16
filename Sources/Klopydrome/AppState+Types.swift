@@ -94,15 +94,6 @@ struct NavigationState {
     /// Pushed pages stack on top of each other and can be popped via the back button
     /// or cleared by clicking a sidebar item.
     var history: [Destination] = []
-    /// Album requested by a surface outside the main navigation stack, such as
-    /// the mini-player. `DetailView` consumes this request exactly once.
-    var pendingAlbum: SubsonicAlbum?
-    /// Song whose detail page was requested by a surface outside the main
-    /// navigation stack (the mini-player has no stack of its own).
-    /// `DetailView` consumes this request exactly once, mirroring `pendingAlbum`.
-    var pendingSong: SubsonicSong?
-    /// Artist requested from a song row's title/subtitle menu.
-    var pendingArtist: Artist?
     /// Playlist picked directly from the sidebar; shown in the detail column
     /// instead of the "All Playlists" grid.
     var selectedPlaylist: PlaylistSummary?

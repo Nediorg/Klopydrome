@@ -146,23 +146,18 @@ struct ContentView: View {
         configureWindow(window)
     }
 
-    /// Returns `true` only for the main player window. The marker is
-    /// `WindowMinSizeView`, which lives in `ContentView.background` and
-    /// therefore exists solely in the player window's hierarchy — never in
-    /// Settings or the mini-player panel.
-    ///
-    /// A style-mask check is unreliable here: `configureWindow` itself
-    /// inserts `.fullSizeContentView`, so a poisoned window would keep
-    /// passing the check (sticky), and system windows may carry the flag
-    /// by default.
-    private func isMainPlayerWindow(_ window: NSWindow) -> Bool {
-        guard let content = window.contentView else { return false }
-        return containsMainWindowMarker(content)
-    }
+    static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("MainWindow")
 
-    private func containsMainWindowMarker(_ view: NSView) -> Bool {
-        if view is WindowMinSizeView { return true }
-        for sub in view.subviews where containsMainWindowMarker(sub) { return true }
+    /// Returns `true` only for the main player window. Settings keeps its default
+    /// opaque background and standard titlebar; the mini-player panel configures
+    /// its own chrome.
+    private func isMainPlayerWindow(_ window: NSWindow) -> Bool {
+        guard !(window is NSPanel) else { return false }
+        if window.identifier == Self.mainWindowIdentifier { return true }
+        if let raw = window.identifier?.rawValue, raw.contains("main") {
+            window.identifier = Self.mainWindowIdentifier
+            return true
+        }
         return false
     }
 
@@ -279,6 +274,9 @@ private final class WindowMinSizeView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let window {
+            window.identifier = ContentView.mainWindowIdentifier
+        }
         apply()
         // Pass the window itself: at join time it may not be main/key/visible
         // yet, so looking it up via NSApp races and silently misses.

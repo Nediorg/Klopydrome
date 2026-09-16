@@ -5,6 +5,12 @@ struct AutomixCrossfadeGains: Equatable {
     let incoming: Float
 }
 
+struct ActiveAutomixCrossfade {
+    let successorID: String
+    let startTime: Double
+    let duration: Double
+}
+
 enum AutomixCrossfade {
     /// Equal-power gains preserve perceived energy through the overlap. The
     /// MPV contexts reserve 3 dB of ReplayGain headroom for their peak sum.

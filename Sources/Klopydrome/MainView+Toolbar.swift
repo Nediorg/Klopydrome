@@ -118,7 +118,6 @@ struct PlayerHeaderBar: View {
                     app.player.volume = 1
                 }
             }
-            .background(NonDraggableBackground())
 
             HStack(spacing: 4) {
                 Button {

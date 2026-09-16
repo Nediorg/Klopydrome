@@ -303,11 +303,6 @@ struct NowPlayingActionMenuItems: View {
     @Environment(AppState.self) private var app
 
     let song: SubsonicSong
-    var path: Binding<NavigationPath>?
-    /// True when hosted by the mini-player panel: that window has no
-    /// navigation stack and no sheet attachments, so surface-dependent actions
-    /// route through the main window instead of acting locally.
-    var inMiniPlayer = false
 
     var body: some View {
         SongActionItems(app: app, song: song, selection: [song])
@@ -379,11 +374,9 @@ struct DownloadsToolbarButton: View {
                     }
                     .frame(width: 24, height: 30)
                     .hoverFill()
-                    .overlay {
-                        DownloadsTooltipOverlay(text: "Загрузки")
-                    }
                 }
                 .buttonStyle(.plain)
+                .help("Загрузки")
                 .accessibilityLabel("Загрузки")
                 .popover(isPresented: $showDownloads, arrowEdge: .bottom) {
                     DownloadsPopoverView()

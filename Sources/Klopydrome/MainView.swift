@@ -109,21 +109,6 @@ struct DetailView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("")
             .background(AMColor.background)
-            .onChange(of: app.nav.pendingAlbum) { _, album in
-                guard let album else { return }
-                app.openAlbumInLibrary(album)
-                app.nav.pendingAlbum = nil
-            }
-            .onChange(of: app.nav.pendingSong) { _, song in
-                guard let song else { return }
-                app.openSongDetails(song)
-                app.nav.pendingSong = nil
-            }
-            .onChange(of: app.nav.pendingArtist) { _, artist in
-                guard let artist else { return }
-                app.openArtistInLibrary(artist)
-                app.nav.pendingArtist = nil
-            }
     }
 
     @ViewBuilder

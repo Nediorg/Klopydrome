@@ -10,7 +10,6 @@ struct MiniPlayerView: View {
     @State private var isHovering = false
     @State private var controlsRemainVisible = false
     @State private var hideControlsTask: Task<Void, Never>?
-    @State private var navigationPath = NavigationPath()
     @State private var showingVolume = false
 
     private let updateWindowChrome: (Bool, AppState.PlayerPanelTab?) -> Void
@@ -103,7 +102,6 @@ struct MiniPlayerView: View {
             if controlsVisible {
                 MiniPlayerControlsLayer(
                     song: song,
-                    navigationPath: $navigationPath,
                     showingVolume: $showingVolume,
                     togglePanel: togglePanel
                 )
@@ -156,7 +154,6 @@ private struct MiniPlayerControlsLayer: View {
     @Environment(AppState.self) private var app
 
     let song: SubsonicSong
-    @Binding var navigationPath: NavigationPath
     @Binding var showingVolume: Bool
     let togglePanel: (AppState.PlayerPanelTab) -> Void
 
@@ -261,7 +258,7 @@ private struct MiniPlayerControlsLayer: View {
             .accessibilityLabel("В избранное")
 
             Menu {
-                NowPlayingActionMenuItems(song: song, path: $navigationPath, inMiniPlayer: true)
+                NowPlayingActionMenuItems(song: song)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 8, weight: .bold))
