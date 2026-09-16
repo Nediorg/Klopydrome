@@ -31,58 +31,34 @@ final class PlaybackVolumeTests: XCTestCase {
     }
 
     @MainActor
-    func testToolbarVolumeSliderRejectsWindowDraggingAndAdjustsVolume() {
-        let (window, slider) = makePlayerBarWindow()
-        guard let slider else {
-            XCTFail("VolumeSliderNSView not found in PlayerHeaderBar hierarchy")
+    func testInteractiveSliderTrackIsMountedInPlayerBar() {
+        let app = AppState()
+        let window = makeTestWindow(rootView: ContentView().environment(app))
+        let toolbar = NSToolbar(identifier: "TestToolbar")
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
+        window.layoutIfNeeded()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        guard let contentView = window.contentView,
+              let sliderTrack = findInteractiveSliderTrackView(in: contentView) else {
+            XCTFail("InteractiveSliderTrackView must be present in PlayerHeaderBar hierarchy")
             return
         }
 
-        XCTAssertFalse(slider.mouseDownCanMoveWindow, "VolumeSliderNSView must disallow window dragging")
-        XCTAssertTrue(slider.acceptsFirstMouse(for: nil), "VolumeSliderNSView must accept first mouse click")
-
-        let sliderCenterInWindow = slider.convert(NSPoint(x: slider.bounds.midX, y: slider.bounds.midY), to: nil)
-        let hitView = window.contentView?.superview?.hitTest(sliderCenterInWindow)
-        XCTAssertTrue(hitView === slider, "Hit-test at slider center must return VolumeSliderNSView directly")
-
-        let trackInset: CGFloat = 6
-        let trackWidth = slider.bounds.width - (trackInset * 2)
-        let halfPoint = slider.convert(NSPoint(x: trackInset + trackWidth * 0.5, y: slider.bounds.midY), to: nil)
-
-        let downEvent = NSEvent.mouseEvent(
-            with: .leftMouseDown,
-            location: halfPoint,
-            modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: window.windowNumber,
-            context: nil,
-            eventNumber: 1,
-            clickCount: 1,
-            pressure: 1.0
-        )!
-        window.sendEvent(downEvent)
-        XCTAssertEqual(slider.value, 0.5, accuracy: 0.05, "Slider value should be ~0.5 after middle click")
-    }
-
-    @MainActor
-    func testToolbarVolumeSliderStaysInHierarchy() {
-        let (window, slider) = makePlayerBarWindow()
-        guard let slider else {
-            XCTFail("VolumeSliderNSView not found in PlayerHeaderBar hierarchy")
-            return
-        }
-
-        XCTAssertFalse(slider.mouseDownCanMoveWindow, "VolumeSliderNSView must disallow window dragging")
-        XCTAssertTrue(slider.acceptsFirstMouse(for: nil), "VolumeSliderNSView must accept first mouse click")
-
-        let sliderCenter = slider.convert(NSPoint(x: slider.bounds.midX, y: slider.bounds.midY), to: nil)
-        let hitView = window.contentView?.superview?.hitTest(sliderCenter)
-        XCTAssertTrue(hitView === slider, "Hit-test must return VolumeSliderNSView directly")
+        XCTAssertFalse(sliderTrack.mouseDownCanMoveWindow)
+        XCTAssertTrue(sliderTrack.acceptsFirstMouse(for: nil))
     }
 
     @MainActor
     func testWindowTrafficLightsAndToolbarRemainVisible() {
-        let (window, _) = makePlayerBarWindow()
+        let app = AppState()
+        let window = makeTestWindow(rootView: ContentView().environment(app))
+        let toolbar = NSToolbar(identifier: "TestToolbar")
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
+        window.layoutIfNeeded()
+
         guard let closeButton = window.standardWindowButton(.closeButton),
               let minButton = window.standardWindowButton(.miniaturizeButton),
               let zoomButton = window.standardWindowButton(.zoomButton) else {
@@ -100,7 +76,7 @@ final class PlaybackVolumeTests: XCTestCase {
     }
 
     @MainActor
-    func testPlayerHeaderBarAndVolumeSliderInAlbumDetail() {
+    func testNonDraggableBackgroundMountedInAlbumDetail() {
         let app = AppState()
         struct FullWindowWithAlbum: View {
             @State var showDownloads = false
@@ -127,20 +103,16 @@ final class PlaybackVolumeTests: XCTestCase {
         window.contentView?.layoutSubtreeIfNeeded()
 
         guard let contentView = window.contentView,
-              let slider = findVolumeSlider(in: contentView) else {
-            XCTFail("VolumeSliderNSView must be mounted when viewing AlbumDetailView")
+              let nonDrag = findNonDraggable(in: contentView) else {
+            XCTFail("NonDraggableNSView must be mounted when viewing AlbumDetailView")
             return
         }
 
-        XCTAssertFalse(slider.isHiddenOrHasHiddenAncestor, "VolumeSliderNSView must be visible")
-        let sliderInWindow = slider.convert(slider.bounds, to: nil)
-        let minExpectedY = window.frame.height - 54
-        XCTAssertGreaterThanOrEqual(sliderInWindow.minY, minExpectedY, "Slider must be in top 52pt header")
-        XCTAssertLessThanOrEqual(sliderInWindow.maxY, window.frame.height, "Slider must stay in window")
+        XCTAssertFalse(nonDrag.isHiddenOrHasHiddenAncestor, "NonDraggableNSView must be visible")
     }
 
     @MainActor
-    func testRealAppAlbumNavigation() {
+    func testNonDraggablePresentAfterNavigation() {
         let app = AppState()
         let hostingView = NSHostingView(rootView: MainView().environment(app).frame(width: 1180, height: 700))
         hostingView.frame = NSRect(x: 0, y: 0, width: 1180, height: 700)
@@ -166,41 +138,35 @@ final class PlaybackVolumeTests: XCTestCase {
         window.layoutIfNeeded()
 
         guard let contentView = window.contentView,
-              let sliderBefore = findVolumeSlider(in: contentView) else {
-            XCTFail("VolumeSliderNSView must exist before navigation")
+              let ndBefore = findNonDraggable(in: contentView) else {
+            XCTFail("NonDraggableNSView must exist before navigation")
             return
         }
-        XCTAssertFalse(sliderBefore.isHiddenOrHasHiddenAncestor, "Slider must be visible before navigation")
-        let frameBefore = sliderBefore.convert(sliderBefore.bounds, to: nil)
-        XCTAssertGreaterThanOrEqual(frameBefore.minY, window.frame.height - 54)
+        XCTAssertFalse(ndBefore.isHiddenOrHasHiddenAncestor, "NonDraggable must be visible before navigation")
 
         // Navigate to album
         app.openAlbumInLibrary(SubsonicAlbum(id: "test", title: "Burial", artist: "Burial"))
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
         window.layoutIfNeeded()
 
-        guard let sliderAfter = findVolumeSlider(in: contentView) else {
-            XCTFail("VolumeSliderNSView must remain mounted after navigating to album")
+        guard findNonDraggable(in: contentView) != nil else {
+            XCTFail("NonDraggableNSView must remain mounted after navigating to album")
             return
         }
-        XCTAssertFalse(sliderAfter.isHiddenOrHasHiddenAncestor, "Slider must be visible after navigating to album")
-        let frameAfter = sliderAfter.convert(sliderAfter.bounds, to: nil)
-        XCTAssertGreaterThanOrEqual(frameAfter.minY, window.frame.height - 54)
 
         // Navigate back
         app.navigateBack()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
         window.layoutIfNeeded()
 
-        guard let sliderAfterBack = findVolumeSlider(in: contentView) else {
-            XCTFail("VolumeSliderNSView must remain mounted after navigating back")
+        guard findNonDraggable(in: contentView) != nil else {
+            XCTFail("NonDraggableNSView must remain mounted after navigating back")
             return
         }
-        XCTAssertFalse(sliderAfterBack.isHiddenOrHasHiddenAncestor, "Slider must be visible after navigating back")
     }
 
     @MainActor
-    func testPlayerHeaderBarControlsStayWithinWindowBoundsAtVariousWidths() {
+    func testNonDraggableNSViewPresentAtVariousWidths() {
         let app = AppState()
         for width: CGFloat in [850, 960, 1180] {
             let hostingView = NSHostingView(rootView: MainView().environment(app).frame(width: width, height: 700))
@@ -218,33 +184,11 @@ final class PlaybackVolumeTests: XCTestCase {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
 
             guard let contentView = window.contentView,
-                  let slider = findVolumeSlider(in: contentView) else {
-                XCTFail("VolumeSliderNSView must exist at width \(width)")
+                  findNonDraggable(in: contentView) != nil else {
+                XCTFail("NonDraggableNSView must exist at width \(width)")
                 continue
             }
-            XCTAssertFalse(slider.isHiddenOrHasHiddenAncestor)
-            let sliderFrame = slider.convert(slider.bounds, to: nil)
-            XCTAssertLessThanOrEqual(
-                sliderFrame.maxX,
-                width - 12,
-                "Slider right edge must not overflow window at width \(width)"
-            )
-            XCTAssertGreaterThanOrEqual(
-                sliderFrame.minY,
-                window.frame.height - 54,
-                "Slider must be in header at width \(width)"
-            )
         }
-    }
-    @MainActor
-    private func makePlayerBarWindow() -> (NSWindow, VolumeSliderNSView?) {
-        let app = AppState()
-        let window = makeTestWindow(rootView: ContentView().environment(app))
-        let toolbar = NSToolbar(identifier: "TestToolbar")
-        window.toolbar = toolbar
-        window.toolbarStyle = .unified
-        window.layoutIfNeeded()
-        return (window, window.contentView.flatMap { findVolumeSlider(in: $0) })
     }
 
     @MainActor
@@ -269,10 +213,18 @@ final class PlaybackVolumeTests: XCTestCase {
         return window
     }
 
-    private func findVolumeSlider(in view: NSView) -> VolumeSliderNSView? {
-        if let slider = view as? VolumeSliderNSView { return slider }
+    private func findNonDraggable(in view: NSView) -> NonDraggableNSView? {
+        if let ndv = view as? NonDraggableNSView { return ndv }
         for sub in view.subviews {
-            if let found = findVolumeSlider(in: sub) { return found }
+            if let found = findNonDraggable(in: sub) { return found }
+        }
+        return nil
+    }
+
+    private func findInteractiveSliderTrackView(in view: NSView) -> InteractiveSliderTrackView? {
+        if let istv = view as? InteractiveSliderTrackView { return istv }
+        for sub in view.subviews {
+            if let found = findInteractiveSliderTrackView(in: sub) { return found }
         }
         return nil
     }

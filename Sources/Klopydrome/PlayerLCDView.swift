@@ -58,7 +58,10 @@ struct PlayerLCDView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                 .overlay(alignment: .bottomLeading) {
                     if app.player.displaySong != nil {
-                        MinimalScrubber(isLCDHovered: nowHovered)
+                        MinimalScrubber(
+                            isLCDHovered: nowHovered,
+                            onHover: { hoverScrubber = $0 }
+                        )
                             // Greedy GeometryReader would span the whole LCD and its
                             // tracking would shadow every zone beneath (seen as s1
                             // everywhere). Constrain to the real strip: heights must
@@ -102,6 +105,7 @@ struct PlayerLCDView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 42)
+        .background(NonDraggableBackground())
     }
 
     private var lcdContent: some View {

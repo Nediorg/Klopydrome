@@ -13,6 +13,7 @@ struct KlopydromeApp: App {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSWindow.allowsAutomaticWindowTabbing = false
+        TitlebarPassThrough.installGlobal()
     }
 
     var body: some Scene {
@@ -184,6 +185,7 @@ struct ContentView: View {
             toolbar.displayMode = .iconOnly
         }
         window.titlebarSeparatorStyle = .none
+        TitlebarPassThrough.install(on: window)
         DispatchQueue.main.async { [weak window] in
             func clearMenuRecursively(in view: NSView) {
                 if String(describing: type(of: view)).contains("Toolbar") {

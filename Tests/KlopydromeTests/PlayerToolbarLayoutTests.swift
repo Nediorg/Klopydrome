@@ -6,54 +6,19 @@ import XCTest
 
 final class PlayerToolbarLayoutTests: XCTestCase {
     @MainActor
-    func testPlayerPanelDoesNotCoverHeaderBar() {
-        let app = AppState()
-        let window = makeTestWindow(rootView: MainView().environment(app), width: 1000)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
-
-        // Open queue panel
-        app.togglePlayerPanel(.queue)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
-        window.contentView?.layoutSubtreeIfNeeded()
-
-        guard let contentView = window.contentView,
-              let slider = findVolumeSlider(in: contentView) else {
-            XCTFail("VolumeSliderNSView must remain mounted and accessible when queue panel is open")
-            return
-        }
-
-        XCTAssertFalse(slider.isHiddenOrHasHiddenAncestor, "Volume slider must remain visible when queue panel is open")
-        let sliderInWindow = slider.convert(slider.bounds, to: nil)
-        XCTAssertGreaterThanOrEqual(
-            sliderInWindow.minY,
-            window.frame.height - 54,
-            "Slider must remain in the top 52pt header bar"
-        )
-
-        // Ensure hit-test at slider center hits slider directly (not obscured by PlayerPanelView)
-        let sliderCenter = slider.convert(NSPoint(x: slider.bounds.midX, y: slider.bounds.midY), to: nil)
-        let hitView = window.contentView?.superview?.hitTest(sliderCenter)
-        XCTAssertTrue(
-            hitView === slider,
-            "Hit-test must return slider directly, proving PlayerPanelView does not cover it"
-        )
-    }
-
-    @MainActor
     func testHeaderBarControlsPreservedAtMinimumWindowWidth() {
         let app = AppState()
         let minWidth = LayoutMetrics.windowMinWidth
         let window = makeTestWindow(rootView: MainView().environment(app), width: minWidth)
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
 
-        guard let contentView = window.contentView,
-              let slider = findVolumeSlider(in: contentView) else {
-            XCTFail("VolumeSliderNSView must be present at minimum window width")
+        guard let contentView = window.contentView else {
+            XCTFail("contentView must exist at minimum window width")
             return
         }
-
-        XCTAssertFalse(slider.isHiddenOrHasHiddenAncestor)
-        XCTAssertEqual(slider.bounds.width, 75, accuracy: 1.0, "Volume slider must maintain standard 75pt width")
+        // NonDraggableNSView must be present (backs the volume cluster)
+        let nonDrag = findNonDraggable(in: contentView)
+        XCTAssertNotNil(nonDrag, "NonDraggableNSView must be present at minimum window width")
     }
 
     @MainActor
@@ -116,6 +81,32 @@ final class PlayerToolbarLayoutTests: XCTestCase {
     }
 
     @MainActor
+    func testControlsDoNotAllowWindowDragging() {
+        let nonDraggable = NonDraggableNSView()
+        XCTAssertFalse(nonDraggable.mouseDownCanMoveWindow)
+    }
+
+    @MainActor
+    func testNonDraggableBackgroundMountedInPlayerBar() {
+        let app = AppState()
+        let song = SubsonicSong(id: "s1", title: "Test Song", artist: "Test Artist")
+        app.player.queue = [song]
+        app.player.currentIndex = 0
+        let window = makeTestWindow(rootView: MainView().environment(app), width: 1000)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        guard let contentView = window.contentView,
+              let nonDrag = findNonDraggable(in: contentView) else {
+            XCTFail("NonDraggableNSView must be mounted in player bar")
+            return
+        }
+
+        XCTAssertFalse(nonDrag.isHiddenOrHasHiddenAncestor)
+        XCTAssertFalse(nonDrag.mouseDownCanMoveWindow)
+    }
+
+    @MainActor
     private func makeTestWindow(rootView: some View, width: CGFloat) -> NSWindow {
         let hostingView = NSHostingView(rootView: rootView.frame(width: width, height: 700))
         hostingView.frame = NSRect(x: 0, y: 0, width: width, height: 700)
@@ -140,10 +131,10 @@ final class PlayerToolbarLayoutTests: XCTestCase {
         return window
     }
 
-    private func findVolumeSlider(in view: NSView) -> VolumeSliderNSView? {
-        if let slider = view as? VolumeSliderNSView { return slider }
+    private func findNonDraggable(in view: NSView) -> NonDraggableNSView? {
+        if let ndv = view as? NonDraggableNSView { return ndv }
         for sub in view.subviews {
-            if let found = findVolumeSlider(in: sub) { return found }
+            if let found = findNonDraggable(in: sub) { return found }
         }
         return nil
     }

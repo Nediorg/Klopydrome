@@ -34,7 +34,13 @@ struct MatteVolumeSlider: View {
             }
             .frame(width: width, height: thumbDiameter)
             .contentShape(Rectangle())
-            .gesture(volumeGesture(width: width))
+            .overlay {
+                InteractiveSliderTrack(
+                    onDragChanged: { progress in
+                        value = Float(progress)
+                    }
+                )
+            }
         }
         .frame(height: thumbDiameter)
         .accessibilityElement(children: .ignore)
@@ -44,13 +50,5 @@ struct MatteVolumeSlider: View {
             let delta: Float = direction == .increment ? 0.05 : -0.05
             value = min(max(value + delta, 0), 1)
         }
-    }
-
-    private func volumeGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { gesture in
-                guard width > 0 else { return }
-                value = Float(min(max(gesture.location.x / width, 0), 1))
-            }
     }
 }

@@ -168,6 +168,7 @@ struct MinimalScrubber: View {
 
     /// Hover keeps the track readable without turning the LCD into a second player bar.
     let isLCDHovered: Bool
+    var onHover: ((Bool) -> Void)?
     private var trackHeight: CGFloat { isLCDHovered ? 5 : 3 }
     private var hitHeight: CGFloat { isLCDHovered ? 18 : 12 }
 
@@ -175,7 +176,7 @@ struct MinimalScrubber: View {
     @State private var dragProgress: CGFloat?
 
     /// Sweep shows only while the player is actually loading/stalled, never during
-/// plain playback (background caching ahead is not "loading").
+    /// plain playback (background caching ahead is not "loading").
     private var isLoading: Bool {
         app.player.isBuffering || app.player.isLoading
     }
@@ -193,22 +194,8 @@ struct MinimalScrubber: View {
             let width = geo.size.width
             ZStack(alignment: .bottom) {
                 Color.clear
-                Button(action: {}) {
-                    content(width: width)
-                }
-                .buttonStyle(.plain)
-                // The visual track stays compact, while the bottom-only hit zone is
-                // large enough to scrub reliably without covering top LCD controls.
-                .frame(width: width, height: hitHeight, alignment: .bottom)
-                .contentShape(Rectangle())
-                .simultaneousGesture(drag(width: width))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Позиция воспроизведения")
-                .accessibilityValue(app.player.formattedCurrentTime())
-                .accessibilityAdjustableAction { direction in
-                    let step = direction == .increment ? 10.0 : -10.0
-                    app.player.seek(to: min(max(app.player.currentTime + step, 0), app.player.trackDuration))
-                }
+                content(width: width)
+                    .allowsHitTesting(false)
 
                 if isLCDHovered {
                     HStack {
@@ -224,6 +211,43 @@ struct MinimalScrubber: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }
+
+                Color.clear
+                    .frame(width: width, height: hitHeight)
+                    .contentShape(Rectangle())
+                    .overlay {
+                        InteractiveSliderTrack(
+                            onDragStarted: {
+                                guard trackDuration > 0, width > 0 else { return }
+                                if dragProgress == nil {
+                                    app.player.beginScrub()
+                                }
+                            },
+                            onDragChanged: { ratio in
+                                guard trackDuration > 0, width > 0 else { return }
+                                dragProgress = ratio
+                                app.player.scrub(to: Double(ratio) * trackDuration)
+                            },
+                            onDragEnded: { ratio in
+                                guard trackDuration > 0, width > 0 else { return }
+                                app.player.endScrub(at: Double(ratio) * trackDuration)
+                                dragProgress = nil
+                            },
+                            onHoverChanged: { hovering in
+                                onHover?(hovering)
+                            },
+                            calculateProgress: { point, size in
+                                scrubberProgress(pointX: point.x, width: size.width)
+                            }
+                        )
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Позиция воспроизведения")
+                    .accessibilityValue(app.player.formattedCurrentTime())
+                    .accessibilityAdjustableAction { direction in
+                        let step = direction == .increment ? 10.0 : -10.0
+                        app.player.seek(to: min(max(app.player.currentTime + step, 0), app.player.trackDuration))
+                    }
             }
         }
     }
@@ -266,19 +290,14 @@ struct MinimalScrubber: View {
             .offset(x: trackProgress * width - (isLCDHovered ? 2.5 : 2))
     }
 
-    private func drag(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard trackDuration > 0, width > 0 else { return }
-                let ratio = min(max(value.location.x / width, 0), 1)
-                dragProgress = ratio
-                app.player.beginScrub()
-                app.player.scrub(to: ratio * trackDuration)
-            }
-            .onEnded { _ in
-                guard let dragProgress, trackDuration > 0 else { return }
-                app.player.endScrub(at: dragProgress * trackDuration)
-                self.dragProgress = nil
-            }
+    /// The first 5 pt of the track are clamped to 0:00, making rewinding
+    /// to the very beginning of the track effortless on the first try.
+    private func scrubberProgress(pointX: CGFloat, width: CGFloat) -> CGFloat {
+        let deadzone: CGFloat = 5.0
+        guard width > deadzone else { return 0 }
+        if pointX <= deadzone { return 0 }
+        let effectiveX = pointX - deadzone
+        let effectiveWidth = width - deadzone
+        return min(max(effectiveX / effectiveWidth, 0), 1)
     }
 }

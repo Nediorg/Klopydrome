@@ -39,6 +39,8 @@ struct PlayerHeaderBar: View {
             let finalLCDWidth: CGFloat = max(240, min(targetLCDWidth, maxCenteredSpace))
 
             ZStack {
+                HeaderBarWindowDragRegion()
+
                 // Center layer: strictly centered in the detail column
                 if !isMiniPlayerVisible {
                     centerGroup(width: finalLCDWidth)
@@ -116,6 +118,7 @@ struct PlayerHeaderBar: View {
                     app.player.volume = 1
                 }
             }
+            .background(NonDraggableBackground())
 
             HStack(spacing: 4) {
                 Button {
