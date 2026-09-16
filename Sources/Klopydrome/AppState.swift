@@ -21,6 +21,7 @@ final class AppState {
     /// Latest Discord RPC connection state, surfaced in Settings so a silent
     /// "no presence in Discord" has a visible diagnosis.
     var discordConnectionStatus: DiscordRPCTransport.ConnectionStatus = .idle
+    var discordSnoozeSongID: String?
     @ObservationIgnored var discordAlbumArtworkURLs: [String: URL] = [:]
     @ObservationIgnored var discordArtworkUnavailableAlbumIDs: Set<String> = []
     @ObservationIgnored var discordArtworkLoadingAlbumIDs: Set<String> = []
@@ -193,6 +194,7 @@ final class AppState {
         }
         player.onTrackEnded = { [weak self] in
             guard let self else { return }
+            self.discordSnoozeSongID = nil
             if self.scrobblingEnabled, let ended = self.player.currentSong {
                 let id = ended.id
                 Task { try? await self.client?.scrobble(id: id, submission: true) }
@@ -200,9 +202,12 @@ final class AppState {
             self.player.trackDidFinish()
         }
         player.onTrackCrossfaded = { [weak self] ended in
-            guard let self, self.scrobblingEnabled else { return }
-            let id = ended.id
-            Task { try? await self.client?.scrobble(id: id, submission: true) }
+            guard let self else { return }
+            self.discordSnoozeSongID = nil
+            if self.scrobblingEnabled {
+                let id = ended.id
+                Task { try? await self.client?.scrobble(id: id, submission: true) }
+            }
         }
         loadPersisted()
         restorePlaybackExitPreferences()
@@ -348,6 +353,7 @@ final class AppState {
     func disconnect() {
         discordRichPresence.clear()
         discordConnectionStatus = .idle
+        discordSnoozeSongID = nil
         discordAlbumArtworkURLs = [:]
         discordArtworkUnavailableAlbumIDs = []
         discordArtworkLoadingAlbumIDs = []
@@ -535,6 +541,9 @@ final class AppState {
     }
 
     private func startCurrent(_ song: SubsonicSong) {
+        if discordSnoozeSongID != song.id {
+            discordSnoozeSongID = nil
+        }
         // Cancel stale per-song work from the previously playing track.
         currentCacheTask?.cancel()
         lyricsTask?.cancel()

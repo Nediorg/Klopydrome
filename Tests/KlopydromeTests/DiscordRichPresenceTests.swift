@@ -92,4 +92,63 @@ final class DiscordRichPresenceTests: XCTestCase {
         XCTAssertFalse(DiscordRPCFrame.isReady(Data(error.utf8)))
         XCTAssertFalse(DiscordRPCFrame.isError(Data("not json".utf8)))
     }
+
+    override func tearDown() {
+        super.tearDown()
+        UserDefaults.standard.removeObject(forKey: "discordSnoozeUntil")
+    }
+
+    @MainActor
+    func testSnoozeForCurrentTrackSuppressesPresenceAndResumesOnNextTrack() {
+        let app = AppState()
+        let song1 = SubsonicSong(id: "snooze-song-1", title: "Song 1", duration: 180)
+        let song2 = SubsonicSong(id: "snooze-song-2", title: "Song 2", duration: 200)
+
+        app.player.setQueue([song1, song2], startAt: 0)
+        XCTAssertEqual(app.player.currentSong?.id, "snooze-song-1")
+        XCTAssertFalse(app.isDiscordSnoozed)
+
+        app.snoozeDiscordForCurrentTrack()
+        XCTAssertTrue(app.isDiscordSnoozed)
+        XCTAssertEqual(app.discordSnoozeSongID, "snooze-song-1")
+
+        app.player.next()
+        XCTAssertEqual(app.player.currentSong?.id, "snooze-song-2")
+        app.refreshDiscordRichPresence()
+        XCTAssertFalse(app.isDiscordSnoozed)
+        XCTAssertNil(app.discordSnoozeSongID)
+    }
+
+    @MainActor
+    func testSnoozeForCurrentTrackResumesOnTrackEnd() {
+        let app = AppState()
+        let song = SubsonicSong(id: "snooze-song-end", title: "Song End", duration: 180)
+
+        app.player.setQueue([song], startAt: 0)
+        app.snoozeDiscordForCurrentTrack()
+        XCTAssertTrue(app.isDiscordSnoozed)
+
+        app.player.onTrackEnded?()
+        XCTAssertFalse(app.isDiscordSnoozed)
+        XCTAssertNil(app.discordSnoozeSongID)
+    }
+
+    @MainActor
+    func testTimedSnoozeOverridesTrackSnooze() {
+        let app = AppState()
+        let song = SubsonicSong(id: "snooze-song-override", title: "Song Override", duration: 180)
+
+        app.player.setQueue([song], startAt: 0)
+        app.snoozeDiscordForCurrentTrack()
+        XCTAssertEqual(app.discordSnoozeSongID, "snooze-song-override")
+
+        app.snoozeDiscord(for: 3600)
+        XCTAssertNil(app.discordSnoozeSongID)
+        XCTAssertTrue(app.isDiscordSnoozed)
+        XCTAssertNotNil(app.discordSnoozeUntil)
+
+        app.resumeDiscordSnooze()
+        XCTAssertFalse(app.isDiscordSnoozed)
+        XCTAssertNil(app.discordSnoozeUntil)
+    }
 }

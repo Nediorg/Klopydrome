@@ -720,13 +720,14 @@
 "Не удалось авторизоваться на сервере." = "Couldn't sign in to the server.";
 "Ошибка сервера (HTTP %lld)." = "Server error (HTTP %lld).";
 
-"Приостановить активность..." = "Snooze Rich Presence...";
-"Возобновить активность..." = "Resume Rich Presence...";
-"Навсегда" = "Forever";
+"Скрыть активность" = "Hide Activity";
+"Показать активность" = "Show Activity";
+"На эту песню" = "For This Track";
 "На 15 минут" = "For 15 Minutes";
 "На 1 час" = "For 1 Hour";
 "На 8 часов" = "For 8 Hours";
 "На 24 часа" = "For 24 Hours";
+"Навсегда" = "Forever";
 "Нет подключения к серверу Навидром." = "No connection to the Navidrome server.";
 "Добро пожаловать" = "Welcome";
 "Чтобы продолжить, войдите в свой аккаунт" = "To continue, sign in to your account";

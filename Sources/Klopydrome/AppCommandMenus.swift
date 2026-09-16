@@ -102,15 +102,16 @@ struct AppCommandMenus: Commands {
             Divider()
 
             if app.isDiscordSnoozed {
-                Button("Возобновить активность...".localized) {
+                Button("Показать активность".localized) {
                     app.resumeDiscordSnooze()
                 }
                 .disabled(!app.serverConfig.effectiveDiscordRichPresenceEnabled)
             } else {
-                Menu("Приостановить активность...".localized) {
-                    Button("Навсегда".localized) {
-                        app.snoozeDiscord(for: nil)
+                Menu("Скрыть активность".localized) {
+                    Button("На эту песню".localized) {
+                        app.snoozeDiscordForCurrentTrack()
                     }
+                    .disabled(app.player.currentSong == nil)
                     Divider()
                     Button("На 15 минут".localized) {
                         app.snoozeDiscord(for: 15 * 60)
@@ -123,6 +124,10 @@ struct AppCommandMenus: Commands {
                     }
                     Button("На 24 часа".localized) {
                         app.snoozeDiscord(for: 24 * 60 * 60)
+                    }
+                    Divider()
+                    Button("Навсегда".localized) {
+                        app.snoozeDiscord(for: nil)
                     }
                 }
                 .disabled(!app.serverConfig.effectiveDiscordRichPresenceEnabled)

@@ -3,6 +3,9 @@ import NavidromeClient
 
 extension AppState {
     func refreshDiscordRichPresence() {
+        if let snoozeSongID = discordSnoozeSongID, player.currentSong?.id != snoozeSongID {
+            discordSnoozeSongID = nil
+        }
         if isDiscordSnoozed {
             discordRichPresence.clear()
             discordConnectionStatus = .idle

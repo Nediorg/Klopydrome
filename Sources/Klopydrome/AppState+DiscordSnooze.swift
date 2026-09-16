@@ -27,6 +27,11 @@ extension AppState {
     }
 
     var isDiscordSnoozed: Bool {
+        if let snoozeSongID = discordSnoozeSongID {
+            if player.currentSong?.id == snoozeSongID {
+                return true
+            }
+        }
         access(keyPath: \.discordSnoozeUntil)
         guard let until = UserDefaults.standard.object(forKey: Self.discordSnoozeKey) as? Date else { return false }
         if until == .distantFuture { return true }
@@ -36,6 +41,7 @@ extension AppState {
     }
 
     func snoozeDiscord(for interval: TimeInterval?) {
+        discordSnoozeSongID = nil
         if let interval {
             discordSnoozeUntil = Date().addingTimeInterval(interval)
         } else {
@@ -45,8 +51,17 @@ extension AppState {
         discordConnectionStatus = .idle
     }
 
+    func snoozeDiscordForCurrentTrack() {
+        guard let songID = player.currentSong?.id else { return }
+        discordSnoozeUntil = nil
+        discordSnoozeSongID = songID
+        discordRichPresence.clear()
+        discordConnectionStatus = .idle
+    }
+
     func resumeDiscordSnooze() {
         discordSnoozeUntil = nil
+        discordSnoozeSongID = nil
         refreshDiscordRichPresence()
     }
 }
