@@ -35,11 +35,12 @@ jobs:
         run: brew install nasm meson ninja cmake pkg-config wget
       - name: Restore Libmpv build
         id: mpvcache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: vendor/MPVKit-Audio/dist
-          key: libmpv-${{ runner.os }}-${{ hashFiles('vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'vendor/MPVKit-Audio/Sources/BuildScripts/**', 'vendor/MPVKit-Audio/Sources/BuildScripts/patch/**', 'scripts/build-mpvkit-audio.sh', '.github/workflows/build.yml') }}
-          restore-keys: libmpv-${{ runner.os }}-
+          key: libmpv-${{ runner.os }}-${{ hashFiles('scripts/build-mpvkit-audio.sh', 'vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'vendor/MPVKit-Audio/Package.swift', 'vendor/MPVKit-Audio/Sources/BuildScripts/**') }}
+          restore-keys: |
+            libmpv-${{ runner.os }}-
       - name: Verify cached engine
         id: mpvverify
         # A failed engine build must never poison the cache: the artifacts
@@ -50,8 +51,22 @@ jobs:
           Z=vendor/MPVKit-Audio/dist/release/Libmpv.xcframework.zip
           if [ -f "$F" ] && [ -d "$X" ] && [ -f "$Z" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build audio engine
-        if: steps.mpvcache.outputs.cache-hit != 'true' || steps.mpvverify.outputs.ok != 'true'
+        if: steps.mpvverify.outputs.ok != 'true'
         run: ./scripts/build-mpvkit-audio.sh
+      - name: Verify built engine
+        id: mpvpostverify
+        if: steps.mpvverify.outputs.ok != 'true'
+        run: |
+          F=vendor/MPVKit-Audio/dist/libmpv/macos/Libmpv.framework/Versions/A/Libmpv
+          X=vendor/MPVKit-Audio/dist/release/xcframework/Libmpv.xcframework
+          Z=vendor/MPVKit-Audio/dist/release/Libmpv.xcframework.zip
+          if [ -f "$F" ] && [ -d "$X" ] && [ -f "$Z" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Save Libmpv build
+        if: steps.mpvcache.outputs.cache-hit != 'true' && (steps.mpvverify.outputs.ok == 'true' || steps.mpvpostverify.outputs.ok == 'true')
+        uses: actions/cache/save@v4
+        with:
+          path: vendor/MPVKit-Audio/dist
+          key: libmpv-${{ runner.os }}-${{ hashFiles('scripts/build-mpvkit-audio.sh', 'vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'vendor/MPVKit-Audio/Package.swift', 'vendor/MPVKit-Audio/Sources/BuildScripts/**') }}
       - name: Restore build cache
         # SPM artifacts only: xcode-derived and the app bundle are rebuilt
         # clean by build-app.sh every run, caching them is pure bandwidth.
