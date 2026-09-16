@@ -52,30 +52,41 @@ struct SidebarView: View {
             }
 
             Section {
-                playlistRow("Все плейлисты",
-                            icon: icon(for: .playlists),
-                            isSelected: selection == .section(.playlists))
-                    .tag(Selection.section(.playlists))
-                    .contentShape(Rectangle())
-                    .simultaneousGesture(TapGesture().onEnded { select(.section(.playlists)) })
-                    .contextMenu { playlistContextMenu }
-                ForEach(personalPlaylists) { playlist in
-                    playlistRow(playlist.displayName,
-                                icon: playlist.isSmart ? "gearshape" : "music.note.list",
-                                isSelected: selection == .playlistID(playlist.id))
-                        .lineLimit(1)
-                        .tag(Selection.playlistID(playlist.id))
+                Button {
+                    select(.section(.playlists))
+                } label: {
+                    playlistRow("Все плейлисты",
+                                icon: icon(for: .playlists),
+                                isSelected: selection == .section(.playlists))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
-                        .simultaneousGesture(TapGesture().onEnded { select(.playlistID(playlist.id)) })
-                        .contextMenu {
-                            PlaylistContextMenuItems(playlist: playlist) {
-                                beginRename(playlist)
-                            } onEditRules: {
-                                editRules(playlist)
-                            } onDelete: {
-                                confirmingDeleteID = playlist.id
-                            }
+                }
+                .buttonStyle(.plain)
+                .tag(Selection.section(.playlists))
+                .contextMenu { playlistContextMenu }
+
+                ForEach(personalPlaylists) { playlist in
+                    Button {
+                        select(.playlistID(playlist.id))
+                    } label: {
+                        playlistRow(playlist.displayName,
+                                    icon: playlist.isSmart ? "gearshape" : "music.note.list",
+                                    isSelected: selection == .playlistID(playlist.id))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .tag(Selection.playlistID(playlist.id))
+                    .contextMenu {
+                        PlaylistContextMenuItems(playlist: playlist) {
+                            beginRename(playlist)
+                        } onEditRules: {
+                            editRules(playlist)
+                        } onDelete: {
+                            confirmingDeleteID = playlist.id
                         }
+                    }
                 }
             } header: {
                 Text("Плейлисты".localized)
@@ -84,22 +95,27 @@ struct SidebarView: View {
 
             Section {
                 ForEach(sharedPlaylists) { playlist in
-                    playlistRow(playlist.displayName,
-                                icon: "arrow.turn.down.right",
-                                isSelected: selection == .playlistID(playlist.id))
-                        .lineLimit(1)
-                        .tag(Selection.playlistID(playlist.id))
-                        .contentShape(Rectangle())
-                        .simultaneousGesture(TapGesture().onEnded { select(.playlistID(playlist.id)) })
-                        .contextMenu {
-                            PlaylistContextMenuItems(playlist: playlist) {
-                                beginRename(playlist)
-                            } onEditRules: {
-                                editRules(playlist)
-                            } onDelete: {
-                                confirmingDeleteID = playlist.id
-                            }
+                    Button {
+                        select(.playlistID(playlist.id))
+                    } label: {
+                        playlistRow(playlist.displayName,
+                                    icon: "arrow.turn.down.right",
+                                    isSelected: selection == .playlistID(playlist.id))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .tag(Selection.playlistID(playlist.id))
+                    .contextMenu {
+                        PlaylistContextMenuItems(playlist: playlist) {
+                            beginRename(playlist)
+                        } onEditRules: {
+                            editRules(playlist)
+                        } onDelete: {
+                            confirmingDeleteID = playlist.id
                         }
+                    }
                 }
             } header: {
                 Text("Общие плейлисты".localized)
@@ -158,12 +174,24 @@ struct SidebarView: View {
             }
             Button("Отмена", role: .cancel) { confirmingDeleteID = nil }
         }
-        .searchable(text: Bindable(app).nav.searchQuery, placement: .sidebar, prompt: "Искать музыку")
+        .searchable(text: Bindable(app).nav.searchQuery, placement: .sidebar, prompt: Text("Search".localized))
         .submitLabel(.search)
         .onSubmit(of: .search) { submitSearch() }
         .task(id: app.isConnected) { await loadPlaylists() }
         .onChange(of: selection) { _, newValue in
             if let newValue { select(newValue) }
+        }
+        .onChange(of: app.nav.selected) { _, newSection in
+            if app.nav.selectedPlaylist == nil {
+                selection = .section(newSection)
+            }
+        }
+        .onChange(of: app.nav.selectedPlaylist) { _, newPlaylist in
+            if let newPlaylist {
+                selection = .playlistID(newPlaylist.id)
+            } else {
+                selection = .section(app.nav.selected)
+            }
         }
         .onAppear {
             if let selectedPlaylist = app.nav.selectedPlaylist {
@@ -266,15 +294,20 @@ struct SidebarView: View {
     /// tint (icon stays white), so the `isSelected` tint has to be explicit.
     private func sidebarRow(_ text: String, _ section: NavigationState.Section) -> some View {
         let isSelected = selection == .section(section)
-        return HStack(spacing: 6) {
-            Image(systemName: icon(for: section))
-                .foregroundStyle(isSelected ? Color.white : Color.accentColor)
-                .frame(width: 16, height: 16)
-            Text(text.localized)
+        return Button {
+            select(.section(section))
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon(for: section))
+                    .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+                    .frame(width: 16, height: 16)
+                Text(text.localized)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .tag(Selection.section(section))
-        .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture().onEnded { select(.section(section)) })
     }
 
     /// Playlist row built as an HStack, NOT a `Label`: the sidebar list style

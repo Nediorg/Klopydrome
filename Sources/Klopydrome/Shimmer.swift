@@ -14,6 +14,7 @@ struct Shimmer: ViewModifier {
             .overlay {
                 if enabled {
                     ShimmerBand(phase: phase)
+                        .allowsHitTesting(false)
                 }
             }
             .clipped()
@@ -47,6 +48,7 @@ struct ShimmerBand: View {
             .scaleEffect(x: 0.85, y: 1.6)
             .offset(x: phase * geo.size.width * 2.2)
         }
+        .allowsHitTesting(false)
     }
 }
 

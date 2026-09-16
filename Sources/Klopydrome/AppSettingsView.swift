@@ -26,7 +26,7 @@ private struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Потоковая передача") {
+            Section {
                 Picker("Кодек", selection: Bindable(app).serverConfig.format) {
                     Text("Оригинальный (решает сервер)".localized).tag(String?.none)
                     Text("Opus").tag(String?.some("opus"))
@@ -34,9 +34,8 @@ private struct GeneralSettingsView: View {
                     Text("M4A (AAC)").tag(String?.some("m4a"))
                     Text("FLAC").tag(String?.some("flac"))
                 }
-                .help("Формат, в который сервер будет транскодировать потоки и загрузки. «Оригинальный» сохраняет исходный файл.")
 
-                Picker("Битрейт транскодинга", selection: Bindable(app).serverConfig.maxBitRate) {
+                Picker("Битрейт", selection: Bindable(app).serverConfig.maxBitRate) {
                     Text("Оригинал".localized).tag(0)
                     Text("320 kbps").tag(320)
                     Text("256 kbps").tag(256)
@@ -44,29 +43,27 @@ private struct GeneralSettingsView: View {
                     Text("128 kbps").tag(128)
                     Text("64 kbps").tag(64)
                 }
-                // swiftlint:disable:next line_length
-                Text("Применяется к потокам и загруженному кэшу. Кодек и битрейт требуют поддержки транскодирования на сервере.".localized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Потоковая передача".localized)
+            } footer: {
+                Text("Параметры транскодирования на стороне сервера для потоков и загрузок.".localized)
             }
-            Section("Внешний вид") {
+
+            Section {
                 Picker("Тема", selection: Bindable(app).serverConfig.theme) {
                     Text("Как в системе".localized).tag(AppTheme?.none)
                     ForEach([AppTheme.dark, AppTheme.light]) { theme in
                         Text(theme.label.localized).tag(AppTheme?.some(theme))
                     }
                 }
-                .help("Принудительно включает тёмную или светлую тему; по умолчанию следует системной.")
                 Picker("Разрешение обложек", selection: Bindable(app).serverConfig.coverResolution) {
                     Text("Высокое (по умолчанию)".localized).tag(CoverResolution?.none)
                     ForEach(CoverResolution.allCases.filter { $0 != .high }) { resolution in
                         Text(resolution.label.localized).tag(CoverResolution?.some(resolution))
                     }
                 }
-                .help(
-                    "Высокое — до 1000px, чётко на Retina без лишнего трафика. " +
-                        "«Оригинал» — полное разрешение; низкие значения экономят кэш и трафик."
-                )
+            } header: {
+                Text("Внешний вид".localized)
             }
             Section("Аккаунт") {
                 LabeledContent("Сервер") { Text(app.serverConfig.url).foregroundStyle(.secondary) }
@@ -102,7 +99,7 @@ private struct AdvancedSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Discord Rich Presence") {
+            Section {
                 Toggle(
                     "Показывать текущий трек в Discord",
                     isOn: Bindable(app).serverConfig.discordRichPresenceEnabled.orFalse
@@ -118,8 +115,11 @@ private struct AdvancedSettingsView: View {
                     prompt: Text("123456789012345678")
                 )
                 .textContentType(.none)
-                .help("Создайте application в Discord Developer Portal и вставьте его числовой ID.")
                 DiscordStatusRow()
+            } header: {
+                Text("Discord Rich Presence".localized)
+            } footer: {
+                Text("Для интеграции укажите Client ID приложения из Discord Developer Portal.".localized)
             }
 
             DebugSettingsSection()
@@ -162,14 +162,18 @@ private struct CacheSettingsView: View {
     }
     var body: some View {
         Form {
-            Section("Офлайн-кэш") {
+            Section {
                 Toggle(
-                    "Сохранять полностью прослушанные песни",
+                    "Сохранять прослушанные песни",
                     isOn: Bindable(app).serverConfig.cacheEnabled
                 )
-                Text("Пропущенные песни не загружаются. Для полной загрузки используйте «Загрузить».".localized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Офлайн-кэш".localized)
+            } footer: {
+                Text(
+                    ("Автоматически сохраняет полностью прослушанные треки " +
+                        "для воспроизведения без интернета.").localized
+                )
             }
 
             Section("Использование кэша") {
@@ -189,7 +193,7 @@ private struct CacheSettingsView: View {
             Section("Лимиты кэша") {
                 CacheBudgetSection(
                     title: "Аудиокэш",
-                    details: "Скачанные песни входят в общий кэш.",
+                    details: "Включает скачанные и прослушанные треки.",
                     selectedLimit: configuredStreamLimit,
                     automaticValue: effectiveStreamLimit,
                     choices: CacheLimitPreset.all,
@@ -423,14 +427,8 @@ private struct CacheBudgetSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title.localized)
                     .fontWeight(.medium)
-                Text(selectedLimit == nil
-                     ? L10n.format("format.storage.automaticLimit", limitDescription.localized)
-                     : L10n.format("format.storage.limit", limitDescription.localized))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
                 Text(details.localized)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -440,7 +438,7 @@ private struct CacheBudgetSection: View {
                 L10n.format("format.storage.limitTitle", title.localized),
                 selection: Binding(get: { selectedLimit }, set: onSelect)
             ) {
-                Text("Автоматически".localized).tag(Int?.none)
+                Text(L10n.format("format.storage.automaticLimit", limitDescription.localized)).tag(Int?.none)
                 Divider()
                 ForEach(displayChoices) { preset in
                     Text(preset.title.localized).tag(Optional(preset.bytes))
@@ -449,9 +447,11 @@ private struct CacheBudgetSection: View {
             .labelsHidden()
             .pickerStyle(.menu)
             .fixedSize(horizontal: true, vertical: false)
-            .frame(width: 128, alignment: .trailing)
+            .frame(minWidth: 140, alignment: .trailing)
             .accessibilityLabel(L10n.format("format.storage.limitTitle", title.localized))
-            .accessibilityValue(selectedLimit == nil ? L10n.text("Автоматически") : limitDescription.localized)
+            .accessibilityValue(selectedLimit == nil
+                ? L10n.format("format.storage.automaticLimit", limitDescription.localized)
+                : limitDescription.localized)
         }
         .padding(.vertical, 2)
     }

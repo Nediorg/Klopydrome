@@ -99,7 +99,7 @@ struct AlbumDetailView: View {
         HStack(alignment: .top, spacing: 24) {
             QuickLookCover(coverArt: detail.coverArt)
                 .frame(width: 220, height: 220)
-                .help("Нажмите или сильный клик для предпросмотра — как в Finder")
+                .help("Быстрый просмотр обложки".localized)
                 .accessibilityLabel("Предпросмотр обложки")
             VStack(alignment: .leading, spacing: 10) {
                 Text(detail.displayName)

@@ -733,3 +733,15 @@
 "Нет воспроизведения" = "Nothing playing";
 "Сервер не поддерживает публикацию ссылок (EnableSharing выключен)." = "The server doesn't support link sharing (EnableSharing is off).";
 "Подключение к серверу не установлено." = "Not connected to the server.";
+
+"В режиме AVFoundation плавный переход, ReplayGain, обрезка тишины и предзагрузка треков недоступны." = "Crossfade, ReplayGain, silence trimming, and track preloading are unavailable with AVFoundation.";
+"Заранее открывает следующий трек для воспроизведения без задержки." = "Pre-opens the next track to eliminate pauses between songs.";
+"Сохраняет позицию и список воспроизведения между запусками приложения." = "Saves playback position and queue across app launches.";
+"Следующая песня начинает звучать до окончания текущей." = "Fades into the next song before the current one ends.";
+"Выравнивание громкости приводит треки с тегами ReplayGain к единому уровню." = "Normalizes playback volume using ReplayGain tags.";
+"Параметры транскодирования на стороне сервера для потоков и загрузок." = "Server-side transcoding settings for streams and downloads.";
+"Для интеграции укажите Client ID приложения из Discord Developer Portal." = "Enter the Client ID of your application from the Discord Developer Portal.";
+"Автоматически сохраняет полностью прослушанные треки для воспроизведения без интернета." = "Automatically saves fully played tracks for offline playback.";
+"Включает скачанные и прослушанные треки." = "Includes downloaded and played tracks.";
+"Быстрый просмотр обложки" = "Quick Look artwork";
+"Сохранять прослушанные песни" = "Save played songs";

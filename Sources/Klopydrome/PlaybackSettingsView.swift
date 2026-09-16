@@ -24,7 +24,7 @@ struct PlaybackSettingsView: View {
     private var crossfadeDuration: Binding<Double> {
         Binding(
             get: { app.serverConfig.effectiveAutomixFadeDuration },
-            set: { app.serverConfig.automixFadeDuration = $0 }
+            set: { app.serverConfig.automixFadeDuration = $0.rounded() }
         )
     }
 
@@ -38,7 +38,7 @@ struct PlaybackSettingsView: View {
     private var replayGainPreamp: Binding<Float> {
         Binding(
             get: { app.serverConfig.effectiveReplayGainPreampDB },
-            set: { app.serverConfig.replayGainPreampDB = $0 }
+            set: { app.serverConfig.replayGainPreampDB = $0.rounded() }
         )
     }
 
@@ -58,13 +58,21 @@ struct PlaybackSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Плеер") {
+            Section {
                 Picker("Движок", selection: playbackEngineBinding) {
                     ForEach(PlaybackEngine.allCases) { engine in
                         Text(engine.label.localized).tag(engine)
                     }
                 }
-                .help("MPV: точный поиск и любые форматы. AVFoundation: системный плеер.")
+            } header: {
+                Text("Плеер".localized)
+            } footer: {
+                if playbackEngineBinding.wrappedValue == .avFoundation {
+                    Text(
+                        "В режиме AVFoundation плавный переход, ReplayGain, " +
+                            "обрезка тишины и предзагрузка треков недоступны.".localized
+                    )
+                }
             }
 
             Section {
@@ -72,14 +80,11 @@ struct PlaybackSettingsView: View {
             } header: {
                 Text("Предзагрузка".localized)
             } footer: {
-                Text(
-                    "Заранее открывает следующий трек, чтобы уменьшить паузу между " +
-                        "песнями."
-                )
+                Text("Заранее открывает следующий трек для воспроизведения без задержки.".localized)
             }
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
-            Section("Поведение") {
+            Section {
                 Toggle("Авто-скробблинг", isOn: Binding(
                     get: { app.scrobblingEnabled },
                     set: { app.scrobblingEnabled = $0 }
@@ -88,17 +93,17 @@ struct PlaybackSettingsView: View {
                     get: { app.queuePersistenceEnabled },
                     set: { app.queuePersistenceEnabled = $0 }
                 ))
-                .help(
-                    "Очередь воспроизведения и позиция сохраняются на сервере " +
-                        "и восстанавливаются при следующем запуске."
-                )
+            } header: {
+                Text("Поведение".localized)
+            } footer: {
+                Text("Сохраняет позицию и список воспроизведения между запусками приложения.".localized)
             }
 
             Section {
                 Toggle("Включить плавный переход", isOn: crossfadeEnabled)
                 HStack {
                     Text("Длительность".localized)
-                    Slider(value: crossfadeDuration, in: 1...12, step: 1)
+                    Slider(value: crossfadeDuration, in: 1...12)
                     Text(L10n.format("format.duration.seconds", Int(crossfadeDuration.wrappedValue)))
                         .monospacedDigit()
                         .frame(width: 32, alignment: .trailing)
@@ -107,11 +112,9 @@ struct PlaybackSettingsView: View {
             } header: {
                 Text("Плавный переход".localized)
             } footer: {
-                Text(
-                    "Следующая песня начинает звучать до конца текущей. " +
-                        "Работает при непрерывном воспроизведении очереди через MPV."
-                )
+                Text("Следующая песня начинает звучать до окончания текущей.".localized)
             }
+            .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
                 Picker("Коррекция громкости (ReplayGain)", selection: replayGainMode) {
@@ -119,10 +122,9 @@ struct PlaybackSettingsView: View {
                         Text(mode.label.localized).tag(mode)
                     }
                 }
-                .help("Выравнивает громкость песен по тегам ReplayGain.")
                 HStack {
                     Text("Предусиление".localized)
-                    Slider(value: replayGainPreamp, in: AutomixLoudness.preampRange, step: 1)
+                    Slider(value: replayGainPreamp, in: AutomixLoudness.preampRange)
                     Text(L10n.format("format.gain.decibels", Double(replayGainPreamp.wrappedValue)))
                         .monospacedDigit()
                         .frame(width: 56, alignment: .trailing)
@@ -133,14 +135,10 @@ struct PlaybackSettingsView: View {
                         Text(mode.label.localized).tag(mode)
                     }
                 }
-                .help("Убирает долгую паузу в конце дорожки.")
             } header: {
                 Text("Обработка звука".localized)
             } footer: {
-                Text(
-                    "Коррекция громкости делает уровень песен ровнее независимо от " +
-                        "плавного перехода. Обрезка тишины и ReplayGain работают только через MPV."
-                )
+                Text("Выравнивание громкости приводит треки с тегами ReplayGain к единому уровню.".localized)
             }
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
         }
