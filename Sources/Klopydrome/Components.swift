@@ -76,26 +76,6 @@ extension View {
     }
 }
 
-/// Subtle scale on hover for card-like tappables (Apple Music style).
-struct HoverScale: ViewModifier {
-    @State private var hovering = false
-    var amount: CGFloat = 1.02
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(hovering ? amount : 1)
-            .zIndex(hovering ? 1 : 0)
-            .animation(Motion.spring(Motion.hover), value: hovering)
-            .onHover { hovering = $0 }
-    }
-}
-
-extension View {
-    func hoverScale(_ amount: CGFloat = 1.02) -> some View {
-        modifier(HoverScale(amount: amount))
-    }
-}
-
 /// Pins an empty-state block to the top of the content area (just under the
 /// header row) instead of letting it float in the vertical center of the window.
 extension View {
@@ -348,14 +328,19 @@ enum LibrarySort: String, CaseIterable, Hashable, Identifiable {
 struct SongEllipsisMenu: View {
     let song: SubsonicSong
     var foregroundStyle: Color = .secondary
+    var app: AppState?
     var extraMenuItems: (() -> AnyView)?
 
-    @Environment(AppState.self) private var app
+    @Environment(AppState.self) private var envApp
+
+    private var resolvedApp: AppState {
+        app ?? envApp
+    }
 
     var body: some View {
         Menu {
             if let extraMenuItems { extraMenuItems() }
-            SongActionItems(app: app, song: song, selection: [song])
+            SongActionItems(app: resolvedApp, song: song, selection: [song])
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .medium))
@@ -411,7 +396,6 @@ struct ActionPillLabel: View {
         .background(Capsule().fill(fillColor))
         .overlay(Capsule().strokeBorder(filled ? Color.clear : Color.secondary.opacity(0.5)))
         .foregroundStyle(filled ? .white : Color.primary)
-        .scaleEffect(hovering ? 1.03 : 1)
         .animation(.snappy(duration: 0.15), value: hovering)
     }
 
@@ -452,7 +436,38 @@ struct RoundEllipsisMenu<MenuContent: View>: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .accessibilityLabel("Ещё")
-        .help("Ещё")
+        .accessibilityLabel("Ещё".localized)
+        .help("Ещё".localized)
+    }
+}
+
+/// Round favorite button matching RoundEllipsisMenu for detail-page action rows.
+struct RoundFavoriteButton: View {
+    let isStarred: Bool
+    var size: CGFloat = 32
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(hovering ? AMColor.surfaceTertiaryHover : AMColor.surfaceLight)
+                    .frame(width: size, height: size)
+
+                Image(systemName: isStarred ? "star.fill" : "star")
+                    .font(.system(size: 14))
+                    .foregroundStyle(isStarred ? AMColor.accent : Color.secondary)
+                    .symbolEffect(.bounce, value: isStarred)
+            }
+            .frame(width: 40, height: 40)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+        .accessibilityLabel(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
     }
 }

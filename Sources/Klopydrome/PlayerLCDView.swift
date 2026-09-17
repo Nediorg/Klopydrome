@@ -306,38 +306,6 @@ struct NowPlayingActionMenuItems: View {
 
     var body: some View {
         SongActionItems(app: app, song: song, selection: [song])
-        Divider()
-        Button {
-            app.playStation(from: song)
-        } label: {
-            Label("Создать станцию", systemImage: "dot.radiowaves.left.and.right")
-        }
-        Button {
-            app.openSongDetails(song)
-        } label: {
-            Label("Сведения", systemImage: "info.circle")
-        }
-        if let albumID = song.albumId {
-            Button {
-                app.openAlbumInLibrary(
-                    .nowPlayingSummary(from: song, albumID: albumID)
-                )
-            } label: {
-                Label("Показать альбом в медиатеке", systemImage: "square.stack")
-            }
-        }
-        Divider()
-        Button {
-            copyNowPlaying()
-        } label: {
-            Label("Скопировать", systemImage: "doc.on.doc")
-        }
-    }
-
-    private func copyNowPlaying() {
-        let parts = [song.displayTitle, song.artist, song.album].compactMap { $0 }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(parts.joined(separator: " — "), forType: .string)
     }
 }
 

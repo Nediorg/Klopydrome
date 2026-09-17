@@ -8,11 +8,16 @@ import Quartz
 /// on-screen frame — exactly like Finder.
 struct QuickLookCover: NSViewRepresentable {
     let coverArt: String?
+    var size: CGFloat = 220
+    var cornerRadius: CGFloat?
+    var shadow: Bool = true
 
     func makeNSView(context: Context) -> NSQuickLookView {
         let view = NSQuickLookView()
         view.coverArt = coverArt
-        let hosting = NSHostingView(rootView: CoverArtView(coverArt: coverArt, size: 220, shadow: true))
+        let hosting = NSHostingView(
+            rootView: CoverArtView(coverArt: coverArt, size: size, cornerRadius: cornerRadius, shadow: shadow)
+        )
         hosting.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(hosting)
         NSLayoutConstraint.activate([
@@ -36,7 +41,12 @@ struct QuickLookCover: NSViewRepresentable {
         }
         nsView.coverArt = coverArt
         if let hosting = nsView.hostingView {
-            hosting.rootView = CoverArtView(coverArt: coverArt, size: 220, shadow: true)
+            hosting.rootView = CoverArtView(
+                coverArt: coverArt,
+                size: size,
+                cornerRadius: cornerRadius,
+                shadow: shadow
+            )
         }
     }
 

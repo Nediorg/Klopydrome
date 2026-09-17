@@ -213,6 +213,7 @@
 "Все песни" = "All Songs";
 "Все плейлисты" = "All Playlists";
 "Вся музыка" = "All Music";
+"Время" = "Time";
 "Выберите жанр…" = "Choose Genre…";
 "Выберите плейлист…" = "Choose Playlist…";
 "Выбрать дату" = "Select Date";
@@ -329,6 +330,9 @@
 "Лимиты кэша" = "Cache Limits";
 "Логика" = "Logic";
 "Лучшие песни" = "Top Songs";
+"Лучшие результаты" = "Top Results";
+"Лучший результат" = "Top Result";
+"Другие песни" = "Other Songs";
 "Люблю (избранное)" = "Loved (Favorites)";
 "Люблю альбом" = "Loved Album";
 "Люблю исполнителя" = "Loved Artist";
@@ -375,6 +379,7 @@
 "Нет подключения к серверу Навидром." = "No connection to Navidrome server.";
 "Нет сети. Доступны сохранённые песни." = "No network. Saved songs available.";
 "Нет совпадений" = "No Matches";
+"Нет текста песни" = "No lyrics available";
 "Ни одна песня не подходит под текущие правила." = "No songs match the current rules.";
 "Низкое" = "Low";
 "Ничего не найдено" = "Nothing Found";
@@ -382,6 +387,7 @@
 "Новый плейлист" = "New Playlist";
 "Новый умный плейлист" = "New Smart Playlist";
 "Номер диска" = "Disc Number";
+"Номер дорожки" = "Track Number";
 "Номер трека" = "Track Number";
 "О приложении" = "About This App";
 "О треке" = "Track Info";
@@ -396,6 +402,7 @@
 "Океан" = "Ocean";
 "Оператор" = "Operator";
 "Описание (необязательно)" = "Description (optional)";
+"Обложка" = "Artwork";
 "Оригинал" = "Original";
 "Оригинальная дата" = "Original Date";
 "Оригинальный (решает сервер)" = "Original (server decides)";
@@ -522,6 +529,7 @@
 "пустое / отсутствует" = "empty / missing";
 "Путь" = "Path";
 "Путь к файлу" = "File path";
+"Путь скопирован" = "Path Copied";
 "Работает при непрерывном воспроизведении очереди через MPV." = "Works with continuous queue playback via MPV.";
 "равно" = "equals";
 "Размер" = "Size";
@@ -529,6 +537,7 @@
 "Размер альбома" = "Album size";
 "Разрешение обложек" = "Cover resolution";
 "Разрешить загрузку" = "Allow download";
+"Расположение" = "Location";
 "Раскрывает поле поиска" = "Reveals the search field";
 "Раскрыть альбомы сеткой" = "Show albums in grid";
 "Рассвет" = "Dawn";
@@ -546,7 +555,9 @@
 "Сборка" = "Build";
 "Сборник" = "Compilation";
 "Сбросить" = "Reset";
-"Сведения" = "Info";
+"Сведения" = "Details";
+"Свойства" = "Get Info";
+"Свойства…" = "Get Info…";
 "Свернуть альбомы" = "Collapse Albums";
 "Светлая" = "Light";
 "Сдвиг" = "Shift";
@@ -558,6 +569,8 @@
 "Сильная" = "Strong";
 "Скопировано" = "Copied";
 "Скопировать" = "Copy";
+"Скопировать путь" = "Copy Path";
+"Слова" = "Lyrics";
 "Следующая обложка" = "Next Cover";
 "Следующая песня начинает звучать до конца текущей. " = "The next song starts playing before the current one ends. ";
 "Следующий трек" = "Next Track";
@@ -624,6 +637,7 @@
 "Удалить группу" = "Delete Group";
 "Удалить загрузку" = "Delete Download";
 "Удалить из медиатеки" = "Delete from Library";
+"Удалить из очереди" = "Remove from Queue";
 "Удалить плейлист?" = "Delete Playlist?";
 "Удалить правило" = "Delete Rule";
 "Удалить умный плейлист?" = "Delete Smart Playlist?";
@@ -713,6 +727,7 @@
 "Переместить группу" = "Move group";
 "Повторить загрузку" = "Retry";
 "Скрыть громкость" = "Hide volume";
+"Файл" = "File";
 
 "Некорректный адрес сервера." = "Invalid server address.";
 "Не удалось сформировать запрос." = "Couldn't build the request.";
@@ -746,3 +761,7 @@
 "Включает скачанные и прослушанные треки." = "Includes downloaded and played tracks.";
 "Быстрый просмотр обложки" = "Quick Look artwork";
 "Сохранять прослушанные песни" = "Save played songs";
+"Медиатека" = "Library";
+"Аудио без потерь" = "Lossless Audio";
+"Действия над исполнителем" = "Artist Actions";
+"Предпросмотр обложки" = "Artwork Preview";

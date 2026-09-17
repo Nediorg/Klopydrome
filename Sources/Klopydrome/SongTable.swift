@@ -3,25 +3,40 @@ import NavidromeClient
 
 /// Table column identifiers for the Songs tab.
 enum SongColumn: String, CaseIterable, Hashable, Identifiable {
-    case title, artist, album, duration, year, genre, bitrate, rating, plays, added
+    case title
+    case duration
+    case artist
+    case album
+    case albumArtist
+    case genre
+    case plays
+    case year
+    case composer
+    case favorite
+    case bitrate
+    case rating
+    case added
 
     var id: String { rawValue }
 
-    /// Columns shown by default (title is always visible).
-    static let defaults: Set<SongColumn> = [.artist, .album, .duration, .rating]
+    /// Columns shown by default (title, duration, artist, album, genre are primary).
+    static let defaults: Set<SongColumn> = [.title, .duration, .artist, .album, .genre]
 
     var title: String {
         switch self {
-        case .title: return "Название"
-        case .artist: return "Артист"
-        case .album: return "Альбом"
-        case .duration: return "Длительность"
-        case .year: return "Год"
-        case .genre: return "Жанр"
-        case .bitrate: return "Битрейт"
-        case .rating: return "Рейтинг"
-        case .plays: return "Воспроизведено"
-        case .added: return "Добавлено"
+        case .title: return "Название".localized
+        case .duration: return "Время".localized
+        case .artist: return "Артист".localized
+        case .album: return "Альбом".localized
+        case .albumArtist: return "Исполнитель альбома".localized
+        case .genre: return "Жанр".localized
+        case .plays: return "Воспроизведено".localized
+        case .year: return "Год".localized
+        case .composer: return "Композитор".localized
+        case .favorite: return "Избранное".localized
+        case .bitrate: return "Битрейт".localized
+        case .rating: return "Рейтинг".localized
+        case .added: return "Добавлено".localized
         }
     }
 
@@ -29,14 +44,17 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
     var comparator: KeyPathComparator<SubsonicSong> {
         switch self {
         case .title: return KeyPathComparator(\.title)
+        case .duration: return KeyPathComparator(\.duration)
         case .artist: return KeyPathComparator(\.artist)
         case .album: return KeyPathComparator(\.album)
-        case .duration: return KeyPathComparator(\.duration)
-        case .year: return KeyPathComparator(\.year)
+        case .albumArtist: return KeyPathComparator(\.albumArtist)
         case .genre: return KeyPathComparator(\.genre)
+        case .plays: return KeyPathComparator(\.playCount)
+        case .year: return KeyPathComparator(\.year)
+        case .composer: return KeyPathComparator(\.composer)
+        case .favorite: return KeyPathComparator(\.starred)
         case .bitrate: return KeyPathComparator(\.bitRate)
         case .rating: return KeyPathComparator(\.userRating)
-        case .plays: return KeyPathComparator(\.playCount)
         case .added: return KeyPathComparator(\.created)
         }
     }
@@ -176,46 +194,75 @@ private struct SongColumnCell: View {
     let song: SubsonicSong
     let app: AppState
 
+    private var isCurrent: Bool {
+        app.player.currentSong?.id == song.id
+    }
+
     var body: some View {
         switch column {
         case .title:
             HStack(spacing: 6) {
-                if app.player.currentSong?.id == song.id {
+                if isCurrent {
                     Image(systemName: "speaker.wave.2.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(AMColor.accent)
                 }
                 Text(song.displayTitle)
-                    .fontWeight(app.player.currentSong?.id == song.id ? .semibold : .regular)
+                    .fontWeight(isCurrent ? .semibold : .regular)
+                    .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     .lineLimit(1)
             }
-        case .artist:
-            Text(song.artist ?? "").foregroundStyle(.secondary)
-        case .album:
-            Text(song.album ?? "").foregroundStyle(.secondary)
         case .duration:
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isCurrent ? AMColor.accent : .secondary)
             }
-        case .year:
-            Text(song.year.map(String.init) ?? "").foregroundStyle(.secondary)
+        case .artist:
+            Text(song.artist ?? "")
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .lineLimit(1)
+        case .album:
+            Text(song.album ?? "")
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .lineLimit(1)
+        case .albumArtist:
+            Text(song.albumArtist ?? "")
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .lineLimit(1)
         case .genre:
-            Text(song.genre ?? "").foregroundStyle(.secondary)
-        case .bitrate:
-            Text(song.bitRate.map { "\($0) kbps" } ?? "")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        case .rating:
-            RatingStars(song: song, app: app)
+            Text(song.genre ?? "")
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .lineLimit(1)
         case .plays:
             Text(song.playCount.map(String.init) ?? "")
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+        case .year:
+            Text(song.year.map(String.init) ?? "")
+                .monospacedDigit()
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+        case .composer:
+            Text(song.composer ?? "")
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .lineLimit(1)
+        case .favorite:
+            if app.isStarred(song) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(AMColor.accent)
+            }
+        case .bitrate:
+            Text(song.bitRate.map { "\($0) kbps" } ?? "")
+                .monospacedDigit()
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+        case .rating:
+            if app.effectiveRating(for: song) > 0 {
+                RatingStars(song: song, app: app, size: 10, spacing: 2)
+            }
         case .added:
-             Text(SongTable.addedDateText(song.created))
-                .foregroundStyle(.secondary)
+            Text(SongTable.addedDateText(song.created))
+                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
         }
     }
 }

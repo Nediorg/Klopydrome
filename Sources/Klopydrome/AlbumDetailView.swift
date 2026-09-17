@@ -100,7 +100,7 @@ struct AlbumDetailView: View {
             QuickLookCover(coverArt: detail.coverArt)
                 .frame(width: 220, height: 220)
                 .help("Быстрый просмотр обложки".localized)
-                .accessibilityLabel("Предпросмотр обложки")
+                .accessibilityLabel("Предпросмотр обложки".localized)
             VStack(alignment: .leading, spacing: 10) {
                 Text(detail.displayName)
                     .font(.largeTitle.bold())
@@ -147,16 +147,27 @@ struct AlbumDetailView: View {
         } else if let count = detail.songCount {
             parts.append("\(count) \(Pluralized.song(count))")
         }
-        if isLossless { parts.append("Lossless") }
-        return HStack(spacing: 6) {
+        return HStack(spacing: 8) {
             Text(parts.joined(separator: " · "))
+                .font(.callout)
+                .foregroundStyle(AMColor.secondaryText)
             if isLossless {
-                Image(systemName: "waveform.mid")
-                    .font(.system(size: 13))
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform.mid")
+                        .font(.system(size: 9, weight: .bold))
+                    Text("Lossless")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(Color.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 0.8)
+                )
+                .help("Аудио без потерь".localized)
             }
         }
-        .font(.callout)
-        .foregroundStyle(AMColor.secondaryText)
     }
 
     // MARK: Action row
@@ -170,10 +181,13 @@ struct AlbumDetailView: View {
                 if !songs.isEmpty { app.playShuffled(songs) }
             }
             Spacer()
+            RoundFavoriteButton(isStarred: app.isStarred(album)) {
+                app.toggleStar(album)
+            }
             RoundEllipsisMenu {
                 AlbumContextMenuItems(album: album)
             }
-            .help("Действия над альбомом")
+            .help("Действия над альбомом".localized)
         }
     }
 
@@ -191,10 +205,23 @@ struct AlbumDetailView: View {
         groupedSongs.flatMap(\.songs)
     }
 
+    private func isCompilationAlbum(_ detail: AlbumDetail) -> Bool {
+        if let recordType = detail.recordType?.lowercased(), recordType == "compilation" {
+            return true
+        }
+        if let artist = detail.artist?.lowercased(),
+           artist == "various artists" || artist == "разные артисты" || artist == "soundtrack" {
+            return true
+        }
+        let artists = Set(songs.compactMap { $0.artist })
+        return artists.count > 1
+    }
+
     private func trackList(_ detail: AlbumDetail) -> some View {
         let currentID = app.player.currentSong?.id
         let groups = groupedSongs
         let ordered = orderedSongs
+        let showTrackArtist = isCompilationAlbum(detail)
         // O(1) lookup for global index instead of O(n) firstIndex per song.
         let indexByID: [String: Int] = Dictionary(
             uniqueKeysWithValues: ordered.enumerated().map { ($0.element.id, $0.offset) }
@@ -213,11 +240,11 @@ struct AlbumDetailView: View {
                     }
                     ForEach(group.songs, id: \.id) { song in
                         let globalIndex = indexByID[song.id] ?? 0
-                        let displayIndex: Int? = song.track.map { $0 - 1 }
+                        let displayIndex: Int = song.track.map { $0 - 1 } ?? globalIndex
                         SongRow(song: song, index: displayIndex, showAlbum: false,
+                                showsArtist: showTrackArtist,
                                 isCurrentOverride: currentID == song.id,
                                 onPlay: { _ in app.play(ordered, at: globalIndex) })
-                        if song.id != group.songs.last?.id { Divider().opacity(0.3) }
                     }
                     if showDiscHeaders && group.disc != groups.last?.disc {
                         Divider().opacity(0.2).padding(.vertical, 4)

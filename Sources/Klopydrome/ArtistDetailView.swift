@@ -108,7 +108,6 @@ struct ArtistDetailView: View {
                             .frame(width: 52, height: 52)
                             .background(Circle().fill(AMColor.accent))
                             .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-                            .scaleEffect(playHovered ? 1.08 : 1)
                             .brightness(playHovered ? 0.08 : 0)
                             .animation(.snappy(duration: 0.15), value: playHovered)
                     }
@@ -116,13 +115,13 @@ struct ArtistDetailView: View {
             }
             .buttonStyle(.plain)
             .onHover { playHovered = $0 }
-            .help("Слушать исполнителя")
-            .accessibilityLabel("Слушать исполнителя")
+            .help("Слушать исполнителя".localized)
+            .accessibilityLabel("Слушать исполнителя".localized)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(detail.name ?? artist.name)
                     .font(.largeTitle.bold())
-                Text(roleLabel ?? "Исполнитель")
+                Text(roleLabel ?? "Исполнитель".localized)
                     .font(.subheadline)
                     .foregroundStyle(AMColor.secondaryText)
                 if let count = detail.albumCount {
@@ -132,6 +131,13 @@ struct ArtistDetailView: View {
                 }
             }
             Spacer()
+            RoundFavoriteButton(isStarred: app.isStarred(artist)) {
+                app.toggleStar(artist)
+            }
+            RoundEllipsisMenu {
+                ArtistContextMenuItems(artist: artist)
+            }
+            .help("Действия над исполнителем".localized)
         }
     }
 
@@ -209,7 +215,6 @@ struct ArtistDetailView: View {
                     SongRow(song: song, index: index, showAlbum: true,
                             isCurrentOverride: currentID == song.id,
                             onPlay: { idx in app.play(top, at: idx) })
-                    if index < top.count - 1 { Divider().opacity(0.3) }
                 }
             }
         }

@@ -43,7 +43,7 @@ struct SidebarView: View {
                 sidebarRow("Главная", .home)
             }
 
-            Section("Библиотека") {
+            Section("Медиатека".localized) {
                 sidebarRow("Недавно добавленные", .recentlyAdded)
                 sidebarRow("Артисты", .artists)
                 sidebarRow("Альбомы", .albums)

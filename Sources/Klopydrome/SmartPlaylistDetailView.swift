@@ -131,7 +131,6 @@ struct SmartPlaylistDetailView: View {
                 SongRow(song: song, index: index, showAlbum: true,
                         isCurrentOverride: currentID == song.id,
                         onPlay: { playIndex in app.play(songs, at: playIndex) })
-                if index < songs.count - 1 { Divider().opacity(0.3) }
             }
         }
     }

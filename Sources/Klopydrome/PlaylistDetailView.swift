@@ -116,7 +116,7 @@ struct PlaylistDetailView: View {
             QuickLookCover(coverArt: detail.coverArt)
                 .frame(width: 220, height: 220)
                 .help("Быстрый просмотр обложки".localized)
-                .accessibilityLabel("Предпросмотр обложки")
+                .accessibilityLabel("Предпросмотр обложки".localized)
             VStack(alignment: .leading, spacing: 10) {
                 Text(detail.displayName)
                     .font(.largeTitle.bold())
@@ -140,8 +140,8 @@ struct PlaylistDetailView: View {
 
     private func kindLine(_ detail: PlaylistDetail) -> some View {
         var parts: [String] = []
-        parts.append(detail.isSmart ? "Умный плейлист" : "Плейлист")
-        if detail.isPublic == true { parts.append("Открытый") }
+        parts.append(detail.isSmart ? "Умный плейлист".localized : "Плейлист".localized)
+        if detail.isPublic == true { parts.append("Открытый".localized) }
         return Text(parts.joined(separator: " · "))
             .font(.title3.weight(.medium))
             .foregroundStyle(.secondary)
@@ -180,6 +180,9 @@ struct PlaylistDetailView: View {
             .disabled(isPreparingPlayback)
 
             Spacer()
+            RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
+                app.toggleFollow(detail.summary)
+            }
             RoundEllipsisMenu {
                 PlaylistContextMenuItems(
                     playlist: detail.summary,
@@ -191,7 +194,7 @@ struct PlaylistDetailView: View {
                     onDelete: { confirmingDelete = true }
                 )
             }
-            .help("Действия над плейлистом")
+            .help("Действия над плейлистом".localized)
         }
     }
 
@@ -208,7 +211,7 @@ struct PlaylistDetailView: View {
                         showAlbum: true,
                         isCurrentOverride: currentID == song.id,
                         extraMenuItems: canEditTracks
-                            ? { AnyView(Button("Убрать из плейлиста") { remove(at: index, from: detail) }) }
+                            ? { AnyView(Button("Убрать из плейлиста".localized) { remove(at: index, from: detail) }) }
                             : nil,
                         onPlay: { rowIndex in
                             // `displayedSongs` is a prefix of `rows`, so indices align.
@@ -220,7 +223,6 @@ struct PlaylistDetailView: View {
                             displayedCount = min(displayedCount + pageSize, rows.count)
                         }
                     }
-                    if index < displayedSongs.count - 1 { Divider().opacity(0.3) }
                 }
             }
         }

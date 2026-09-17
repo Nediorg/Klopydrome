@@ -218,7 +218,7 @@ struct PlaylistsView: View {
 struct PlaylistTilePlaceholder: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(0.06))
                 .aspectRatio(1, contentMode: .fit)
             RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -235,12 +235,22 @@ struct PlaylistTilePlaceholder: View {
 struct PlaylistTile: View {
     let playlist: PlaylistSummary
 
-    @State private var hovering = false
+    private var fallbackPreset: PlaylistCoverPreset {
+        let presets = PlaylistCoverPreset.all
+        let index = abs(playlist.id.hashValue) % presets.count
+        return presets[index]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geo in
-                CoverArtView(coverArt: playlist.coverArt, size: geo.size.width, cornerRadius: 10, shadow: true)
+                if let coverArt = playlist.coverArt, !coverArt.isEmpty {
+                    CoverArtView(coverArt: coverArt, size: geo.size.width, cornerRadius: 6, shadow: true)
+                } else {
+                    CoverPresetView(preset: fallbackPreset, size: geo.size.width, title: playlist.displayName)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                }
             }
             .aspectRatio(1, contentMode: .fit)
 
@@ -249,7 +259,7 @@ struct PlaylistTile: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(playlist.owner ?? "Плейлист")
+                Text(playlist.owner ?? "Плейлист".localized)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -257,18 +267,12 @@ struct PlaylistTile: View {
             .padding(.horizontal, 2)
         }
         .contentShape(Rectangle())
-        .scaleEffect(hovering ? 1.03 : 1)
-        .zIndex(hovering ? 1 : 0)
-        .animation(.snappy(duration: 0.15), value: hovering)
-        .onHover { hovering = $0 }
     }
 }
 
 /// Square tile for a smart playlist: outline gear artwork with rules beneath.
 struct SmartPlaylistTile: View {
     let playlist: SmartPlaylist
-
-    @State private var hovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -277,7 +281,7 @@ struct SmartPlaylistTile: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.gray.opacity(0.12))
                 )
                 .aspectRatio(1, contentMode: .fit)
@@ -295,9 +299,5 @@ struct SmartPlaylistTile: View {
             .padding(.horizontal, 2)
         }
         .contentShape(Rectangle())
-        .scaleEffect(hovering ? 1.03 : 1)
-        .zIndex(hovering ? 1 : 0)
-        .animation(.snappy(duration: 0.15), value: hovering)
-        .onHover { hovering = $0 }
     }
 }

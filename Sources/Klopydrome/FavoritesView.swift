@@ -119,7 +119,6 @@ struct FavoritesView: View {
                                 Text(artist.name).font(.caption).lineLimit(2).frame(width: 90)
                             }
                             .contentShape(Rectangle())
-                            .hoverScale(1.05)
                         }
                         .buttonStyle(.plain)
                     }
@@ -163,7 +162,6 @@ struct FavoritesView: View {
                     SongRow(song: song, index: index, showAlbum: true,
                             isCurrentOverride: currentID == song.id,
                             onPlay: { idx in app.play(songs, at: idx) })
-                    if index < songs.count - 1 { Divider().opacity(0.3) }
                 }
             }
         }

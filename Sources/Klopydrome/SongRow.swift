@@ -3,8 +3,9 @@ import NavidromeClient
 
 struct SongRow: View {
     let song: SubsonicSong
-    let index: Int?
-    let showAlbum: Bool
+    var index: Int?
+    var showAlbum: Bool = true
+    var showsArtist: Bool = false
     /// When non-nil, overrides the environment-derived current-track check.
     /// Lets parents pass a snapshot and enables `Equatable` skipping when
     /// `AppState` ticks for unrelated reasons (progress, downloads).
@@ -22,55 +23,118 @@ struct SongRow: View {
     private var fgSecondary: Color { isCurrent ? .white.opacity(0.8) : .secondary }
     private var isDownloading: Bool { app.downloadingSongIDs.contains(song.id) }
     private var isCachedLocally: Bool { app.isCached(song) }
+    private var isStarred: Bool { app.isStarred(song) }
+    private var isCurrentPlaying: Bool { isCurrent && app.player.isPlaying }
+    private var starForeground: Color { AMColor.accent }
 
     var body: some View {
-        SongRowEdgeLayout(spacing: 10) {
-            leadingContent
-            trailingContent
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background {
-            if isCurrent {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(AMColor.accent)
-            } else if hovering {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06))
+        HStack(spacing: 6) {
+            Button {
+                app.toggleStar(song)
+            } label: {
+                Image(systemName: isStarred ? "star.fill" : "star")
+                    .font(.system(size: 11))
+                    .foregroundStyle(starForeground)
+                    .symbolEffect(.bounce, value: isStarred)
+            }
+            .buttonStyle(.plain)
+            .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+            .opacity(isStarred ? 1 : (hovering ? 1 : 0))
+            .allowsHitTesting(hovering || isStarred)
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+
+            SongRowEdgeLayout(spacing: 10, minHeight: showAlbum ? 36 : (showsArtist ? 30 : 20)) {
+                leadingContent
+                trailingContent
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background {
+                if isCurrent {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous).fill(AMColor.accent)
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06))
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { onPlay?(index ?? 0) }
+            .contextMenu {
+                if let extraMenuItems { extraMenuItems() }
+                SongActionItems(
+                    app: app,
+                    song: song,
+                    selection: [song],
+                    onPlay: onPlay.map { play in { play(index ?? 0) } }
+                )
             }
         }
-        .animation(.snappy(duration: 0.15), value: hovering)
+        .frame(minHeight: showAlbum ? 46 : (showsArtist ? 40 : 32))
         .onHover { hovering = $0 }
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onPlay?(index ?? 0) }
-        .contextMenu {
-            if let extraMenuItems { extraMenuItems() }
-            SongActionItems(
-                app: app,
-                song: song,
-                selection: [song],
-                onPlay: onPlay.map { play in { play(index ?? 0) } }
-            )
-        }
+        .animation(.snappy(duration: 0.15), value: hovering)
     }
 
     @ViewBuilder
     private var leadingContent: some View {
         HStack(spacing: 10) {
-            if let index {
+            if !showAlbum {
                 ZStack {
-                    Text("\(index + 1)")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(fgSecondary)
-                        .opacity(isCurrent ? 0 : 1)
                     if isCurrent {
-                        Image(systemName: "speaker.wave.2.fill")
+                        if hovering {
+                            Image(systemName: isCurrentPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(fgPrimary)
+                        } else {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(fgPrimary)
+                        }
+                    } else if hovering {
+                        Image(systemName: "play.fill")
                             .font(.system(size: 11))
+                            .foregroundStyle(fgPrimary)
+                    } else if let index {
+                        Text("\(index + 1)")
+                            .font(.callout.monospacedDigit())
+                            .foregroundStyle(fgSecondary)
+                    }
+                }
+                .frame(width: 22, alignment: .trailing)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isCurrent {
+                        app.player.togglePlayPause()
+                    } else {
+                        onPlay?(index ?? 0)
+                    }
+                }
+            }
+            if showAlbum {
+                ZStack {
+                    CoverArtView(coverArt: song.coverArt, size: 36, cornerRadius: 4)
+                    if isCurrent && !hovering {
+                        Color.black.opacity(0.35)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white)
+                    } else if hovering {
+                        Color.black.opacity(0.35)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Image(systemName: isCurrentPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 13))
                             .foregroundStyle(.white)
                     }
                 }
-                .frame(width: 26, alignment: .trailing)
-            }
-            if showAlbum, let coverArt = song.coverArt {
-                CoverArtView(coverArt: coverArt, size: 36)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isCurrent {
+                        app.player.togglePlayPause()
+                    } else {
+                        onPlay?(index ?? 0)
+                    }
+                }
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(song.displayTitle)
@@ -83,7 +147,7 @@ struct SongRow: View {
                         .font(.caption)
                         .foregroundStyle(fgSecondary)
                         .lineLimit(1)
-                } else if let artist = song.artist {
+                } else if showsArtist, let artist = song.artist {
                     Text(artist)
                         .font(.caption)
                         .foregroundStyle(fgSecondary)
@@ -102,8 +166,8 @@ struct SongRow: View {
                 ProgressView()
                     .controlSize(.mini)
                     .frame(width: 16, height: 16)
-                    .help("Загрузка…")
-                    .accessibilityLabel("Загрузка")
+                    .help("Загрузка…".localized)
+                    .accessibilityLabel("Загрузка".localized)
             } else {
                 Button {
                     if isCachedLocally {
@@ -118,9 +182,9 @@ struct SongRow: View {
                         .symbolEffect(.bounce, value: isCachedLocally)
                 }
                 .buttonStyle(.plain)
-                .help(isCachedLocally ? "Удалить загрузку" : "Загрузить")
-                .accessibilityLabel(isCachedLocally ? "Удалить загрузку"
-                                                    : (isDownloading ? "Загрузка" : "Загрузить"))
+                .help(isCachedLocally ? "Удалить загрузку".localized : "Загрузить".localized)
+                .accessibilityLabel(isCachedLocally ? "Удалить загрузку".localized
+                                                    : (isDownloading ? "Загрузка".localized : "Загрузить".localized))
                 .opacity(hovering || isCachedLocally ? 1 : 0)
                 .allowsHitTesting(hovering || isCachedLocally)
                 .frame(width: 18, height: 18)
@@ -128,7 +192,6 @@ struct SongRow: View {
                 .transition(.opacity)
                 .accessibilityHidden(false)
             }
-            RatingStars(song: song, app: app, size: 11, spacing: 2)
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
                     .font(.caption.monospacedDigit())
@@ -136,7 +199,10 @@ struct SongRow: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            SongEllipsisMenu(song: song, foregroundStyle: isCurrent ? .white : .secondary, extraMenuItems: extraMenuItems)
+            SongEllipsisMenu(song: song,
+                             foregroundStyle: isCurrent ? .white : .secondary,
+                             app: app,
+                             extraMenuItems: extraMenuItems)
                 .opacity(hovering ? 1 : 0)
                 .allowsHitTesting(hovering)
                 .animation(.snappy(duration: 0.12), value: hovering)
@@ -147,6 +213,7 @@ struct SongRow: View {
 
 private struct SongRowEdgeLayout: Layout {
     let spacing: CGFloat
+    var minHeight: CGFloat = 34
 
     func sizeThatFits(
         proposal: ProposedViewSize,
@@ -162,7 +229,8 @@ private struct SongRowEdgeLayout: Layout {
         }
         let leading = subviews[0].sizeThatFits(.unspecified)
         let idealWidth = leading.width + spacing + cache
-        let height = max(leading.height, subviews[1].sizeThatFits(.unspecified).height)
+        let contentHeight = max(leading.height, subviews[1].sizeThatFits(.unspecified).height)
+        let height = max(minHeight, contentHeight)
         return CGSize(width: max(proposal.width ?? idealWidth, idealWidth), height: height)
     }
 

@@ -54,7 +54,7 @@ struct SongsView: View {
     /// defaults.
     @State private var columnCustomization: TableColumnCustomization<SubsonicSong> = {
         var customization = TableColumnCustomization<SubsonicSong>()
-        for column in SongColumn.allCases where column != .title {
+        for column in SongColumn.allCases {
             customization[visibility: column.id] = SongColumn.defaults.contains(column) ? .visible : .hidden
         }
         return customization
@@ -168,27 +168,27 @@ struct SongsView: View {
         if onlyFav { starredIDs = Set(base.filter { app.isStarred($0) }.map(\.id)) }
 
         reprocessTask?.cancel()
-        reprocessTask = Task.detached(priority: .utility) { [self] in
-            let result = Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
-                                      query: query, sortOrder: order)
-            await MainActor.run {
-                guard !Task.isCancelled, self.reprocessGeneration == generation else {
-                    self.reprocessing = false
-                    if self.reprocessDirty {
-                        self.reprocessDirty = false
-                        self.reprocess()
-                    }
-                    return
+        reprocessTask = Task {
+            let result = await Task.detached(priority: .utility) {
+                Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
+                             query: query, sortOrder: order)
+            }.value
+            guard !Task.isCancelled, reprocessGeneration == generation else {
+                reprocessing = false
+                if reprocessDirty {
+                    reprocessDirty = false
+                    reprocess()
                 }
-                self.processedSongs = result.processed
-                if !result.searchable.isEmpty {
-                    self.searchable.merge(result.searchable) { _, new in new }
-                }
-                self.reprocessing = false
-                if self.reprocessDirty {
-                    self.reprocessDirty = false
-                    self.reprocess()
-                }
+                return
+            }
+            processedSongs = result.processed
+            if !result.searchable.isEmpty {
+                searchable.merge(result.searchable) { _, new in new }
+            }
+            reprocessing = false
+            if reprocessDirty {
+                reprocessDirty = false
+                reprocess()
             }
         }
     }

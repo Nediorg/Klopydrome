@@ -8,9 +8,14 @@ struct CoverArtView: View {
     var shadow = false
     var placeholderBackground: Color?
 
-    /// Corner radius scales with size: small thumbnails ~4pt, large hero covers
-    /// ~12pt (HIG_COMPLIANCE §1.3).
-    private var radius: CGFloat { cornerRadius ?? (size < 64 ? 4 : 12) }
+    /// Corner radius scales with size: small thumbnails ~4pt, grid covers ~6pt,
+    /// large hero covers ~8pt matching Apple Music macOS Sequoia.
+    private var radius: CGFloat {
+        if let cornerRadius { return cornerRadius }
+        if size < 64 { return 4 }
+        if size < 180 { return 6 }
+        return 8
+    }
     /// Drop shadow scales with the cover so hero artwork reads with depth
     /// (HIG §1.3: ~y8/blur24/30%) without swamping small thumbnails.
     private var shadowRadius: CGFloat { shadow ? max(8, size * 0.08) : 0 }

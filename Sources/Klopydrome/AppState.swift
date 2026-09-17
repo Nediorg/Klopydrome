@@ -81,6 +81,7 @@ final class AppState {
     /// as the menu closes, so the presentation never happens. The sheet is
     /// attached in `MainView` and reads this value.
     var shareTarget: ShareTarget?
+    var inspectingSong: SubsonicSong?
 
     var showLyrics = true
     var queuePanelVisible = false

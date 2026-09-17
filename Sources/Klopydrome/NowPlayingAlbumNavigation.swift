@@ -10,7 +10,7 @@ extension SubsonicAlbum {
             album: song.album,
             name: song.album,
             artist: song.albumArtist ?? song.artist,
-            artistId: song.artistId,
+            artistId: song.albumArtistId ?? song.artistId,
             coverArt: song.coverArt,
             year: song.year,
             genre: song.genre
@@ -21,6 +21,10 @@ extension SubsonicAlbum {
 extension Artist {
     static func nowPlayingSummary(from song: SubsonicSong, artistID: String) -> Self {
         Self(id: artistID, name: song.artist ?? song.albumArtist ?? "Unknown Artist")
+    }
+
+    static func albumArtistSummary(from song: SubsonicSong, artistID: String) -> Self {
+        Self(id: artistID, name: song.albumArtist ?? song.artist ?? "Unknown Artist")
     }
 }
 
@@ -66,6 +70,23 @@ extension AppState {
         nav.selectedPlaylist = nil
         nav.history.append(.artist(artist))
         nav.navVersion += 1
+    }
+
+    func openAlbumArtistInLibrary(_ song: SubsonicSong) {
+        MiniPlayerPanelController.shared.closeForLibraryNavigation()
+        nav.selectedPlaylist = nil
+        if let albumArtistId = song.albumArtistId {
+            nav.history.append(.artist(Artist(id: albumArtistId, name: song.effectiveAlbumArtist)))
+            nav.navVersion += 1
+        } else if let artistId = song.artistId, song.albumArtist == nil || song.albumArtist == song.artist {
+            nav.history.append(.artist(Artist(id: artistId, name: song.effectiveAlbumArtist)))
+            nav.navVersion += 1
+        } else {
+            nav.searchQuery = song.effectiveAlbumArtist
+            nav.selected = .search
+            nav.history.removeAll()
+            nav.navVersion += 1
+        }
     }
 
     /// Shows the playlists view — used as the “go to playlist” fallback from a

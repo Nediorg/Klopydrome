@@ -242,6 +242,8 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
     public let albumId: String?
     public let artistId: String?
     public let albumArtist: String?
+    public let albumArtistId: String?
+    public let composer: String?
     public let type: String?
     public let streamId: String?
     public let isVideo: Bool?
@@ -260,13 +262,26 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
         [artist, album].compactMap { $0 }.joined(separator: " — ")
     }
 
+    /// Effective album artist name, falling back to track artist or unknown.
+    public var effectiveAlbumArtist: String {
+        albumArtist ?? artist ?? "Unknown Artist"
+    }
+
+    /// Whether this track belongs to a compilation / various artists album.
+    public var isVariousArtists: Bool {
+        guard let albumArtist else { return false }
+        let lower = albumArtist.lowercased()
+        return lower == "various artists" || lower == "various" || lower == "soundtrack" || lower == "va"
+    }
+
     public init(id: String, parent: String? = nil, isDir: Bool? = nil, title: String? = nil, album: String? = nil,
                 artist: String? = nil, track: Int? = nil, year: Int? = nil, genre: String? = nil,
                 coverArt: String? = nil, size: Int? = nil, contentType: String? = nil, suffix: String? = nil,
                 transcodedContentType: String? = nil, transcodedSuffix: String? = nil, duration: Int? = nil,
                 bitRate: Int? = nil, path: String? = nil, playCount: Int? = nil, discNumber: Int? = nil,
                 created: String? = nil, starred: String? = nil, userRating: Int? = nil, averageRating: Double? = nil,
-                albumId: String? = nil, artistId: String? = nil, albumArtist: String? = nil, type: String? = nil,
+                albumId: String? = nil, artistId: String? = nil, albumArtist: String? = nil,
+                albumArtistId: String? = nil, composer: String? = nil, type: String? = nil,
                 streamId: String? = nil, isVideo: Bool? = nil, bookmarkPosition: Int? = nil,
                 sortName: String? = nil, musicBrainzId: String? = nil) {
         self.id = id
@@ -296,6 +311,8 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
         self.albumId = albumId
         self.artistId = artistId
         self.albumArtist = albumArtist
+        self.albumArtistId = albumArtistId
+        self.composer = composer
         self.type = type
         self.streamId = streamId
         self.isVideo = isVideo

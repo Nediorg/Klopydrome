@@ -58,6 +58,22 @@ struct MainView: View {
         )) { target in
             ShareSheet(target: target)
         }
+        .sheet(item: Binding(
+            get: { app.inspectingSong },
+            set: { app.inspectingSong = $0 }
+        )) { song in
+            SongInfoSheet(song: song)
+        }
+        .background {
+            Button("") {
+                if let current = app.player.currentSong {
+                    app.inspectSong(current)
+                }
+            }
+            .keyboardShortcut("i", modifiers: .command)
+            .opacity(0)
+            .allowsHitTesting(false)
+        }
     }
 }
 

@@ -47,8 +47,8 @@ struct SongActionItems: View {
                 }
             }
         }
-        Button("Скачать") { app.downloadTrack(song) }
-        Menu("Оценить") {
+        Button("Скачать".localized) { app.downloadTrack(song) }
+        Menu("Оценить".localized) {
             ForEach(1...5, id: \.self) { star in
                 Button("\(star) \(Pluralized.star(star))") {
                     targets.forEach { app.setRating(star == app.effectiveRating(for: $0) ? 0 : star, for: $0) }
@@ -57,7 +57,49 @@ struct SongActionItems: View {
         }
 
         Divider()
-        Button("Поделиться…") {
+        Button {
+            app.playStation(from: song)
+        } label: {
+            Label("Создать станцию".localized, systemImage: "dot.radiowaves.left.and.right")
+        }
+
+        if let albumId = song.albumId {
+            Button {
+                app.openAlbumInLibrary(.nowPlayingSummary(from: song, albumID: albumId))
+            } label: {
+                Label("Показать альбом в медиатеке".localized, systemImage: "square.stack")
+            }
+        }
+        if let artistId = song.artistId, !(song.artist?.isEmpty ?? true) {
+            Button {
+                app.openArtistInLibrary(Artist.nowPlayingSummary(from: song, artistID: artistId))
+            } label: {
+                Label("Перейти к исполнителю".localized, systemImage: "music.mic")
+            }
+        }
+        if let albumArtist = song.albumArtist, !albumArtist.isEmpty,
+           albumArtist.lowercased() != song.artist?.lowercased() {
+            Button {
+                app.openAlbumArtistInLibrary(song)
+            } label: {
+                Label("Перейти к автору альбома".localized, systemImage: "person.2")
+            }
+        }
+
+        Divider()
+        Button {
+            app.inspectSong(song)
+        } label: {
+            Label("Свойства…".localized, systemImage: "info.circle")
+        }
+        Button {
+            let parts = [song.displayTitle, song.artist, song.album].compactMap { $0 }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(parts.joined(separator: " — "), forType: .string)
+        } label: {
+            Label("Скопировать".localized, systemImage: "doc.on.doc")
+        }
+        Button("Поделиться…".localized) {
             app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
         }
     }

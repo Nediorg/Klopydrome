@@ -266,18 +266,17 @@ struct AlbumGridView: View {
         let onlyFav = favoritesOnly
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let sortKind = sort
-        let local = isLocalSort
         var starredIDs: Set<String>?
         if onlyFav { starredIDs = Set(base.filter { app.isStarred($0) }.map(\.id)) }
 
         reprocessTask?.cancel()
-        reprocessTask = Task.detached(priority: .userInitiated) { [self] in
-            let result = Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
-                                      query: query, sort: sortKind)
-            await MainActor.run {
-                guard !Task.isCancelled, self.reprocessGeneration == generation else { return }
-                self.processedAlbums = result
-            }
+        reprocessTask = Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
+                             query: query, sort: sortKind)
+            }.value
+            guard !Task.isCancelled, reprocessGeneration == generation else { return }
+            processedAlbums = result
         }
     }
 

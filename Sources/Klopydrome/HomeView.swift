@@ -234,9 +234,7 @@ struct AlbumCard: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 6) {
-                CoverArtView(coverArt: album.coverArt, size: width, cornerRadius: 8, shadow: true)
-                    .scaleEffect(hovering ? 1.02 : 1)
-                    .animation(.snappy(duration: 0.15), value: hovering)
+                CoverArtView(coverArt: album.coverArt, size: width, cornerRadius: 6, shadow: true)
                 textBlock
             }
             .frame(width: width, alignment: .leading)
@@ -254,16 +252,17 @@ struct AlbumCard: View {
                 }
                 .buttonStyle(.plain)
                 .padding(6)
-                .help(isStarred ? "Убрать из избранного" : "В избранное")
-                .accessibilityLabel(isStarred ? "Убрать альбом из избранного" : "Добавить альбом в избранное")
+                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+                .accessibilityLabel(
+                    isStarred ? "Убрать альбом из избранного".localized : "Добавить альбом в избранное".localized
+                )
                 .transition(.opacity)
             }
         }
-        .zIndex(hovering ? 1 : 0)
         .animation(.snappy(duration: 0.15), value: isStarred)
         .onHover { hovering = $0 }
         .accessibilityLabel(album.displayName)
-        .accessibilityAction(named: isStarred ? "Убрать из избранного" : "В избранное") {
+        .accessibilityAction(named: isStarred ? "Убрать из избранного".localized : "В избранное".localized) {
             app.toggleStar(album)
         }
         .contextMenu {
@@ -342,7 +341,7 @@ struct AlbumCardPlaceholder: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.white.opacity(0.08))
                 .frame(width: width, height: width)
             Text("Album Name")

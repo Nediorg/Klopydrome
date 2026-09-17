@@ -90,27 +90,37 @@ struct QueuePanelView: View {
             if list.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(list.enumerated()), id: \.element.id) { index, song in
-                            QueueTrackRow(song: song, isCurrent: isCurrent(song)) {
-                                select(song, at: index)
-                            }
-                            Divider().padding(.leading, 56)
-                        }
+                List {
+                    ForEach(Array(list.enumerated()), id: \.element.id) { index, song in
+                        QueueTrackRow(
+                            song: song,
+                            isCurrent: isCurrent(song),
+                            canRemove: selectedTab == .upNext,
+                            onRemove: { app.player.remove(at: index) },
+                            action: { select(song, at: index) }
+                        )
+                        .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
+                    .onMove { source, destination in
+                        guard selectedTab == .upNext else { return }
+                        app.player.move(fromOffsets: source, toOffset: destination)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(maxWidth: .infinity)
         .frame(maxHeight: .infinity)
         .confirmationDialog(
-            selectedTab == .upNext ? "Очистить очередь?" : "Очистить историю?",
+            selectedTab == .upNext ? "Очистить очередь?".localized : "Очистить историю?".localized,
             isPresented: $confirmingClear,
             titleVisibility: .visible
         ) {
-            Button("Очистить", role: .destructive) { clearAction() }
-            Button("Отмена", role: .cancel) {}
+            Button("Очистить".localized, role: .destructive) { clearAction() }
+            Button("Отмена".localized, role: .cancel) {}
         }
     }
 
@@ -129,7 +139,7 @@ struct QueuePanelView: View {
             Image(systemName: selectedTab == .upNext ? "list.bullet" : "clock")
                 .font(.system(size: 24))
                 .foregroundStyle(.tertiary)
-            Text(selectedTab == .upNext ? "Очередь пуста" : "Истории прослушивания ещё нет")
+            Text(selectedTab == .upNext ? "Очередь пуста".localized : "Истории прослушивания ещё нет".localized)
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -148,7 +158,6 @@ struct QueuePanelView: View {
                 app.player.jump(to: queueIndex)
             }
         case .history:
-            // История — лог, а не очередь (как в Apple Music)
             app.player.play([song], recordHistory: false)
         }
     }
@@ -164,12 +173,15 @@ struct QueuePanelView: View {
 }
 
 /// A single queue track row: artwork, title, artist — album and duration,
-/// with a macOS hover highlight and red accent for the current track.
+/// with a macOS hover highlight, deletion button, context menu, and red accent for current track.
 struct QueueTrackRow: View {
     let song: SubsonicSong
     let isCurrent: Bool
+    var canRemove: Bool = false
+    var onRemove: (() -> Void)?
     let action: () -> Void
 
+    @Environment(AppState.self) private var app
     @State private var hovering = false
 
     var body: some View {
@@ -192,14 +204,24 @@ struct QueueTrackRow: View {
 
                 Spacer()
 
-                if let duration = song.duration {
+                if canRemove && hovering {
+                    Button {
+                        onRemove?()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(isCurrent ? .white.opacity(0.9) : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Удалить из очереди".localized)
+                } else if let duration = song.duration {
                     Text(Player.format(seconds: Double(duration)))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(isCurrent ? .white.opacity(0.8) : .secondary)
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal)
+            .padding(.vertical, 7)
+            .padding(.horizontal, 10)
             .contentShape(Rectangle())
             .background {
                 if isCurrent {
@@ -212,6 +234,17 @@ struct QueueTrackRow: View {
         .buttonStyle(.plain)
         .animation(.snappy(duration: 0.15), value: hovering)
         .onHover { hovering = $0 }
+        .contextMenu {
+            if canRemove {
+                Button(role: .destructive) {
+                    onRemove?()
+                } label: {
+                    Label("Удалить из очереди".localized, systemImage: "trash")
+                }
+                Divider()
+            }
+            SongActionItems(app: app, song: song, selection: [song])
+        }
         .accessibilityLabel(song.displayTitle)
     }
 }
