@@ -35,6 +35,8 @@ public struct SubsonicEnvelope: Decodable {
     public let songsByGenre: SongListPayload?
     public let genres: GenresPayload?
     public let albumInfo: AlbumInfoPayload?
+    public let artistInfo: ArtistInfoPayload?
+    public let artistInfo2: ArtistInfoPayload?
 
     public final class SubsonicErrorPayload: Decodable {
         public let code: Int
@@ -133,6 +135,28 @@ public struct AlbumInfoPayload: Codable {
         self.largeImageUrl = largeImageUrl
         self.mediumImageUrl = mediumImageUrl
         self.smallImageUrl = smallImageUrl
+    }
+}
+
+public struct ArtistInfoPayload: Codable, Hashable {
+    public let biography: String?
+    public let musicBrainzId: String?
+    public let lastFmUrl: String?
+    public let smallImageUrl: String?
+    public let mediumImageUrl: String?
+    public let largeImageUrl: String?
+    public let similarArtist: [Artist]?
+
+    public init(biography: String? = nil, musicBrainzId: String? = nil, lastFmUrl: String? = nil,
+                smallImageUrl: String? = nil, mediumImageUrl: String? = nil, largeImageUrl: String? = nil,
+                similarArtist: [Artist]? = nil) {
+        self.biography = biography
+        self.musicBrainzId = musicBrainzId
+        self.lastFmUrl = lastFmUrl
+        self.smallImageUrl = smallImageUrl
+        self.mediumImageUrl = mediumImageUrl
+        self.largeImageUrl = largeImageUrl
+        self.similarArtist = similarArtist
     }
 }
 
@@ -244,6 +268,7 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
     public let albumArtist: String?
     public let albumArtistId: String?
     public let composer: String?
+    public let artists: [Artist]?
     public let type: String?
     public let streamId: String?
     public let isVideo: Bool?
@@ -281,9 +306,9 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
                 bitRate: Int? = nil, path: String? = nil, playCount: Int? = nil, discNumber: Int? = nil,
                 created: String? = nil, starred: String? = nil, userRating: Int? = nil, averageRating: Double? = nil,
                 albumId: String? = nil, artistId: String? = nil, albumArtist: String? = nil,
-                albumArtistId: String? = nil, composer: String? = nil, type: String? = nil,
-                streamId: String? = nil, isVideo: Bool? = nil, bookmarkPosition: Int? = nil,
-                sortName: String? = nil, musicBrainzId: String? = nil) {
+                albumArtistId: String? = nil, composer: String? = nil, artists: [Artist]? = nil,
+                type: String? = nil, streamId: String? = nil, isVideo: Bool? = nil,
+                bookmarkPosition: Int? = nil, sortName: String? = nil, musicBrainzId: String? = nil) {
         self.id = id
         self.parent = parent
         self.isDir = isDir
@@ -313,6 +338,7 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
         self.albumArtist = albumArtist
         self.albumArtistId = albumArtistId
         self.composer = composer
+        self.artists = artists
         self.type = type
         self.streamId = streamId
         self.isVideo = isVideo

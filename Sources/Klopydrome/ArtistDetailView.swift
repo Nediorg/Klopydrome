@@ -12,7 +12,7 @@ struct ArtistDetailView: View {
     /// "Gather & Play" instead of issuing a duplicate request burst.
     @State private var allSongs: [SubsonicSong] = []
     @State private var gatheringSongs = false
-    @State private var playHovered = false
+    @State private var artistInfo: ArtistInfoPayload?
     /// The discography crawl, spawned in the background by `load()` so the page
     /// renders the instant the (fast) artist info lands. Cancelled when this
     /// view goes away. "Gather & Play" awaits it instead of issuing a fresh
@@ -50,27 +50,43 @@ struct ArtistDetailView: View {
     }
 
     /// Role label inferred from the OpenSubsonic `roles` tag when present,
-    /// otherwise from the artist's own songs (artist vs albumArtist).
+    /// identifying the artist's primary role (album artist vs composer vs guest).
     private var roleLabel: String? {
-        ArtistRole.playlistLabel(roles: detail?.roles, songs: allSongs)
+        ArtistRole.primaryRole(
+            roles: detail?.roles,
+            hasAlbums: !(albums.isEmpty && (detail?.albumCount ?? 0) == 0),
+            songs: allSongs
+        )
     }
 
     var body: some View {
         Group {
             if let detail {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        header(detail)
-                        ArtistHeroRow(artist: artist, latest: latestReleaseCandidate, top: topSongs)
-                        if !albums.isEmpty {
-                            albumsShelf
+                    VStack(alignment: .leading, spacing: 24) {
+                        ArtistHeroBanner(
+                            artist: artist,
+                            detail: detail,
+                            roleLabel: roleLabel,
+                            albums: albums,
+                            allSongs: allSongs,
+                            artistInfo: artistInfo,
+                            gatheringSongs: gatheringSongs,
+                            onPlay: { gatherAndPlay() }
+                        )
+
+                        VStack(alignment: .leading, spacing: 28) {
+                            ArtistHeroRow(artist: artist, latest: latestReleaseCandidate, top: topSongs)
+                            if !albums.isEmpty {
+                                albumsShelf
+                            }
+                            if !appearsOn.isEmpty {
+                                appearsOnSection()
+                            }
                         }
-                        if !appearsOn.isEmpty {
-                            appearsOnSection()
-                        }
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
                 }
                 .scrollClipDisabled()
             } else if loading {
@@ -81,60 +97,6 @@ struct ArtistDetailView: View {
         }
         .task { await load() }
         .onDisappear { discographyTask?.cancel() }
-    }
-
-    // MARK: Header
-
-    private func header(_ detail: ArtistDetail) -> some View {
-        HStack(spacing: 20) {
-            Button {
-                gatherAndPlay()
-            } label: {
-                Group {
-                    if gatheringSongs {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 52, height: 52)
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 52, height: 52)
-                            .background(Circle().fill(AMColor.accent))
-                            .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-                            .brightness(playHovered ? 0.08 : 0)
-                            .animation(.snappy(duration: 0.15), value: playHovered)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .onHover { playHovered = $0 }
-            .help("Слушать исполнителя".localized)
-            .accessibilityLabel("Слушать исполнителя".localized)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(detail.name ?? artist.name)
-                    .font(.largeTitle.bold())
-                Text(roleLabel ?? "Исполнитель".localized)
-                    .font(.subheadline)
-                    .foregroundStyle(AMColor.secondaryText)
-                if let count = detail.albumCount {
-                    Text("\(count) \(Pluralized.album(count))")
-                        .font(.subheadline)
-                        .foregroundStyle(AMColor.secondaryText)
-                }
-            }
-            Spacer()
-            HStack(spacing: 8) {
-                RoundFavoriteButton(isStarred: app.isStarred(artist)) {
-                    app.toggleStar(artist)
-                }
-                RoundEllipsisMenu {
-                    ArtistContextMenuItems(artist: artist)
-                }
-                .help("Действия над исполнителем".localized)
-            }
-        }
     }
 
     private func appearsOnSection() -> some View {
@@ -187,7 +149,22 @@ struct ArtistDetailView: View {
         loading = true
         defer { loading = false }
         guard let client = app.client else { return }
-        detail = try? await client.getArtist(id: artist.id)
+        var resolvedID = artist.id
+        var fetchedDetail = try? await client.getArtist(id: resolvedID)
+        if fetchedDetail == nil {
+            if let matched = app.library.findArtist(named: artist.name) {
+                resolvedID = matched.id
+                fetchedDetail = try? await client.getArtist(id: resolvedID)
+            } else if let search = try? await client.search3(query: artist.name),
+                      let match = search.artists.first(where: {
+                          $0.name.localizedCaseInsensitiveCompare(artist.name) == .orderedSame
+                      }) {
+                resolvedID = match.id
+                fetchedDetail = try? await client.getArtist(id: resolvedID)
+            }
+        }
+        detail = fetchedDetail
+        artistInfo = try? await client.getArtistInfo(id: resolvedID)
         // If the full discography was already crawled during this connection,
         // replay it from the cache instead of re-fetching every album's tracklist.
         if let cached = await app.cache?.cachedDiscography(for: artist.id) {
@@ -247,20 +224,24 @@ struct ArtistDetailView: View {
 }
 
 /// Role label for an artist, from OpenSubsonic `roles` when present; otherwise
-/// a plain "Исполнитель" fallback. Roles are authoritative — the server pushes
-/// them via `getArtist`, so we don't try to second-guess from song fields.
+/// a plain "Исполнитель" fallback. Resolves the artist's distinct primary role
+/// without concatenating multiple internal tags into a single text line.
 enum ArtistRole {
-    static func playlistLabel(roles: [String]?, songs: [SubsonicSong]) -> String? {
-        if let roles, !roles.isEmpty {
-            var labels: [String] = []
-            if roles.contains("composer") { labels.append("Композитор") }
-            if roles.contains("albumartist") { labels.append("Автор альбома") }
-            if roles.contains("artist") { labels.append("Исполнитель") }
-            if !labels.isEmpty {
-                return labels.joined(separator: " · ")
-            }
+    static func primaryRole(roles: [String]?, hasAlbums: Bool, songs: [SubsonicSong]) -> String {
+        let normalized = roles?.map { $0.lowercased() } ?? []
+        // If the artist released albums in the library, their primary role is Album Artist.
+        if hasAlbums || normalized.contains("albumartist") {
+            return "Исполнитель альбома".localized
         }
-        return "Исполнитель"
+        // If the artist has no albums of their own in the library, but is a composer.
+        if normalized.contains("composer") {
+            return "Композитор".localized
+        }
+        // If the artist appears only as a featured performer on other artists' tracks.
+        if normalized.contains("artist") {
+            return "Приглашённый артист".localized
+        }
+        return "Исполнитель".localized
     }
 }
 

@@ -47,7 +47,29 @@ private func buildGoToMenu(
 
 @MainActor
 private func addArtistAlbumItems(to menu: NSMenu, for song: SubsonicSong, helper: GoToMenuHelper) {
-    if song.artistId != nil, !(song.artist?.isEmpty ?? true) {
+    let collaborators = SongCollaborators.parse(from: song, library: helper.appState.library)
+    if collaborators.count > 1 {
+        let parentItem = NSMenuItem(
+            title: "Перейти к исполнителю".localized,
+            action: nil,
+            keyEquivalent: ""
+        )
+        parentItem.image = NSImage(systemSymbolName: "music.mic", accessibilityDescription: nil)
+        let subMenu = NSMenu()
+        for artist in collaborators {
+            let subItem = NSMenuItem(
+                title: artist.name,
+                action: #selector(GoToMenuHelper.goToSpecificArtist(_:)),
+                keyEquivalent: ""
+            )
+            subItem.target = helper
+            subItem.representedObject = artist
+            subMenu.addItem(subItem)
+        }
+        parentItem.submenu = subMenu
+        menu.addItem(parentItem)
+    } else if let singleArtist = collaborators.first {
+        helper.singleArtist = singleArtist
         let item = NSMenuItem(
             title: "Перейти к исполнителю".localized,
             action: #selector(GoToMenuHelper.goToArtist),
@@ -55,17 +77,6 @@ private func addArtistAlbumItems(to menu: NSMenu, for song: SubsonicSong, helper
         )
         item.target = helper
         item.image = NSImage(systemSymbolName: "music.mic", accessibilityDescription: nil)
-        menu.addItem(item)
-    }
-    if let albumArtist = song.albumArtist, !albumArtist.isEmpty,
-       albumArtist.lowercased() != song.artist?.lowercased() {
-        let item = NSMenuItem(
-            title: "Перейти к автору альбома".localized,
-            action: #selector(GoToMenuHelper.goToAlbumArtist),
-            keyEquivalent: ""
-        )
-        item.target = helper
-        item.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: nil)
         menu.addItem(item)
     }
     if song.albumId != nil {
@@ -94,7 +105,11 @@ private func addPlaylistItems(to menu: NSMenu, for song: SubsonicSong, helper: G
         item.image = NSImage(systemSymbolName: "music.note.list", accessibilityDescription: nil)
         menu.addItem(item)
     } else if containing.count > 1 {
-        let parent = NSMenuItem(title: "Перейти к плейлисту".localized, action: nil, keyEquivalent: "")
+        let parent = NSMenuItem(
+            title: "Перейти к плейлисту".localized,
+            action: nil,
+            keyEquivalent: ""
+        )
         parent.image = NSImage(systemSymbolName: "music.note.list", accessibilityDescription: nil)
         let submenu = NSMenu()
         for playlist in containing {
@@ -116,6 +131,7 @@ private func addPlaylistItems(to menu: NSMenu, for song: SubsonicSong, helper: G
 private final class GoToMenuHelper: NSObject {
     let appState: AppState
     let track: SubsonicSong
+    var singleArtist: Artist?
     var singlePlaylist: PlaylistSummary?
 
     init(app: AppState, song: SubsonicSong) {
@@ -124,13 +140,17 @@ private final class GoToMenuHelper: NSObject {
     }
 
     @objc func goToArtist() {
-        guard let identifier = track.artistId else { return }
-        let artist = Artist.nowPlayingSummary(from: track, artistID: identifier)
-        appState.openArtistInLibrary(artist)
+        if let artist = singleArtist {
+            appState.openArtistInLibrary(artist)
+        } else if let identifier = track.artistId {
+            let artist = Artist.nowPlayingSummary(from: track, artistID: identifier)
+            appState.openArtistInLibrary(artist)
+        }
     }
 
-    @objc func goToAlbumArtist() {
-        appState.openAlbumArtistInLibrary(track)
+    @objc func goToSpecificArtist(_ sender: NSMenuItem) {
+        guard let artist = sender.representedObject as? Artist else { return }
+        appState.openArtistInLibrary(artist)
     }
 
     @objc func goToAlbum() {

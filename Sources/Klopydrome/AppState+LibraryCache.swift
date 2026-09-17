@@ -37,4 +37,20 @@ final class LibraryCache {
     var playlistsLoaded = false
     var songsLoaded = false
     var homeShelvesLoaded = false
+
+    /// Finds a cached artist by name across the alphabetical index and favorites.
+    func findArtist(named name: String) -> Artist? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        for index in artistIndexes {
+            if let match = index.artist?.first(where: {
+                $0.name.localizedCaseInsensitiveCompare(trimmed) == .orderedSame
+            }) {
+                return match
+            }
+        }
+        return favoritesArtists.first(where: {
+            $0.name.localizedCaseInsensitiveCompare(trimmed) == .orderedSame
+        })
+    }
 }

@@ -98,7 +98,7 @@ struct CircularArtistArt: View {
     @State private var retryNonce = 0
 
     var body: some View {
-        let initials = name.split(separator: " ").prefix(2).map(String.init).joined()
+        let initial = name.first(where: { $0.isLetter || $0.isNumber }).map { String($0).uppercased() } ?? "?"
         ZStack {
             Circle().fill(Color.primary.opacity(0.1))
             if let image {
@@ -106,8 +106,8 @@ struct CircularArtistArt: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Text(initials)
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                Text(initial)
+                    .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         }

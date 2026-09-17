@@ -223,7 +223,7 @@ struct AlbumDetailView: View {
         let currentID = app.player.currentSong?.id
         let groups = groupedSongs
         let ordered = orderedSongs
-        let showTrackArtist = isCompilationAlbum(detail)
+        let isCompilation = isCompilationAlbum(detail)
         // O(1) lookup for global index instead of O(n) firstIndex per song.
         let indexByID: [String: Int] = Dictionary(
             uniqueKeysWithValues: ordered.enumerated().map { ($0.element.id, $0.offset) }
@@ -243,8 +243,11 @@ struct AlbumDetailView: View {
                     ForEach(group.songs, id: \.id) { song in
                         let globalIndex = indexByID[song.id] ?? 0
                         let displayIndex: Int = song.track.map { $0 - 1 } ?? globalIndex
+                        let isDifferent = song.artist != nil &&
+                            song.artist?.localizedCaseInsensitiveCompare(detail.artist ?? "") != .orderedSame
+                        let rowShowsArtist = isCompilation || isDifferent
                         SongRow(song: song, index: displayIndex, showAlbum: false,
-                                showsArtist: showTrackArtist,
+                                showsArtist: rowShowsArtist,
                                 isCurrentOverride: currentID == song.id,
                                 onPlay: { _ in app.play(ordered, at: globalIndex) })
                     }

@@ -70,19 +70,22 @@ struct SongActionItems: View {
                 Label("Показать альбом в медиатеке".localized, systemImage: "square.stack")
             }
         }
-        if let artistId = song.artistId, !(song.artist?.isEmpty ?? true) {
-            Button {
-                app.openArtistInLibrary(Artist.nowPlayingSummary(from: song, artistID: artistId))
+        let collaborators = SongCollaborators.parse(from: song, library: app.library)
+        if collaborators.count > 1 {
+            Menu {
+                ForEach(collaborators, id: \.name) { artist in
+                    Button(artist.name) {
+                        app.openArtistInLibrary(artist)
+                    }
+                }
             } label: {
                 Label("Перейти к исполнителю".localized, systemImage: "music.mic")
             }
-        }
-        if let albumArtist = song.albumArtist, !albumArtist.isEmpty,
-           albumArtist.lowercased() != song.artist?.lowercased() {
+        } else if let singleArtist = collaborators.first {
             Button {
-                app.openAlbumArtistInLibrary(song)
+                app.openArtistInLibrary(singleArtist)
             } label: {
-                Label("Перейти к автору альбома".localized, systemImage: "person.2")
+                Label("Перейти к исполнителю".localized, systemImage: "music.mic")
             }
         }
 
@@ -102,5 +105,57 @@ struct SongActionItems: View {
         Button("Поделиться…".localized) {
             app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
         }
+    }
+}
+
+/// Resolves all participating artists for a track (collaborators, features, album artists).
+enum SongCollaborators {
+    @MainActor
+    static func parse(from song: SubsonicSong, library: LibraryCache) -> [Artist] {
+        var resolved: [Artist] = []
+        var seen = Set<String>()
+
+        func appendArtist(_ artist: Artist) {
+            let key = artist.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !key.isEmpty, !seen.contains(key) else { return }
+            seen.insert(key)
+            resolved.append(artist)
+        }
+
+        // 1. Structured OpenSubsonic artists
+        if let artists = song.artists, !artists.isEmpty {
+            for artist in artists {
+                appendArtist(artist)
+            }
+        }
+
+        // 2. Parse from song.artist string
+        if let raw = song.artist, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            var text = raw
+            let delimiters = [" feat. ", " Feat. ", " ft. ", " Ft. ", " & ", ", ", " / ", " vs. ", " vs "]
+            for delim in delimiters {
+                text = text.replacingOccurrences(of: delim, with: "\u{1F}")
+            }
+            let names = text.components(separatedBy: "\u{1F}")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            for name in names {
+                if let matched = library.findArtist(named: name) {
+                    appendArtist(matched)
+                } else if names.count == 1, let artistId = song.artistId {
+                    appendArtist(Artist(id: artistId, name: name))
+                } else {
+                    appendArtist(Artist(id: name, name: name))
+                }
+            }
+        }
+
+        // 3. Fallback to song.artistId if nothing resolved
+        if resolved.isEmpty, let artistId = song.artistId, let name = song.artist {
+            appendArtist(Artist(id: artistId, name: name))
+        }
+
+        return resolved
     }
 }
