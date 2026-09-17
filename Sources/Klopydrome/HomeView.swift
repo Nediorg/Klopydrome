@@ -224,8 +224,7 @@ struct AlbumCard: View {
     /// Reserves room for a two-line title so every card is the same height and
     /// grid rows stay uniform (re-sorting never shifts the layout). The spare
     /// space lands at the bottom of the card — the text block stays compact.
-    /// Opt-in: most surfaces prefer cards that hug their content.
-    var reservesTitleLines: Bool = false
+    var reservesTitleLines: Bool = true
 
     @Environment(AppState.self) private var app
     @State private var hovering = false

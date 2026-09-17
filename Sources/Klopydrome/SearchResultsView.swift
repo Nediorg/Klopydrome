@@ -124,7 +124,7 @@ extension SearchResultsView {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Альбомы".localized)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(alignment: .top, spacing: 16) {
                     ForEach(albums) { album in
                         Button {
                             app.openAlbumInLibrary(album)
@@ -144,7 +144,7 @@ extension SearchResultsView {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Исполнители".localized)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(alignment: .top, spacing: 16) {
                     ForEach(artists) { artist in
                         Button {
                             app.openArtistInLibrary(artist)
@@ -154,7 +154,7 @@ extension SearchResultsView {
                                 Text(artist.name)
                                     .font(.caption)
                                     .lineLimit(2)
-                                    .frame(width: 80)
+                                    .frame(width: 80, alignment: .top)
                             }
                             .contentShape(Rectangle())
                         }
@@ -174,7 +174,7 @@ extension SearchResultsView {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Плейлисты".localized)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(alignment: .top, spacing: 16) {
                     ForEach(matchingPlaylists) { playlist in
                         Button {
                             app.openPlaylist(playlist)

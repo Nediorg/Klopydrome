@@ -169,7 +169,7 @@ public struct ArtistIndex: Codable, Hashable {
     public init(name: String, artist: [Artist]? = nil) { self.name = name; self.artist = artist }
 }
 
-public struct Artist: Codable, Hashable, Identifiable {
+public struct Artist: Codable, Hashable, Identifiable, Sendable {
     public let id: String
     public let name: String
     public let albumCount: Int?

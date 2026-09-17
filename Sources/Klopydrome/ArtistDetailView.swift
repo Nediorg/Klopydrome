@@ -146,10 +146,7 @@ struct ArtistDetailView: View {
         }
     }
 
-    private func load() async {
-        loading = true
-        defer { loading = false }
-        guard let client = app.client else { return }
+    private func resolveArtistID(client: SubsonicClient) async -> (id: String, detail: ArtistDetail?) {
         var resolvedID = artist.id
         var fetchedDetail = try? await client.getArtist(id: resolvedID)
         if fetchedDetail == nil {
@@ -164,33 +161,143 @@ struct ArtistDetailView: View {
                 fetchedDetail = try? await client.getArtist(id: resolvedID)
             }
         }
+        return (resolvedID, fetchedDetail)
+    }
+
+    private func processSearchSongs(
+        _ songs: [SubsonicSong],
+        artistID: String,
+        name: String
+    ) -> (lead: [SubsonicSong], appearsOn: [SubsonicAlbum]) {
+        let ownAlbumIDs = Set(albums.map(\.id))
+        var lead: [SubsonicSong] = []
+        var guest: [String: SubsonicSong] = [:]
+
+        for song in songs {
+            let matches = song.artistId == artistID ||
+                song.artist?.localizedCaseInsensitiveCompare(name) == .orderedSame ||
+                song.albumArtistId == artistID ||
+                song.albumArtist?.localizedCaseInsensitiveCompare(name) == .orderedSame
+            guard matches else { continue }
+
+            let albumID = song.albumId ?? ""
+            let isLead = ownAlbumIDs.contains(albumID) ||
+                song.albumArtistId == artistID ||
+                song.albumArtist?.localizedCaseInsensitiveCompare(name) == .orderedSame
+
+            if isLead {
+                lead.append(song)
+            } else if !albumID.isEmpty, !ownAlbumIDs.contains(albumID), guest[albumID] == nil {
+                guest[albumID] = song
+            }
+        }
+
+        let guestAlbums = guest.values.compactMap { song -> SubsonicAlbum? in
+            guard let id = song.albumId, !id.isEmpty else { return nil }
+            return SubsonicAlbum(
+                id: id,
+                title: song.album,
+                album: song.album,
+                artist: song.albumArtist,
+                coverArt: song.coverArt
+            )
+        }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+
+        return (lead, guestAlbums)
+    }
+
+    private func userAffinityScore(for song: SubsonicSong) -> Double {
+        let plays = Double(song.playCount ?? 0)
+        let rating = app.effectiveRating(for: song)
+        let isStarred = song.starred != nil || app.isStarred(song)
+
+        let ratingPoints: Double
+        switch rating {
+        case 5: ratingPoints = 100.0
+        case 4: ratingPoints = 60.0
+        case 3: ratingPoints = 20.0
+        case 2: ratingPoints = -50.0
+        case 1: ratingPoints = -100.0
+        default: ratingPoints = 0.0
+        }
+
+        let starPoints: Double = isStarred ? (rating == 0 ? 80.0 : 30.0) : 0.0
+        let playPoints: Double = plays * 3.0
+
+        return ratingPoints + starPoints + playPoints
+    }
+
+    private func sortTopSongs(_ songs: [SubsonicSong]) -> [SubsonicSong] {
+        songs.sorted { firstSong, secondSong in
+            let score1 = userAffinityScore(for: firstSong)
+            let score2 = userAffinityScore(for: secondSong)
+            if score1 != score2 { return score1 > score2 }
+
+            let rating1 = app.effectiveRating(for: firstSong)
+            let rating2 = app.effectiveRating(for: secondSong)
+            if rating1 != rating2 { return rating1 > rating2 }
+
+            let star1 = (firstSong.starred != nil || app.isStarred(firstSong)) ? 1 : 0
+            let star2 = (secondSong.starred != nil || app.isStarred(secondSong)) ? 1 : 0
+            if star1 != star2 { return star1 > star2 }
+
+            let plays1 = firstSong.playCount ?? 0
+            let plays2 = secondSong.playCount ?? 0
+            if plays1 != plays2 { return plays1 > plays2 }
+
+            let disc1 = firstSong.discNumber ?? 1
+            let disc2 = secondSong.discNumber ?? 1
+            if disc1 != disc2 { return disc1 < disc2 }
+
+            return (firstSong.track ?? 0) < (secondSong.track ?? 0)
+        }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        guard let client = app.client else { return }
+
+        let (resolvedID, fetchedDetail) = await resolveArtistID(client: client)
         detail = fetchedDetail
         artistInfo = try? await client.getArtistInfo(id: resolvedID)
-        // If the full discography was already crawled during this connection,
-        // replay it from the cache instead of re-fetching every album's tracklist.
+
         if let cached = await app.cache?.cachedDiscography(for: artist.id) {
             allSongs = cached
-            topSongs = Array(cached.sorted { ($0.playCount ?? 0) > ($1.playCount ?? 0) }.prefix(27))
+            topSongs = Array(sortTopSongs(cached).prefix(27))
             discographyTask?.cancel()
             discographyTask = nil
-        } else if let serverTop = try? await client.getTopSongs(artist: detail?.name ?? artist.name, count: 27),
-                   !serverTop.isEmpty {
-            topSongs = serverTop
-            discographyTask?.cancel()
-            discographyTask = nil
-        } else {
-            // Fallback discography crawl if server does not provide top songs.
+            await loadAppearsOn(client: client)
+            return
+        }
+
+        let name = detail?.name ?? artist.name
+        if !name.isEmpty,
+           let search = try? await client.search3(query: name, artistCount: 0, albumCount: 0, songCount: 500) {
+            let (lead, guestAlbums) = processSearchSongs(search.songs, artistID: resolvedID, name: name)
+            if !lead.isEmpty {
+                allSongs = lead
+                topSongs = Array(sortTopSongs(lead).prefix(27))
+                await app.cache?.cacheDiscography(lead, for: artist.id)
+            }
+            if !guestAlbums.isEmpty {
+                appearsOn = guestAlbums
+            }
+        }
+
+        if allSongs.isEmpty && !albums.isEmpty {
             discographyTask?.cancel()
             discographyTask = Task {
                 await crawlDiscography()
-                // Only cache a fully-completed crawl; a cancelled or empty one
-                // must not poison the cache for the next visit.
                 if !Task.isCancelled, !allSongs.isEmpty {
                     await app.cache?.cacheDiscography(allSongs, for: artist.id)
                 }
             }
         }
-        await loadAppearsOn(client: client)
+
+        if appearsOn.isEmpty {
+            await loadAppearsOn(client: client)
+        }
     }
 
     /// Fetches albums this artist appears on without being the lead artist:
@@ -381,8 +488,7 @@ private extension ArtistDetailView {
             results.append(contentsOf: batch)
             if !Task.isCancelled {
                 allSongs = results
-                let sorted = results.sorted { ($0.playCount ?? 0) > ($1.playCount ?? 0) }
-                topSongs = Array(sorted.prefix(27))
+                topSongs = Array(sortTopSongs(results).prefix(27))
             }
             start = end
             await Task.yield()
