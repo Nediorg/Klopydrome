@@ -201,23 +201,16 @@ struct ArtistDetailView: View {
     }
 
     private func topSongsSection(_ top: [SubsonicSong]) -> some View {
-        let currentID = app.player.currentSong?.id
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text("Лучшие песни".localized)
-                    .font(.title2.bold())
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        CompactSongsSection(
+            title: "Лучшие песни".localized,
+            titleFont: .title2.bold(),
+            songs: top,
+            subtitle: { song in
+                let yearStr = song.year.map(String.init)
+                let parts = [song.album, yearStr].compactMap { $0 }.filter { !$0.isEmpty }
+                return parts.isEmpty ? (song.artist ?? "") : parts.joined(separator: " · ")
             }
-            LazyVStack(spacing: 0) {
-                ForEach(Array(top.enumerated()), id: \.element.id) { index, song in
-                    SongRow(song: song, index: index, showAlbum: true,
-                            isCurrentOverride: currentID == song.id,
-                            onPlay: { idx in app.play(top, at: idx) })
-                }
-            }
-        }
+        )
     }
 
     // MARK: Actions
@@ -248,7 +241,7 @@ struct ArtistDetailView: View {
         // replay it from the cache instead of re-fetching every album's tracklist.
         if let cached = await app.cache?.cachedDiscography(for: artist.id) {
             allSongs = cached
-            topSongs = Array(cached.sorted { ($0.playCount ?? 0) > ($1.playCount ?? 0) }.prefix(10))
+            topSongs = Array(cached.sorted { ($0.playCount ?? 0) > ($1.playCount ?? 0) }.prefix(27))
             discographyTask?.cancel()
             discographyTask = nil
         } else {
@@ -447,7 +440,7 @@ private extension ArtistDetailView {
             if !Task.isCancelled {
                 allSongs = results
                 let sorted = results.sorted { ($0.playCount ?? 0) > ($1.playCount ?? 0) }
-                topSongs = Array(sorted.prefix(10))
+                topSongs = Array(sorted.prefix(27))
             }
             start = end
             await Task.yield()

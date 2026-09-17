@@ -9,8 +9,6 @@ struct SearchResultsView: View {
     @State private var albums: [SubsonicAlbum] = []
     @State private var songs: [SubsonicSong] = []
     @State private var loading = true
-    /// When false the songs grid shows only the first 9 entries (3×3).
-    @State private var songsExpanded = false
 
     private var matchingPlaylists: [PlaylistSummary] {
         guard !query.isEmpty else { return [] }
@@ -71,7 +69,6 @@ struct SearchResultsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: "\(app.nav.navVersion)|\(query)") { await load() }
-        .onChange(of: query) { songsExpanded = false }
     }
 }
 
@@ -108,77 +105,15 @@ extension SearchResultsView {
     }
 }
 
-// MARK: - Songs Section (3-column compact grid)
+// MARK: - Songs Section
 extension SearchResultsView {
-
-    private static let compactRows = 3      // rows visible when collapsed
-    private static let cols       = 3       // columns
-
     private var songsSection: some View {
-        let colCount = Self.cols
-        let initialCount = Self.compactRows * colCount
-        let displayed = songsExpanded ? songs : Array(songs.prefix(initialCount))
-        let hasMore = songs.count > initialCount
-
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Button {
-                    withAnimation(.snappy(duration: 0.2)) { songsExpanded.toggle() }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("Песни".localized)
-                            .font(.title3.bold())
-                        if hasMore {
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(songsExpanded ? 90 : 0))
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(songsExpanded ? "Свернуть".localized : "Раскрыть".localized)
-                .accessibilityLabel(songsExpanded ? "Свернуть".localized : "Раскрыть".localized)
-            }
-
-            // Split into `colCount` columns, filling left-to-right.
-            let perCol = Int(ceil(Double(displayed.count) / Double(colCount)))
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(0..<colCount, id: \.self) { col in
-                    let start = col * perCol
-                    let end   = min(start + perCol, displayed.count)
-                    if start < displayed.count {
-                        let slice = Array(displayed[start..<end])
-                        compactColumn(slice, baseIndex: start)
-                    } else {
-                        Spacer()
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func compactColumn(_ slice: [SubsonicSong], baseIndex: Int) -> some View {
-        VStack(spacing: 0) {
-            ForEach(Array(slice.enumerated()), id: \.element.id) { offset, song in
-                let globalIndex = baseIndex + offset
-                CompactSongRow(
-                    song: song,
-                    isCurrent: app.player.currentSong?.id == song.id
-                ) {
-                    app.play(songs, at: globalIndex)
-                }
-
-                if offset < slice.count - 1 {
-                    Divider()
-                        .padding(.leading, 44)   // indent past thumbnail
-                        .opacity(0.5)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
+        CompactSongsSection(
+            title: "Песни".localized,
+            titleFont: .title3.bold(),
+            songs: songs,
+            subtitle: { $0.artist }
+        )
     }
 }
 
@@ -265,7 +200,6 @@ extension SearchResultsView {
 
     private func load() async {
         loading = true
-        songsExpanded = false
         defer {
             if !Task.isCancelled { loading = false }
         }
@@ -393,65 +327,5 @@ private struct TopResultSongCard: View {
             return "\(type) · \(artist)"
         }
         return type
-    }
-}
-
-// MARK: - Compact Song Row (3-column grid)
-
-/// Compact row used inside the 3-column songs grid in search results.
-private struct CompactSongRow: View {
-    let song: SubsonicSong
-    let isCurrent: Bool
-    let onPlay: () -> Void
-    @Environment(AppState.self) private var app
-    @State private var hovering = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            CoverArtView(coverArt: song.coverArt, size: 34, cornerRadius: 4)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(song.displayTitle)
-                    .font(.callout)
-                    .lineLimit(1)
-                    .foregroundStyle(isCurrent ? AMColor.accent : .primary)
-                if let artist = song.artist, !artist.isEmpty {
-                    Text(artist)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Menu {
-                SongActionItems(app: app, song: song, onPlay: onPlay)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .opacity(hovering ? 1 : 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            hovering
-                ? Color.primary.opacity(0.06)
-                : Color.clear
-        )
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onPlay() }
-        .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.12), value: hovering)
-        .contextMenu {
-            SongActionItems(app: app, song: song, onPlay: onPlay)
-        }
     }
 }
