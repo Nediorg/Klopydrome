@@ -58,11 +58,16 @@ struct MainView: View {
         )) { target in
             ShareSheet(target: target)
         }
-        .sheet(item: Binding(
+        .inWindowModal(item: Binding(
             get: { app.inspectingSong },
             set: { app.inspectingSong = $0 }
         )) { song in
-            SongInfoSheet(song: song)
+            SongInfoSheet(
+                song: song,
+                onDismiss: {
+                    app.inspectingSong = nil
+                }
+            )
         }
         .background {
             Button("") {

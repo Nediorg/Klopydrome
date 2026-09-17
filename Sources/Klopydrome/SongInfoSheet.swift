@@ -6,8 +6,17 @@ import NavidromeClient
 /// and synchronized/plain lyrics.
 struct SongInfoSheet: View {
     let song: SubsonicSong
+    var onDismiss: (() -> Void)?
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
+
+    private func close() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            dismiss()
+        }
+    }
 
     @State private var selectedTab: Tab = .details
     @State private var copiedPath = false
@@ -256,7 +265,7 @@ struct SongInfoSheet: View {
         HStack {
             Spacer()
             Button("Готово".localized) {
-                dismiss()
+                close()
             }
             .keyboardShortcut(.defaultAction)
         }

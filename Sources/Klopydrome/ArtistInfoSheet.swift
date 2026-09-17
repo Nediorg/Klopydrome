@@ -11,8 +11,17 @@ struct ArtistInfoSheet: View {
     let albums: [SubsonicAlbum]
     let allSongs: [SubsonicSong]
     let artistInfo: ArtistInfoPayload?
+    var onDismiss: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+
+    private func close() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            dismiss()
+        }
+    }
 
     private var artistName: String {
         detail.name ?? artist.name
@@ -69,11 +78,13 @@ struct ArtistInfoSheet: View {
                 .font(.headline)
             Spacer()
             Button {
-                dismiss()
+                close()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)

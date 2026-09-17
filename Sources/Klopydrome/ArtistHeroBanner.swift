@@ -45,10 +45,10 @@ struct ArtistHeroBanner: View {
     let artistInfo: ArtistInfoPayload?
     let gatheringSongs: Bool
     let onPlay: () -> Void
+    var onShowInfo: (() -> Void)?
 
     @Environment(AppState.self) private var app
     @State private var playHovered = false
-    @State private var showInfoSheet = false
 
     private var artistName: String {
         detail.name ?? artist.name
@@ -116,16 +116,6 @@ struct ArtistHeroBanner: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 250)
-        .sheet(isPresented: $showInfoSheet) {
-            ArtistInfoSheet(
-                artist: artist,
-                detail: detail,
-                roleLabel: roleLabel,
-                albums: albums,
-                allSongs: allSongs,
-                artistInfo: artistInfo
-            )
-        }
     }
 
     // MARK: Avatar
@@ -180,7 +170,7 @@ struct ArtistHeroBanner: View {
                     ArtistContextMenuItems(artist: artist)
                 }
                 RoundInfoButton {
-                    showInfoSheet = true
+                    onShowInfo?()
                 }
             }
         }
