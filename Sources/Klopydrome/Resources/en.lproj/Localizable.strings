@@ -264,6 +264,7 @@
 "Дублировать группу" = "Duplicate Group";
 "Есть обложка" = "Has Artwork";
 "Ещё" = "More";
+"Ещё %d…" = "%d more…";
 "Жанр" = "Genre";
 "за последние (дней)" = "in the last (days)";
 "Загружаем библиотеку…" = "Loading library…";
@@ -540,6 +541,7 @@
 "Расположение" = "Location";
 "Раскрывает поле поиска" = "Reveals the search field";
 "Раскрыть альбомы сеткой" = "Show albums in grid";
+"Раскрыть" = "Expand";
 "Рассвет" = "Dawn";
 "Расширенные" = "Advanced";
 "Редактировать правила…" = "Edit Rules…";
@@ -559,6 +561,7 @@
 "Свойства" = "Get Info";
 "Свойства…" = "Get Info…";
 "Свернуть альбомы" = "Collapse Albums";
+"Свернуть" = "Collapse";
 "Светлая" = "Light";
 "Сдвиг" = "Shift";
 "Сделать закрытым" = "Make Private";

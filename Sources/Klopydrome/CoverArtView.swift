@@ -59,7 +59,7 @@ struct CoverArtView: View {
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
         )
         .shadow(color: .black.opacity(shadow ? 0.30 : 0), radius: shadowRadius, y: shadowY)
         .accessibilityLabel(coverArt ?? String(localized: "Обложка"))
