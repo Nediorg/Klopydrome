@@ -50,7 +50,7 @@ struct PlaylistDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 28) {
                         header(currentDetail)
                         songList(currentDetail)
                     }
@@ -59,6 +59,7 @@ struct PlaylistDetailView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: playlist.id) {
             displayedCount = 0
             app.loadPlaylistIfNeeded(playlist)

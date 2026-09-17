@@ -95,6 +95,7 @@ struct ArtistDetailView: View {
                 ContentUnavailableView("Исполнитель недоступен", systemImage: "music.mic")
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await load() }
         .onDisappear { discographyTask?.cancel() }
     }
@@ -109,7 +110,7 @@ struct ArtistDetailView: View {
                     .foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     ForEach(appearsOn) { album in
                         Button {
                             app.openAlbumInLibrary(album)
@@ -172,11 +173,13 @@ struct ArtistDetailView: View {
             topSongs = Array(cached.sorted { ($0.playCount ?? 0) > ($1.playCount ?? 0) }.prefix(27))
             discographyTask?.cancel()
             discographyTask = nil
+        } else if let serverTop = try? await client.getTopSongs(artist: detail?.name ?? artist.name, count: 27),
+                   !serverTop.isEmpty {
+            topSongs = serverTop
+            discographyTask?.cancel()
+            discographyTask = nil
         } else {
-            // The long discography crawl runs in the background, so the header
-            // and album shelf render as soon as the (fast) artist info lands.
-            // Top songs fill in progressively as album batches finish, and any
-            // previous crawl for this view is restarted/cancelled cleanly.
+            // Fallback discography crawl if server does not provide top songs.
             discographyTask?.cancel()
             discographyTask = Task {
                 await crawlDiscography()
@@ -281,7 +284,7 @@ private extension ArtistDetailView {
                     .transition(.opacity)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
                         ForEach(albums) { album in
                             Button {
                                 app.openAlbumInLibrary(album)
@@ -343,6 +346,9 @@ private extension ArtistDetailView {
                 }
             }
             start = end
+        }
+        if !Task.isCancelled, !all.isEmpty {
+            await app.cache?.cacheDiscography(all, for: artist.id)
         }
         return all
     }

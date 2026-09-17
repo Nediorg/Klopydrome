@@ -49,7 +49,7 @@ struct PlaylistsView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 24) {
                         if !app.smartPlaylists.isEmpty {
                             smartSection
                         }
@@ -81,6 +81,7 @@ struct PlaylistsView: View {
                 .refreshable { await load() }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: app.isConnected) { await loadIfNeeded() }
         .confirmationDialog(
             "Удалить плейлист?",

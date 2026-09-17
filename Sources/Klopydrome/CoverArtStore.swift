@@ -200,6 +200,13 @@ final class CoverArtStore: @unchecked Sendable {
         return tmp
     }
 
+    /// Synchronously retrieves an artist image from memory cache if present.
+    func cachedArtistImage(artistURL: String?, size: Int) -> NSImage? {
+        guard let artistURL, !artistURL.isEmpty else { return nil }
+        let key = "artist-\(artistURL)-\(size)"
+        return memory.object(forKey: key as NSString)
+    }
+
     /// Loads an artist image from `artistImageUrl`. The URL may be absolute
     /// (server-provided) or a relative path resolved against the server base.
     func image(artistURL: String?, size: Int) async -> ImageBox {

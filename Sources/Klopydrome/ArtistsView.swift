@@ -56,6 +56,7 @@ struct ArtistsView: View {
                 .listStyle(.inset)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await loadIfNeeded() }
         .refreshable { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
@@ -97,12 +98,16 @@ struct CircularArtistArt: View {
     /// when failed artist images are invalidated store-wide.
     @State private var retryNonce = 0
 
+    private var displayImage: NSImage? {
+        image ?? CoverArtStore.shared.cachedArtistImage(artistURL: imageURL, size: Int(size * 2))
+    }
+
     var body: some View {
         let initial = name.first(where: { $0.isLetter || $0.isNumber }).map { String($0).uppercased() } ?? "?"
         ZStack {
             Circle().fill(Color.primary.opacity(0.1))
-            if let image {
-                Image(nsImage: image)
+            if let img = displayImage {
+                Image(nsImage: img)
                     .resizable()
                     .scaledToFill()
             } else {
@@ -117,6 +122,7 @@ struct CircularArtistArt: View {
             retryNonce += 1
         }
         .task(id: CoverArtRequest(art: imageURL, nonce: retryNonce)) {
+            if displayImage != nil { return }
             let loaded = await CoverArtStore.shared.image(artistURL: imageURL, size: Int(size * 2))
             if let image = loaded.image {
                 self.image = image

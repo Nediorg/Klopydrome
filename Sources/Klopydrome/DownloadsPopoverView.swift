@@ -59,7 +59,7 @@ struct DownloadsPopoverView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ScrollView {
-                LazyVStack(spacing: 2) {
+                VStack(spacing: 2) {
                     ForEach(app.downloadedSongs) { song in
                         DownloadedSongRow(song: song)
                     }

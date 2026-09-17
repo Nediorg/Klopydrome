@@ -33,10 +33,13 @@ struct CompactSongsSection: View {
 
     @Environment(AppState.self) private var app
     @State private var expanded = false
+    @State private var expandedLimit = 45
+
+    private let maxCarouselColumns = 10
 
     /// In collapsed mode (carousel), columns are strictly chunked into 3 songs each.
     private var carouselColumns: [[CompactSongItem]] {
-        CompactSongItem.columns(from: songs)
+        Array(CompactSongItem.columns(from: songs).prefix(maxCarouselColumns))
     }
 
     /// Can expand if there is more than 1 full 3x3 block (more than 9 songs).
@@ -56,6 +59,7 @@ struct CompactSongsSection: View {
         }
         .onChange(of: songs.map(\.id)) {
             expanded = false
+            expandedLimit = 45
         }
     }
 
@@ -90,7 +94,7 @@ struct CompactSongsSection: View {
     /// Horizontal carousel of strictly 3-song columns.
     private var collapsedCarousel: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
                 ForEach(Array(carouselColumns.enumerated()), id: \.offset) { _, colItems in
                     CompactSongColumn(
                         items: colItems,
@@ -107,19 +111,42 @@ struct CompactSongsSection: View {
 
     /// Continuous 3-column layout without vertical block gaps and with dividers between all songs.
     private var expandedGrid: some View {
-        HStack(alignment: .top, spacing: 16) {
-            ForEach(0..<3, id: \.self) { columnIndex in
-                let colItems = expandedSongsForColumn(columnIndex)
-                if !colItems.isEmpty {
-                    CompactSongColumn(
-                        items: colItems,
-                        allSongs: songs,
-                        subtitle: subtitle
-                    )
-                    .frame(maxWidth: .infinity)
-                } else {
-                    Spacer().frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                ForEach(0..<3, id: \.self) { columnIndex in
+                    let colItems = expandedSongsForColumn(columnIndex)
+                    if !colItems.isEmpty {
+                        CompactSongColumn(
+                            items: colItems,
+                            allSongs: songs,
+                            subtitle: subtitle
+                        )
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Spacer().frame(maxWidth: .infinity)
+                    }
                 }
+            }
+
+            if songs.count > expandedLimit {
+                Button {
+                    expandedLimit = min(expandedLimit + 45, songs.count)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Показать ещё".localized)
+                            .font(.callout.weight(.medium))
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(AMColor.accent)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 4)
             }
         }
     }
@@ -129,9 +156,10 @@ struct CompactSongsSection: View {
     /// The remainder (< 9 songs) is balanced evenly across columns into available slots.
     private func expandedSongsForColumn(_ columnIndex: Int) -> [CompactSongItem] {
         guard !songs.isEmpty else { return [] }
+        let visibleCount = min(expandedLimit, songs.count)
         var result: [CompactSongItem] = []
 
-        let fullBlockCount = songs.count / 9
+        let fullBlockCount = visibleCount / 9
         for blockIdx in 0..<fullBlockCount {
             let base = blockIdx * 9 + columnIndex * 3
             for offset in 0..<3 {
@@ -140,7 +168,7 @@ struct CompactSongsSection: View {
             }
         }
 
-        let remainder = songs.count % 9
+        let remainder = visibleCount % 9
         if remainder > 0 {
             let remBaseIndex = fullBlockCount * 9
             let remBase = remainder / 3
@@ -207,6 +235,8 @@ struct CompactSongRow: View {
 
     private var isPlaying: Bool { isCurrent && app.player.isPlaying }
 
+    private var isStarred: Bool { app.isStarred(song) }
+
     private var displaySubtitle: String? {
         if let subtitle, !subtitle.isEmpty { return subtitle }
         return song.artist
@@ -241,34 +271,50 @@ struct CompactSongRow: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(song.displayTitle)
-                    .font(.callout)
-                    .lineLimit(1)
-                    .foregroundStyle(isCurrent ? AMColor.accent : .primary)
-                if let sub = displaySubtitle, !sub.isEmpty {
-                    Text(sub)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(song.displayTitle)
+                        .font(.callout)
                         .lineLimit(1)
+                        .foregroundStyle(isCurrent ? AMColor.accent : .primary)
+                    if let sub = displaySubtitle, !sub.isEmpty {
+                        Text(sub)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
 
-            Menu {
-                SongActionItems(app: app, song: song, onPlay: onPlay)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+                Button {
+                    app.toggleStar(song)
+                } label: {
+                    Image(systemName: isStarred ? "star.fill" : "star")
+                        .font(.system(size: 11))
+                        .foregroundStyle(isStarred ? AMColor.accent : Color.secondary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+                .opacity(isStarred ? 1 : (hovering ? 1 : 0))
+                .allowsHitTesting(hovering || isStarred)
+
+                Menu {
+                    SongActionItems(app: app, song: song, onPlay: onPlay)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .opacity(hovering ? 1 : 0)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .opacity(hovering ? 1 : 0)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 6)

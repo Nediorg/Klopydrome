@@ -69,7 +69,7 @@ struct NavigationState {
             case .songs: return "music.note"
             case .artists: return "music.mic"
             case .albums: return "square.stack"
-            case .favorites: return "heart"
+            case .favorites: return "star"
             case .search: return "magnifyingglass"
             }
         }

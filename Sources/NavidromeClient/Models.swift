@@ -37,6 +37,7 @@ public struct SubsonicEnvelope: Decodable {
     public let albumInfo: AlbumInfoPayload?
     public let artistInfo: ArtistInfoPayload?
     public let artistInfo2: ArtistInfoPayload?
+    public let topSongs: SongListPayload?
 
     public final class SubsonicErrorPayload: Decodable {
         public let code: Int

@@ -36,13 +36,32 @@ struct CoverArtView: View {
     /// re-request even though their cover id never changed.
     @State private var retryNonce = 0
 
+    init(coverArt: String?, size: CGFloat, cornerRadius: CGFloat? = nil, shadow: Bool = false,
+         placeholderBackground: Color? = nil) {
+        self.coverArt = coverArt
+        self.size = size
+        self.cornerRadius = cornerRadius
+        self.shadow = shadow
+        self.placeholderBackground = placeholderBackground
+        let cached = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2))
+        _image = State(initialValue: cached)
+        _renderedCoverArt = State(initialValue: cached != nil ? coverArt : nil)
+    }
+
+    private var displayImage: NSImage? {
+        if let image, renderedCoverArt == coverArt {
+            return image
+        }
+        return CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2))
+    }
+
     var body: some View {
         Group {
-            if let image, let renderedCoverArt, renderedCoverArt == coverArt {
-                Image(nsImage: image)
+            if let displayImage {
+                Image(nsImage: displayImage)
                     .resizable()
                     .scaledToFill()
-                    .id(renderedCoverArt)
+                    .id(coverArt)
                     .transition(.opacity)
             } else {
                 ZStack {
@@ -83,9 +102,17 @@ struct CoverArtView: View {
                 loadFailed = false
                 return
             }
-            // If the art changed, drop the old image immediately so the
-            // placeholder (shimmer) shows while the new one loads — don't
-            // keep showing the previous cover until the fetch finishes.
+            if image != nil, renderedCoverArt == art {
+                return
+            }
+            // Fast cache hit avoiding placeholder flash and shimmer animation:
+            if let cached = CoverArtStore.shared.cachedImage(coverArt: art, size: Int(size * 2)) {
+                image = cached
+                renderedCoverArt = art
+                loadFailed = false
+                return
+            }
+            // If the art changed and is not in memory cache, drop old image for placeholder.
             if renderedCoverArt != art {
                 image = nil
                 renderedCoverArt = nil

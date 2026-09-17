@@ -24,7 +24,7 @@ struct AlbumDetailView: View {
         Group {
             if detail != nil || loading {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 28) {
                         header(displayedDetail)
                         if songs.isEmpty && loading {
                             skeletonRows
@@ -45,6 +45,7 @@ struct AlbumDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: LoadID(albumID: album.id, offlineSession: app.isOfflineSession)) {
             await load()
         }
@@ -70,7 +71,7 @@ struct AlbumDetailView: View {
 
     /// Placeholder track rows shown while the album's songs stream in.
     private var skeletonRows: some View {
-        LazyVStack(spacing: 0) {
+        VStack(spacing: 0) {
             ForEach(0..<10, id: \.self) { _ in
                 HStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -230,7 +231,7 @@ struct AlbumDetailView: View {
         )
         let showDiscHeaders = groups.count > 1
         return VStack(alignment: .leading, spacing: 16) {
-            LazyVStack(spacing: 0) {
+            VStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.element.disc) { _, group in
                     if showDiscHeaders {
                         Text(String(format: "Диск %d".localized, group.disc))
@@ -327,7 +328,7 @@ private struct MoreByArtist: View {
                     .padding(.vertical, 20)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 16) {
+                    HStack(alignment: .top, spacing: 16) {
                         ForEach(albums) { album in
                             Button {
                                 app.openAlbumInLibrary(album)

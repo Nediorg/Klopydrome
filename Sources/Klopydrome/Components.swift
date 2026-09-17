@@ -423,7 +423,6 @@ struct RoundFavoriteButton: View {
                 Image(systemName: isStarred ? "star.fill" : "star")
                     .font(.system(size: 14))
                     .foregroundStyle(isStarred ? AMColor.accent : Color.secondary)
-                    .symbolEffect(.bounce, value: isStarred)
             }
             .frame(width: size, height: size)
             .contentShape(Circle())

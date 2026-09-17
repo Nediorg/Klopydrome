@@ -248,14 +248,13 @@ private struct MiniPlayerControlsLayer: View {
             } label: {
                 Image(systemName: app.isStarred(song) ? "star.fill" : "star")
                     .font(.system(size: 10, weight: .semibold))
-                    .symbolEffect(.bounce, options: .speed(1.8), value: app.isStarred(song))
                     .frame(width: Self.trackActionSide, height: Self.trackActionSide)
                     .miniPlayerMatteCircle(fill: .white.opacity(0.30))
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .help("В избранное")
-            .accessibilityLabel("В избранное")
+            .help(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
+            .accessibilityLabel(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
 
             Menu {
                 NowPlayingActionMenuItems(song: song)

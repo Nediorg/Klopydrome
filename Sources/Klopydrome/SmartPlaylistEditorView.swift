@@ -316,7 +316,7 @@ struct SmartPlaylistEditorView: View {
                 }
             case .loaded(let songs):
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             QueueTrackRow(
                                 song: song,

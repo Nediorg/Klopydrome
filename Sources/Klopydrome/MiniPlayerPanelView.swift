@@ -45,7 +45,7 @@ private struct MiniPlayerQueueView: View {
                 )
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    VStack(spacing: 2) {
                         ForEach(Array(app.player.queue.enumerated()), id: \.element.id) { index, song in
                             MiniPlayerQueueRow(
                                 song: song,

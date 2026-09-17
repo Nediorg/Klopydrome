@@ -251,15 +251,14 @@ struct TopTrailingControlsView: View {
                 Image(systemName: isCurrentStarred ? "star.fill" : "star")
                     .font(.system(size: 12))
                     .foregroundStyle(isCurrentStarred ? AMColor.accent : Color.secondary)
-                    .symbolEffect(.bounce, options: .speed(1.8), value: isCurrentStarred)
                     .frame(width: Self.actionButtonSide, height: Self.actionButtonSide)
                     .hoverFill(fill: Color.primary.opacity(0.08), cornerRadius: 2)
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
             .disabled(song == nil)
-            .help(Text(verbatim: "В избранное"))
-            .accessibilityLabel("В избранное")
+            .help(isCurrentStarred ? "Убрать из избранного".localized : "В избранное".localized)
+            .accessibilityLabel(isCurrentStarred ? "Убрать из избранного".localized : "В избранное".localized)
             .opacity(song == nil ? 0 : 1)
             .allowsHitTesting(song != nil)
         }

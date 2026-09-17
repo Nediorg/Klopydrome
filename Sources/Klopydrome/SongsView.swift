@@ -112,6 +112,7 @@ struct SongsView: View {
                 .padding(.vertical, 8)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             reprocess()
             if !app.library.songsLoaded {

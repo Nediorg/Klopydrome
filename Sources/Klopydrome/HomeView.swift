@@ -62,6 +62,7 @@ struct HomeView: View {
             .padding(.bottom, 24)
         }
         .scrollClipDisabled()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .refreshable { await load() }
         .task(id: app.client != nil) { await loadIfNeeded() }
     }
@@ -114,7 +115,7 @@ struct HomeView: View {
             shelfHeader(shelf)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 18) {
+                HStack(alignment: .top, spacing: 18) {
                     shelfContent(shelf)
                 }
                 .padding(.vertical, 8)
@@ -240,11 +241,11 @@ struct AlbumCard: View {
             .frame(width: width, alignment: .leading)
             .foregroundStyle(.primary)
 
-            if hovering {
+            if hovering || isStarred {
                 Button {
                     app.toggleStar(album)
                 } label: {
-                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                    Image(systemName: isStarred ? "star.fill" : "star")
                         .font(.system(size: 13))
                         .foregroundStyle(isStarred ? AMColor.accent : .white)
                         .padding(5)
@@ -259,7 +260,6 @@ struct AlbumCard: View {
                 .transition(.opacity)
             }
         }
-        .animation(.snappy(duration: 0.15), value: isStarred)
         .onHover { hovering = $0 }
         .accessibilityLabel(album.displayName)
         .accessibilityAction(named: isStarred ? "Убрать из избранного".localized : "В избранное".localized) {

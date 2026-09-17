@@ -54,6 +54,7 @@ struct SmartPlaylistDetailView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await load() }
         .sheet(isPresented: $editing) {
             SmartPlaylistEditorView(playlist: playlist)

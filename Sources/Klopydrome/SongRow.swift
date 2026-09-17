@@ -35,7 +35,6 @@ struct SongRow: View {
                 Image(systemName: isStarred ? "star.fill" : "star")
                     .font(.system(size: 11))
                     .foregroundStyle(starForeground)
-                    .symbolEffect(.bounce, value: isStarred)
             }
             .buttonStyle(.plain)
             .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)

@@ -124,7 +124,7 @@ extension SearchResultsView {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Альбомы".localized)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
+                HStack(spacing: 16) {
                     ForEach(albums) { album in
                         Button {
                             app.openAlbumInLibrary(album)
@@ -144,7 +144,7 @@ extension SearchResultsView {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Исполнители".localized)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
+                HStack(spacing: 16) {
                     ForEach(artists) { artist in
                         Button {
                             app.openArtistInLibrary(artist)
@@ -159,6 +159,9 @@ extension SearchResultsView {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            ArtistContextMenuItems(artist: artist)
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -171,7 +174,7 @@ extension SearchResultsView {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Плейлисты".localized)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
+                HStack(spacing: 16) {
                     ForEach(matchingPlaylists) { playlist in
                         Button {
                             app.openPlaylist(playlist)
@@ -180,6 +183,9 @@ extension SearchResultsView {
                                 .frame(width: 150)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            PlaylistContextMenuItems(playlist: playlist)
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -278,33 +284,54 @@ private struct TopResultSongCard: View {
     @Environment(AppState.self) private var app
     @State private var hovering = false
 
+    private var isStarred: Bool { app.isStarred(song) }
+
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             CoverArtView(coverArt: song.coverArt, size: 40, cornerRadius: 4)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.displayTitle)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                    .foregroundStyle(isCurrent ? AMColor.accent : .primary)
-                Text(subtitleText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+
+            HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.displayTitle)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                        .foregroundStyle(isCurrent ? AMColor.accent : .primary)
+                    Text(subtitleText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    app.toggleStar(song)
+                } label: {
+                    Image(systemName: isStarred ? "star.fill" : "star")
+                        .font(.system(size: 11))
+                        .foregroundStyle(isStarred ? AMColor.accent : Color.secondary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+                .opacity(isStarred ? 1 : (hovering ? 1 : 0))
+                .allowsHitTesting(hovering || isStarred)
+
+                Menu {
+                    SongActionItems(app: app, song: song, onPlay: onPlay)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .opacity(hovering ? 1 : 0)
             }
-            Spacer(minLength: 0)
-            Menu {
-                SongActionItems(app: app, song: song, onPlay: onPlay)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .opacity(hovering ? 1 : 0)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)

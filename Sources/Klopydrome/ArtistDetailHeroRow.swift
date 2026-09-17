@@ -177,7 +177,7 @@ struct ArtistHeroRow: View {
             .offset(x: dockOffset)
             .zIndex(1)
 
-            LazyHStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
                 ForEach(Array(columns.enumerated()), id: \.offset) { _, colItems in
                     CompactSongColumn(
                         items: colItems,
