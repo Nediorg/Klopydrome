@@ -5,6 +5,16 @@ import NavidromeClient
 struct CompactSongItem {
     let song: SubsonicSong
     let globalIndex: Int
+
+    static func columns(from songs: [SubsonicSong], columnSize: Int = 3) -> [[CompactSongItem]] {
+        guard !songs.isEmpty else { return [] }
+        return stride(from: 0, to: songs.count, by: columnSize).map { colBase in
+            let end = min(colBase + columnSize, songs.count)
+            return (colBase..<end).map { globalIdx in
+                CompactSongItem(song: songs[globalIdx], globalIndex: globalIdx)
+            }
+        }
+    }
 }
 
 /// A 3-column tabular song section matching Apple Music Tahoe/Sequoia.
@@ -26,13 +36,7 @@ struct CompactSongsSection: View {
 
     /// In collapsed mode (carousel), columns are strictly chunked into 3 songs each.
     private var carouselColumns: [[CompactSongItem]] {
-        guard !songs.isEmpty else { return [] }
-        return stride(from: 0, to: songs.count, by: 3).map { colBase in
-            let end = min(colBase + 3, songs.count)
-            return (colBase..<end).map { globalIdx in
-                CompactSongItem(song: songs[globalIdx], globalIndex: globalIdx)
-            }
-        }
+        CompactSongItem.columns(from: songs)
     }
 
     /// Can expand if there is more than 1 full 3x3 block (more than 9 songs).

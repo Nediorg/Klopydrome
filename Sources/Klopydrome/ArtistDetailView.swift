@@ -13,7 +13,6 @@ struct ArtistDetailView: View {
     @State private var allSongs: [SubsonicSong] = []
     @State private var gatheringSongs = false
     @State private var playHovered = false
-    @State private var releaseHovered = false
     /// The discography crawl, spawned in the background by `load()` so the page
     /// renders the instant the (fast) artist info lands. Cancelled when this
     /// view goes away. "Gather & Play" awaits it instead of issuing a fresh
@@ -60,19 +59,14 @@ struct ArtistDetailView: View {
         Group {
             if let detail {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 28) {
                         header(detail)
-                        if let latest = latestReleaseCandidate {
-                            latestRelease(latest)
-                        }
+                        ArtistHeroRow(artist: artist, latest: latestReleaseCandidate, top: topSongs)
                         if !albums.isEmpty {
                             albumsShelf
                         }
                         if !appearsOn.isEmpty {
                             appearsOnSection()
-                        }
-                        if let top = topSongs, !top.isEmpty {
-                            topSongsSection(top)
                         }
                     }
                     .padding(.horizontal, 28)
@@ -141,38 +135,6 @@ struct ArtistDetailView: View {
         }
     }
 
-    private func latestRelease(_ latest: SubsonicAlbum) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Последний релиз".localized)
-                .font(.title2.bold())
-            Button {
-                app.openAlbumInLibrary(latest)
-            } label: {
-                HStack(spacing: 16) {
-                    CoverArtView(coverArt: latest.coverArt, size: 150, shadow: true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(latest.displayName)
-                            .font(.title3.weight(.semibold))
-                        Text(latest.artist ?? artist.name)
-                            .font(.subheadline)
-                            .foregroundStyle(AMColor.secondaryText)
-                        if let year = latest.year {
-                            Text(String(year))
-                                .font(.caption)
-                                .foregroundStyle(AMColor.secondaryText)
-                        }
-                    }
-                }
-                .padding(.trailing, 12)
-                .contentShape(Rectangle())
-                .brightness(releaseHovered ? 0.08 : 0)
-                .animation(.snappy(duration: 0.15), value: releaseHovered)
-            }
-            .buttonStyle(.plain)
-            .onHover { releaseHovered = $0 }
-        }
-    }
-
     private func appearsOnSection() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
@@ -198,19 +160,6 @@ struct ArtistDetailView: View {
             }
             .scrollClipDisabled()
         }
-    }
-
-    private func topSongsSection(_ top: [SubsonicSong]) -> some View {
-        CompactSongsSection(
-            title: "Лучшие песни".localized,
-            titleFont: .title2.bold(),
-            songs: top,
-            subtitle: { song in
-                let yearStr = song.year.map(String.init)
-                let parts = [song.album, yearStr].compactMap { $0 }.filter { !$0.isEmpty }
-                return parts.isEmpty ? (song.artist ?? "") : parts.joined(separator: " · ")
-            }
-        )
     }
 
     // MARK: Actions
@@ -346,6 +295,7 @@ private extension ArtistDetailView {
             }
             if albumsExpanded {
                 albumsGrid
+                    .transition(.opacity)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 12) {
@@ -362,6 +312,7 @@ private extension ArtistDetailView {
                     .padding(.horizontal, 4)
                 }
                 .scrollClipDisabled()
+                .transition(.opacity)
             }
         }
     }
@@ -380,6 +331,8 @@ private extension ArtistDetailView {
                 .buttonStyle(.plain)
             }
         }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
     }
 
     /// Fetches every album of the artist (sequentially batched), returning the
