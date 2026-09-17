@@ -255,7 +255,7 @@ private struct TopResultArtistCard: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 8)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -306,7 +306,7 @@ private struct TopResultSongCard: View {
             .fixedSize()
             .opacity(hovering ? 1 : 0)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)

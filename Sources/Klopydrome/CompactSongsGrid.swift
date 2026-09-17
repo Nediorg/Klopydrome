@@ -187,8 +187,8 @@ struct CompactSongColumn: View {
 
                 if offset < items.count - 1 {
                     Divider()
-                        .padding(.leading, 52)
-                        .padding(.trailing, 8)
+                        .padding(.leading, 50)
+                        .padding(.trailing, 6)
                         .opacity(0.4)
                 }
             }
@@ -270,7 +270,7 @@ struct CompactSongRow: View {
             .fixedSize()
             .opacity(hovering ? 1 : 0)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)

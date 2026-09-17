@@ -405,42 +405,6 @@ struct ActionPillLabel: View {
     }
 }
 
-/// Round "…" menu button for detail-page action rows (album, playlists). Per the
-/// Apple Music button bar: a square hit target with the glyph centered on an
-/// elevated circular surface, glyph tinted with the accent.
-struct RoundEllipsisMenu<MenuContent: View>: View {
-    @ViewBuilder let content: MenuContent
-    var size: CGFloat = 32
-
-    @State private var hovering = false
-
-    var body: some View {
-        Menu {
-            content
-        } label: {
-            ZStack {
-                // 1. The strict background layer
-                Circle()
-                    .fill(hovering ? AMColor.surfaceTertiaryHover : AMColor.surfaceLight)
-                    .frame(width: size, height: size)
-
-                // 2. The icon layer
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(AMColor.accent)
-            }
-            .frame(width: 40, height: 40)
-            .contentShape(Rectangle())
-            .onHover { hovering = $0 }
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .accessibilityLabel("Ещё".localized)
-        .help("Ещё".localized)
-    }
-}
-
 /// Round favorite button matching RoundEllipsisMenu for detail-page action rows.
 struct RoundFavoriteButton: View {
     let isStarred: Bool
@@ -461,12 +425,13 @@ struct RoundFavoriteButton: View {
                     .foregroundStyle(isStarred ? AMColor.accent : Color.secondary)
                     .symbolEffect(.bounce, value: isStarred)
             }
-            .frame(width: 40, height: 40)
-            .contentShape(Rectangle())
+            .frame(width: size, height: size)
+            .contentShape(Circle())
             .onHover { hovering = $0 }
         }
         .buttonStyle(.plain)
-        .fixedSize()
+        .frame(width: size, height: size)
+        .contentShape(Circle())
         .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
         .accessibilityLabel(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
     }

@@ -181,13 +181,15 @@ struct AlbumDetailView: View {
                 if !songs.isEmpty { app.playShuffled(songs) }
             }
             Spacer()
-            RoundFavoriteButton(isStarred: app.isStarred(album)) {
-                app.toggleStar(album)
+            HStack(spacing: 8) {
+                RoundFavoriteButton(isStarred: app.isStarred(album)) {
+                    app.toggleStar(album)
+                }
+                RoundEllipsisMenu {
+                    AlbumContextMenuItems(album: album)
+                }
+                .help("Действия над альбомом".localized)
             }
-            RoundEllipsisMenu {
-                AlbumContextMenuItems(album: album)
-            }
-            .help("Действия над альбомом".localized)
         }
     }
 

@@ -125,13 +125,15 @@ struct ArtistDetailView: View {
                 }
             }
             Spacer()
-            RoundFavoriteButton(isStarred: app.isStarred(artist)) {
-                app.toggleStar(artist)
+            HStack(spacing: 8) {
+                RoundFavoriteButton(isStarred: app.isStarred(artist)) {
+                    app.toggleStar(artist)
+                }
+                RoundEllipsisMenu {
+                    ArtistContextMenuItems(artist: artist)
+                }
+                .help("Действия над исполнителем".localized)
             }
-            RoundEllipsisMenu {
-                ArtistContextMenuItems(artist: artist)
-            }
-            .help("Действия над исполнителем".localized)
         }
     }
 

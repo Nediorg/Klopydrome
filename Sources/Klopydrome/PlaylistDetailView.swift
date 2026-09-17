@@ -180,21 +180,23 @@ struct PlaylistDetailView: View {
             .disabled(isPreparingPlayback)
 
             Spacer()
-            RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
-                app.toggleFollow(detail.summary)
+            HStack(spacing: 8) {
+                RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
+                    app.toggleFollow(detail.summary)
+                }
+                RoundEllipsisMenu {
+                    PlaylistContextMenuItems(
+                        playlist: detail.summary,
+                        onRename: { activeEditor = .playlist(detail.summary) },
+                        onEditRules: {
+                            guard detail.isSmart else { return }
+                            activeEditor = .serverRules(ServerSmartPlaylist(summary: detail.summary))
+                        },
+                        onDelete: { confirmingDelete = true }
+                    )
+                }
+                .help("Действия над плейлистом".localized)
             }
-            RoundEllipsisMenu {
-                PlaylistContextMenuItems(
-                    playlist: detail.summary,
-                    onRename: { activeEditor = .playlist(detail.summary) },
-                    onEditRules: {
-                        guard detail.isSmart else { return }
-                        activeEditor = .serverRules(ServerSmartPlaylist(summary: detail.summary))
-                    },
-                    onDelete: { confirmingDelete = true }
-                )
-            }
-            .help("Действия над плейлистом".localized)
         }
     }
 
