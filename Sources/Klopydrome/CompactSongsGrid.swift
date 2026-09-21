@@ -17,7 +17,7 @@ struct CompactSongItem {
     }
 }
 
-/// A 3-column tabular song section matching Apple Music Tahoe/Sequoia.
+/// A 3-column tabular song section matching Apple Music Sequoia.
 ///
 /// In collapsed mode, it renders as a horizontal carousel (`ScrollView(.horizontal)`),
 /// scrolling columns of strictly 3 songs side-by-side.

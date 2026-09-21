@@ -26,7 +26,7 @@ struct MainView: View {
             // the toolbar width. This floor stops both.
             .navigationSplitViewColumnWidth(
                 min: LayoutMetrics.detailColumnMinWidth,
-                ideal: 700,
+                ideal: 750,
                 max: .infinity
             )
         }

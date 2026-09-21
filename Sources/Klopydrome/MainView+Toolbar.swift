@@ -15,39 +15,44 @@ struct PlayerHeaderBar: View {
         GeometryReader { geo in
             let totalWidth = geo.size.width
             let windowX = geo.frame(in: .global).minX
-            // When the sidebar is collapsed (minX < 120), leave room for the window traffic lights and sidebar toggle.
-            let trafficLightOffset = windowX < 120 ? max(0, 104 - windowX) : 0
+            // Clearance for window traffic lights, collapsed sidebar toggle, and standard 16 pt margin.
+            let trafficLightOffset = windowX < 120 ? max(0, 134 - windowX) : 0
             let leadingInset = max(16, trafficLightOffset)
             let trailingInset: CGFloat = 12
 
             let leadingWidth: CGFloat = 208
-            let trailingWidth: CGFloat = 199
-            let maxWing = max(leadingInset + leadingWidth, trailingInset + trailingWidth)
+            let trailingWidth: CGFloat = 216
 
-            let downloadsWidth: CGFloat = app.hasDownloadContent ? 36 : 0
-            let crossfadeWidth: CGFloat = app.player.crossfadeStatusText != nil ? 34 : 0
-            let extraCenterWidth = downloadsWidth + crossfadeWidth
+            let leadingWing = leadingInset + leadingWidth
+            let trailingWing = trailingInset + trailingWidth
 
-            // Space available for centered LCD without overlapping leading/trailing wings
-            let maxCenteredSpace = max(0, (totalWidth / 2 - maxWing - 12) * 2 - extraCenterWidth)
+            // Symmetric satellites clearance: Downloads button (24 + 8 = 32) on the left,
+            // crossfade indicator (24 + 8 = 32) on the right.
+            let satelliteAllowance: CGFloat = 24 + 8
+
+            let effectiveLeadingWing = leadingWing + satelliteAllowance
+            let effectiveTrailingWing = trailingWing + satelliteAllowance
+            let maxEffectiveWing = max(effectiveLeadingWing, effectiveTrailingWing)
+            let safeMargin: CGFloat = 8
+
+            let maxSafeCenteredSpace = max(0, (totalWidth / 2 - maxEffectiveWing - safeMargin) * 2)
 
             let desiredLCDWidth = totalWidth * LayoutMetrics.playerBarMaxFraction
             let targetLCDWidth = min(
                 LayoutMetrics.playerBarMaxWidth,
                 max(LayoutMetrics.playerBarMinWidth, desiredLCDWidth)
             )
-            let finalLCDWidth: CGFloat = max(240, min(targetLCDWidth, maxCenteredSpace))
+            let finalLCDWidth = min(targetLCDWidth, maxSafeCenteredSpace)
+            let showCenterGroup = !isMiniPlayerVisible && maxSafeCenteredSpace >= 150
 
             ZStack {
                 HeaderBarWindowDragRegion()
 
-                // Center layer: strictly centered in the detail column
-                if !isMiniPlayerVisible {
+                if showCenterGroup {
                     centerGroup(width: finalLCDWidth)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
 
-                // Edges layer: Leading controls docked left, Trailing controls docked right
                 HStack(spacing: 0) {
                     Spacer(minLength: 0).frame(width: leadingInset)
 
@@ -88,14 +93,30 @@ struct PlayerHeaderBar: View {
     }
 
     private func centerGroup(width: CGFloat) -> some View {
-        HStack(spacing: 8) {
-            if app.hasDownloadContent {
-                DownloadsToolbarButton(showDownloads: $showDownloads)
-            }
+        ZStack {
             PlayerLCDView()
                 .frame(width: width)
-            CrossfadeToolbarIndicator()
+
+            if app.hasDownloadContent {
+                HStack {
+                    DownloadsToolbarButton(showDownloads: $showDownloads)
+                    Spacer()
+                }
+                .frame(width: width + 2 * (24 + 8))
+                .transition(.opacity)
+            }
+
+            if app.player.crossfadeStatusText != nil {
+                HStack {
+                    Spacer()
+                    CrossfadeToolbarIndicator()
+                }
+                .frame(width: width + 2 * (24 + 8))
+                .transition(.opacity)
+            }
         }
+        .animation(.snappy(duration: 0.2), value: app.hasDownloadContent)
+        .animation(.snappy(duration: 0.2), value: app.player.crossfadeStatusText != nil)
     }
 
     private var rightControls: some View {

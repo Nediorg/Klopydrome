@@ -102,7 +102,6 @@ struct ArtistHeroBanner: View {
         ZStack(alignment: .bottom) {
             bannerBackground
 
-            // Center: Circular Avatar
             VStack {
                 Spacer()
                 avatarView
@@ -111,7 +110,6 @@ struct ArtistHeroBanner: View {
             .frame(maxWidth: .infinity)
             .padding(.bottom, 24)
 
-            // Bottom bar: Controls & Details
             bottomBar
         }
         .frame(maxWidth: .infinity)
@@ -140,7 +138,6 @@ struct ArtistHeroBanner: View {
 
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 16) {
-            // Left: Red Play Button + Artist Title & Details
             HStack(spacing: 14) {
                 playButton
 
@@ -161,7 +158,6 @@ struct ArtistHeroBanner: View {
 
             Spacer(minLength: 16)
 
-            // Right: Action buttons
             HStack(spacing: 8) {
                 RoundFavoriteButton(isStarred: app.isStarred(artist)) {
                     app.toggleStar(artist)

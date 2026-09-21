@@ -64,7 +64,7 @@ private struct HorizontalScrollObserver: NSViewRepresentable {
 }
 
 /// A combined single-line horizontal carousel for "Latest Release" and "Top Songs",
-/// matching Apple Music Tahoe/Sequoia.
+/// matching Apple Music Sequoia.
 ///
 /// When scrolled horizontally, the "Latest Release" scrolls out of view while the
 /// "Top Songs" header smoothly docks at the leading edge and stays pinned there.

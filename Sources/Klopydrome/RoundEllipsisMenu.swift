@@ -41,7 +41,6 @@ struct RoundEllipsisMenu<MenuContent: View>: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(hovering ? Color.primary : Color.secondary)
 
-            // Transparent Menu overlay to capture mouse clicks across the full 32x32 circle
             Menu {
                 content
             } label: {

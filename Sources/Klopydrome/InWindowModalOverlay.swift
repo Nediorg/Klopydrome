@@ -45,7 +45,6 @@ struct InWindowModalOverlay<Content: View>: View {
     var body: some View {
         ZStack {
             if isPresented {
-                // 1. Semi-transparent backdrop with click-to-dismiss (STRICTLY opacity, NO scale)
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
@@ -54,7 +53,6 @@ struct InWindowModalOverlay<Content: View>: View {
                     }
                     .transition(.opacity)
 
-                // 2. Centered elevated card (opacity + scale 0.96)
                 content()
                     .inWindowModalCardStyle()
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
@@ -105,7 +103,6 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
     var body: some View {
         ZStack {
             if let displayItem = retainedItem {
-                // 1. Semi-transparent backdrop with click-to-dismiss (STRICTLY opacity, NO scale)
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
@@ -114,7 +111,6 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
                     }
                     .transition(.opacity)
 
-                // 2. Centered elevated card (opacity + scale 0.96)
                 content(displayItem)
                     .inWindowModalCardStyle()
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
