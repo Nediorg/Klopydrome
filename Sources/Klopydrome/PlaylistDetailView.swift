@@ -25,6 +25,7 @@ struct PlaylistDetailView: View {
     /// bounded prefix. A large playlist can therefore begin playing without its
     /// entire list becoming a layout cost on the main actor.
     @State private var displayedCount = 0
+    @State private var selection = SongRowSelection()
     private let pageSize = 300
 
     private var state: PlaylistLoadState? { app.playlistLoadState(for: playlist) }
@@ -207,6 +208,7 @@ struct PlaylistDetailView: View {
 
     private func songList(_ detail: PlaylistDetail) -> some View {
         let currentID = app.player.currentSong?.id
+        let allSongs = rows
         return LazyVStack(spacing: 0) {
             if rows.isEmpty && loading {
                 skeletonRows
@@ -223,7 +225,10 @@ struct PlaylistDetailView: View {
                         onPlay: { rowIndex in
                             // `displayedSongs` is a prefix of `rows`, so indices align.
                             app.play(rows, at: rowIndex)
-                        }
+                        },
+                        isSelected: selection.isSelected(song.id),
+                        selectedSongs: selection.selectedSongs(from: allSongs),
+                        onSelect: { selection.toggle(song.id, allSongs: allSongs) }
                     )
                     .task {
                         if index == displayedCount - 1 {

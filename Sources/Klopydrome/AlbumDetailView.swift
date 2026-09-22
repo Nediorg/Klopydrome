@@ -13,6 +13,7 @@ struct AlbumDetailView: View {
     @State private var detail: AlbumDetail?
     @State private var loading = true
     @State private var artistHovered = false
+    @State private var selection = SongRowSelection()
 
     private var songs: [SubsonicSong] { detail?.song ?? [] }
 
@@ -247,10 +248,17 @@ struct AlbumDetailView: View {
                         let isDifferent = song.artist != nil &&
                             song.artist?.localizedCaseInsensitiveCompare(detail.artist ?? "") != .orderedSame
                         let rowShowsArtist = isCompilation || isDifferent
-                        SongRow(song: song, index: displayIndex, showAlbum: false,
-                                showsArtist: rowShowsArtist,
-                                isCurrentOverride: currentID == song.id,
-                                onPlay: { _ in app.play(ordered, at: globalIndex) })
+                        SongRow(
+                            song: song,
+                            index: displayIndex,
+                            showAlbum: false,
+                            showsArtist: rowShowsArtist,
+                            isCurrentOverride: currentID == song.id,
+                            onPlay: { _ in app.play(ordered, at: globalIndex) },
+                            isSelected: selection.isSelected(song.id),
+                            selectedSongs: selection.selectedSongs(from: ordered),
+                            onSelect: { selection.toggle(song.id, allSongs: ordered) }
+                        )
                     }
                     if showDiscHeaders && group.disc != groups.last?.disc {
                         Divider().opacity(0.2).padding(.vertical, 4)

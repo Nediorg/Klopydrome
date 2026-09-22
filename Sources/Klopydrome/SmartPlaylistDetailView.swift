@@ -15,6 +15,7 @@ struct SmartPlaylistDetailView: View {
     @State private var state: LoadState = .loading
     @State private var editing = false
     @State private var confirmingDelete = false
+    @State private var selection = SongRowSelection()
 
     private var songs: [SubsonicSong] {
         if case .loaded(let songs) = state { return songs }
@@ -127,11 +128,19 @@ struct SmartPlaylistDetailView: View {
 
     private var songList: some View {
         let currentID = app.player.currentSong?.id
+        let allSongs = songs
         return LazyVStack(spacing: 0) {
             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                SongRow(song: song, index: index, showAlbum: true,
-                        isCurrentOverride: currentID == song.id,
-                        onPlay: { playIndex in app.play(songs, at: playIndex) })
+                SongRow(
+                    song: song,
+                    index: index,
+                    showAlbum: true,
+                    isCurrentOverride: currentID == song.id,
+                    onPlay: { playIndex in app.play(songs, at: playIndex) },
+                    isSelected: selection.isSelected(song.id),
+                    selectedSongs: selection.selectedSongs(from: allSongs),
+                    onSelect: { selection.toggle(song.id, allSongs: allSongs) }
+                )
             }
         }
     }

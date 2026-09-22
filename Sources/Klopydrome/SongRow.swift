@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import NavidromeClient
 
@@ -14,6 +15,13 @@ struct SongRow: View {
     /// из плейлиста»); the canonical `SongActionItems` always follow.
     var extraMenuItems: (() -> AnyView)?
     var onPlay: ((Int) -> Void)?
+    /// Whether this row is part of the current selection. Nil = selection not
+    /// supported on this surface (e.g. compact rows).
+    var isSelected: Bool = false
+    /// Full selection for bulk context-menu actions when multiple rows are selected.
+    var selectedSongs: [SubsonicSong] = []
+    /// Called when the user clicks the row (without double-click intent).
+    var onSelect: (() -> Void)?
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
@@ -26,6 +34,11 @@ struct SongRow: View {
     private var isStarred: Bool { app.isStarred(song) }
     private var isCurrentPlaying: Bool { isCurrent && app.player.isPlaying }
     private var starForeground: Color { AMColor.accent }
+
+    /// Songs that context-menu bulk actions apply to.
+    private var actionTargets: [SubsonicSong] {
+        isSelected && selectedSongs.count > 1 ? selectedSongs : [song]
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -52,18 +65,22 @@ struct SongRow: View {
             .background {
                 if isCurrent {
                     RoundedRectangle(cornerRadius: 6, style: .continuous).fill(AMColor.accent)
+                } else if isSelected {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AMColor.sidebarSelection.opacity(0.55))
                 } else if hovering {
                     RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06))
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { onPlay?(index ?? 0) }
+            .simultaneousGesture(TapGesture().onEnded { onSelect?() })
             .contextMenu {
                 if let extraMenuItems { extraMenuItems() }
                 SongActionItems(
                     app: app,
                     song: song,
-                    selection: [song],
+                    selection: actionTargets,
                     onPlay: onPlay.map { play in { play(index ?? 0) } }
                 )
             }
@@ -71,6 +88,7 @@ struct SongRow: View {
         .frame(minHeight: showAlbum ? 46 : (showsArtist ? 40 : 32))
         .onHover { hovering = $0 }
         .animation(.snappy(duration: 0.15), value: hovering)
+        .animation(.snappy(duration: 0.12), value: isSelected)
     }
 
     @ViewBuilder
@@ -262,5 +280,36 @@ private struct SongRowEdgeLayout: Layout {
     func updateCache(_ cache: inout CGFloat, subviews: Subviews) {
         // Invalidate when trailing content changes (e.g. rating, duration).
         cache = 0
+    }
+}
+
+/// Selection state manager for `SongRow`-based lists (album, playlist, smart playlist).
+/// Handles Cmd+click (additive toggle) and plain click (replace with single item).
+/// Pass `songs` for the full ordered list to support Shift+click range selection.
+struct SongRowSelection {
+    var ids: Set<SubsonicSong.ID> = []
+
+    /// Toggle or replace selection based on current NSEvent modifier flags.
+    mutating func toggle(_ id: SubsonicSong.ID, allSongs: [SubsonicSong]) {
+        let flags = NSApp.currentEvent?.modifierFlags ?? []
+        if flags.contains(.command) {
+            // Cmd+click: additive toggle
+            if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+        } else if flags.contains(.shift), let anchor = ids.first,
+                  let anchorIdx = allSongs.firstIndex(where: { $0.id == anchor }),
+                  let targetIdx = allSongs.firstIndex(where: { $0.id == id }) {
+            // Shift+click: range from first selected item to target
+            let range = min(anchorIdx, targetIdx)...max(anchorIdx, targetIdx)
+            ids = Set(allSongs[range].map(\.id))
+        } else {
+            // Plain click: if already the only selection, deselect; else select only this
+            ids = ids == [id] ? [] : [id]
+        }
+    }
+
+    func isSelected(_ id: SubsonicSong.ID) -> Bool { ids.contains(id) }
+
+    func selectedSongs(from allSongs: [SubsonicSong]) -> [SubsonicSong] {
+        allSongs.filter { ids.contains($0.id) }
     }
 }
