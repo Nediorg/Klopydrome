@@ -15,11 +15,11 @@ struct SongRow: View {
     /// из плейлиста»); the canonical `SongActionItems` always follow.
     var extraMenuItems: (() -> AnyView)?
     var onPlay: ((Int) -> Void)?
-    /// Whether this row is part of the current selection. Nil = selection not
-    /// supported on this surface (e.g. compact rows).
+    /// Whether this row is part of the current selection.
     var isSelected: Bool = false
-    /// Full selection for bulk context-menu actions when multiple rows are selected.
-    var selectedSongs: [SubsonicSong] = []
+    /// Lazily resolves the full selection when the context menu opens.
+    /// Avoids O(N×M) per render by deferring the work until actually needed.
+    var resolveSelection: (() -> [SubsonicSong])?
     /// Called when the user clicks the row (without double-click intent).
     var onSelect: (() -> Void)?
 
@@ -37,7 +37,9 @@ struct SongRow: View {
 
     /// Songs that context-menu bulk actions apply to.
     private var actionTargets: [SubsonicSong] {
-        isSelected && selectedSongs.count > 1 ? selectedSongs : [song]
+        guard isSelected, let resolve = resolveSelection else { return [song] }
+        let resolved = resolve()
+        return resolved.count > 1 ? resolved : [song]
     }
 
     var body: some View {
@@ -85,7 +87,9 @@ struct SongRow: View {
                 )
             }
         }
-        .frame(minHeight: showAlbum ? 46 : (showsArtist ? 40 : 32))
+        // Fixed height (not minHeight) so LazyVStack can estimate row sizes
+        // without materializing them — prevents gaps in long lists.
+        .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
         .onHover { hovering = $0 }
         .animation(.snappy(duration: 0.15), value: hovering)
         .animation(.snappy(duration: 0.12), value: isSelected)
@@ -216,14 +220,16 @@ struct SongRow: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            SongEllipsisMenu(song: song,
-                             foregroundStyle: isCurrent ? .white : .secondary,
-                             app: app,
-                             extraMenuItems: extraMenuItems)
-                .opacity(hovering ? 1 : 0)
-                .allowsHitTesting(hovering)
-                .animation(.snappy(duration: 0.12), value: hovering)
-                .accessibilityHidden(false)
+            if hovering {
+                SongEllipsisMenu(song: song,
+                                 foregroundStyle: isCurrent ? .white : .secondary,
+                                 app: app,
+                                 extraMenuItems: extraMenuItems)
+                    .transition(.opacity)
+            } else {
+                Color.clear
+                    .frame(width: 36, height: 28)
+            }
         }
     }
 }

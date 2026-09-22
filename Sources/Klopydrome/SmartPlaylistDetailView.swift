@@ -45,9 +45,11 @@ struct SmartPlaylistDetailView: View {
                 }
             case .loaded:
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         header
+                            .padding(.bottom, 28)
                         actionRow
+                            .padding(.bottom, 28)
                         songList
                     }
                     .padding(.horizontal, 28)
@@ -126,22 +128,21 @@ struct SmartPlaylistDetailView: View {
         }
     }
 
+    @ViewBuilder
     private var songList: some View {
         let currentID = app.player.currentSong?.id
         let allSongs = songs
-        return LazyVStack(spacing: 0) {
-            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                SongRow(
-                    song: song,
-                    index: index,
-                    showAlbum: true,
-                    isCurrentOverride: currentID == song.id,
-                    onPlay: { playIndex in app.play(songs, at: playIndex) },
-                    isSelected: selection.isSelected(song.id),
-                    selectedSongs: selection.selectedSongs(from: allSongs),
-                    onSelect: { selection.toggle(song.id, allSongs: allSongs) }
-                )
-            }
+        ForEach(Array(songs.enumerated()), id: \.offset) { index, song in
+            SongRow(
+                song: song,
+                index: index,
+                showAlbum: true,
+                isCurrentOverride: currentID == song.id,
+                onPlay: { playIndex in app.play(songs, at: playIndex) },
+                isSelected: selection.isSelected(song.id),
+                resolveSelection: { selection.selectedSongs(from: allSongs) },
+                onSelect: { selection.toggle(song.id, allSongs: allSongs) }
+            )
         }
     }
 

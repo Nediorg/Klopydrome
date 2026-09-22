@@ -13,6 +13,12 @@ struct PlaylistsView: View {
     @State private var confirmingDeleteID: String?
     @State private var confirmingDeleteSmart: SmartPlaylist?
 
+    private let playlistPageSize = 100
+    @State private var displayedPlaylistCount = 100
+    private var displayedPlaylists: [PlaylistSummary] {
+        Array(playlists.prefix(displayedPlaylistCount))
+    }
+
     /// Presentations owned by this view. Merged into one `.sheet(item:)`
     /// because SwiftUI only honours the last `.sheet` modifier on a view.
     enum ActiveSheet: Identifiable {
@@ -55,7 +61,7 @@ struct PlaylistsView: View {
                         }
 
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
-                            ForEach(playlists) { playlist in
+                            ForEach(displayedPlaylists) { playlist in
                                 Button {
                                     app.openPlaylist(playlist)
                                 } label: {
@@ -71,6 +77,16 @@ struct PlaylistsView: View {
                                         confirmingDeleteID = playlist.id
                                     }
                                 }
+                            }
+                            if displayedPlaylistCount < playlists.count {
+                                Color.clear.frame(height: 1)
+                                    .gridCellColumns(1)
+                                    .onAppear {
+                                        displayedPlaylistCount = min(
+                                            displayedPlaylistCount + playlistPageSize,
+                                            playlists.count
+                                        )
+                                    }
                             }
                         }
                     }
@@ -192,6 +208,7 @@ struct PlaylistsView: View {
     private func load() async {
         guard app.client != nil else { return }
         if app.library.playlists.isEmpty { loading = true }
+        displayedPlaylistCount = playlistPageSize
         defer { loading = false }
         await app.refreshPlaylists()
     }

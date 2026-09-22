@@ -51,8 +51,9 @@ struct PlaylistDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         header(currentDetail)
+                            .padding(.bottom, 28)
                         songList(currentDetail)
                     }
                     .padding(.horizontal, 28)
@@ -206,36 +207,37 @@ struct PlaylistDetailView: View {
         }
     }
 
+    @ViewBuilder
     private func songList(_ detail: PlaylistDetail) -> some View {
         let currentID = app.player.currentSong?.id
         let allSongs = rows
-        return LazyVStack(spacing: 0) {
-            if rows.isEmpty && loading {
-                skeletonRows
-            } else {
-                ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
-                    SongRow(
-                        song: song,
-                        index: index,
-                        showAlbum: true,
-                        isCurrentOverride: currentID == song.id,
-                        extraMenuItems: canEditTracks
-                            ? { AnyView(Button("Убрать из плейлиста".localized) { remove(at: index, from: detail) }) }
-                            : nil,
-                        onPlay: { rowIndex in
-                            // `displayedSongs` is a prefix of `rows`, so indices align.
-                            app.play(rows, at: rowIndex)
-                        },
-                        isSelected: selection.isSelected(song.id),
-                        selectedSongs: selection.selectedSongs(from: allSongs),
-                        onSelect: { selection.toggle(song.id, allSongs: allSongs) }
-                    )
-                    .task {
-                        if index == displayedCount - 1 {
-                            displayedCount = min(displayedCount + pageSize, rows.count)
-                        }
+        if rows.isEmpty && loading {
+            skeletonRows
+        } else {
+            ForEach(Array(displayedSongs.enumerated()), id: \.offset) { index, song in
+                SongRow(
+                    song: song,
+                    index: index,
+                    showAlbum: true,
+                    isCurrentOverride: currentID == song.id,
+                    extraMenuItems: canEditTracks
+                        ? { AnyView(Button("Убрать из плейлиста".localized) { remove(at: index, from: detail) }) }
+                        : nil,
+                    onPlay: { rowIndex in
+                        app.play(rows, at: rowIndex)
+                    },
+                    isSelected: selection.isSelected(song.id),
+                    resolveSelection: { selection.selectedSongs(from: allSongs) },
+                    onSelect: { selection.toggle(song.id, allSongs: allSongs) }
+                )
+            }
+            // Sentinel: appears when the user scrolls near the bottom of the
+            // current page window. Grows the window by one page.
+            if displayedCount < rows.count {
+                Color.clear.frame(height: 80)
+                    .onAppear {
+                        displayedCount = min(displayedCount + pageSize, rows.count)
                     }
-                }
             }
         }
     }

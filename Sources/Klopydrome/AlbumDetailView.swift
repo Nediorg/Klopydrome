@@ -256,7 +256,7 @@ struct AlbumDetailView: View {
                             isCurrentOverride: currentID == song.id,
                             onPlay: { _ in app.play(ordered, at: globalIndex) },
                             isSelected: selection.isSelected(song.id),
-                            selectedSongs: selection.selectedSongs(from: ordered),
+                            resolveSelection: { selection.selectedSongs(from: ordered) },
                             onSelect: { selection.toggle(song.id, allSongs: ordered) }
                         )
                     }
