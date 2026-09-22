@@ -74,14 +74,13 @@ struct ArtistHeroBanner: View {
         return sorted.prefix(3).joined(separator: ", ")
     }
 
-    /// Concatenated summary subtitle (role, genre, albums/songs count, total time).
+    /// Concatenated summary subtitle (role, albums/songs count, total time).
+    /// Genres are omitted here — they can be arbitrarily long and crowd out the
+    /// counts. Full genre list is always available in the artist info sheet.
     private var detailsText: String? {
         var parts: [String] = []
         if let roleLabel, !roleLabel.isEmpty {
             parts.append(roleLabel)
-        }
-        if let genresSummary {
-            parts.append(genresSummary)
         }
         let albumCount = detail.albumCount ?? albums.count
         if albumCount > 0 {

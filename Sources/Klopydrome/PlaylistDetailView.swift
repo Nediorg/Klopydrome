@@ -68,6 +68,10 @@ struct PlaylistDetailView: View {
         .onChange(of: rows.count) { _, count in
             if displayedCount == 0, count > 0 {
                 displayedCount = min(count, pageSize)
+            } else if displayedCount > 0, displayedCount < count {
+                // Rows are still streaming in; grow the window so songs that
+                // arrived after the first page are visible without a scroll.
+                displayedCount = min(displayedCount + pageSize, count)
             }
         }
         .sheet(item: $activeEditor) { editor in

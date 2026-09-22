@@ -102,8 +102,11 @@ struct SongTable: View {
                         // row would create one task per column (×8–10).
                         .task {
                             guard column == .title else { return }
-                            let lastIndex = min(displayedCount, songs.count) - 1
-                            if lastIndex >= 0, song.id == songs[lastIndex].id, displayedCount < songs.count {
+                            // Use index lookup rather than comparing songs[lastIndex].id:
+                            // after a re-sort the `song` captured here is from the old render
+                            // cycle and its id no longer matches songs[displayedCount-1].
+                            guard displayedCount > 0, displayedCount < songs.count else { return }
+                            if songs.firstIndex(where: { $0.id == song.id }) == displayedCount - 1 {
                                 displayedCount = min(displayedCount + pageSize, songs.count)
                             }
                         }
@@ -132,9 +135,11 @@ struct SongTable: View {
         .tint(AMColor.sidebarSelection)
         // `contextMenu(forSelectionType:)` auto-selects the clicked row (and lets
         // Cmd/Shift multi-select), so the menu always has a concrete target.
+        // Pass `ids` (the current right-clicked selection) rather than the `selection`
+        // @State, which may lag by one frame if the click didn't extend an existing selection.
         .contextMenu(forSelectionType: SubsonicSong.ID.self) { ids in
             if let id = ids.first, let song = songs.first(where: { $0.id == id }) {
-                SongContextMenu(song: song, songs: songs, selection: selection, app: app)
+                SongContextMenu(song: song, songs: songs, selection: ids, app: app)
             }
         } primaryAction: { ids in
             // Double-click plays the whole contiguous run starting at the row.
