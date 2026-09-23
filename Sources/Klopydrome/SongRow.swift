@@ -25,6 +25,7 @@ struct SongRow: View {
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
+    @State private var hoverTracker = HoverTracker()
 
     private var isCurrent: Bool { isCurrentOverride ?? (app.player.currentSong?.id == song.id) }
     private var fgPrimary: Color { isCurrent ? .white : .primary }
@@ -44,21 +45,24 @@ struct SongRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Button {
-                app.toggleStar(song)
-            } label: {
-                Image(systemName: isStarred ? "star.fill" : "star")
-                    .font(.system(size: 11))
-                    .foregroundStyle(starForeground)
+            if isStarred || hovering {
+                Button {
+                    app.toggleStar(song)
+                } label: {
+                    Image(systemName: isStarred ? "star.fill" : "star")
+                        .font(.system(size: 11))
+                        .foregroundStyle(starForeground)
+                }
+                .buttonStyle(.plain)
+                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+            } else {
+                Color.clear
+                    .frame(width: 16, height: 16)
             }
-            .buttonStyle(.plain)
-            .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
-            .opacity(isStarred ? 1 : (hovering ? 1 : 0))
-            .allowsHitTesting(hovering || isStarred)
-            .frame(width: 16, height: 16)
-            .contentShape(Rectangle())
 
-            SongRowEdgeLayout(spacing: 10, minHeight: showAlbum ? 36 : (showsArtist ? 30 : 20)) {
+            HStack(spacing: 10) {
                 leadingContent
                 trailingContent
             }
@@ -90,8 +94,27 @@ struct SongRow: View {
         // Fixed height (not minHeight) so LazyVStack can estimate row sizes
         // without materializing them — prevents gaps in long lists.
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
-        .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.15), value: hovering)
+        .onHover { isInside in
+            hoverTracker.isInside = isInside
+            if isInside {
+                if !ScrollGate.shared.isScrolling {
+                    hovering = true
+                }
+            } else {
+                if hovering {
+                    hovering = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
+            if hoverTracker.isInside && !hovering {
+                hovering = true
+            }
+        }
+        .onDisappear {
+            hoverTracker.isInside = false
+            hovering = false
+        }
         .animation(.snappy(duration: 0.12), value: isSelected)
     }
 
@@ -189,7 +212,7 @@ struct SongRow: View {
                     .frame(width: 16, height: 16)
                     .help("Загрузка…".localized)
                     .accessibilityLabel("Загрузка".localized)
-            } else {
+            } else if hovering || isCachedLocally {
                 Button {
                     if isCachedLocally {
                         Task { await app.removeFromCache(song) }
@@ -206,12 +229,13 @@ struct SongRow: View {
                 .help(isCachedLocally ? "Удалить загрузку".localized : "Загрузить".localized)
                 .accessibilityLabel(isCachedLocally ? "Удалить загрузку".localized
                                                     : (isDownloading ? "Загрузка".localized : "Загрузить".localized))
-                .opacity(hovering || isCachedLocally ? 1 : 0)
-                .allowsHitTesting(hovering || isCachedLocally)
                 .frame(width: 18, height: 18)
                 .contentShape(Rectangle())
                 .transition(.opacity)
                 .accessibilityHidden(false)
+            } else {
+                Color.clear
+                    .frame(width: 18, height: 18)
             }
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
@@ -234,58 +258,24 @@ struct SongRow: View {
     }
 }
 
-private struct SongRowEdgeLayout: Layout {
-    let spacing: CGFloat
-    var minHeight: CGFloat = 34
+private final class HoverTracker {
+    var isInside = false
+}
 
-    func sizeThatFits(
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout CGFloat
-    ) -> CGSize {
-        guard subviews.count == 2 else { return .zero }
-        // Cache trailing width — it depends only on the trailing content
-        // (duration + stars + buttons), not on the proposed width, so it is
-        // stable across the two layout passes (sizeThatFits + placeSubviews).
-        if cache == 0 {
-            cache = subviews[1].sizeThatFits(.unspecified).width
-        }
-        let leading = subviews[0].sizeThatFits(.unspecified)
-        let idealWidth = leading.width + spacing + cache
-        let contentHeight = max(leading.height, subviews[1].sizeThatFits(.unspecified).height)
-        let height = max(minHeight, contentHeight)
-        return CGSize(width: max(proposal.width ?? idealWidth, idealWidth), height: height)
-    }
-
-    func placeSubviews(
-        in bounds: CGRect,
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout CGFloat
-    ) {
-        guard subviews.count == 2 else { return }
-        if cache == 0 {
-            cache = subviews[1].sizeThatFits(.unspecified).width
-        }
-        let leadingWidth = max(0, bounds.width - cache - spacing)
-        let height = bounds.height
-
-        subviews[0].place(
-            at: CGPoint(x: bounds.minX, y: bounds.midY),
-            anchor: .leading,
-            proposal: ProposedViewSize(width: leadingWidth, height: height)
-        )
-        subviews[1].place(
-            at: CGPoint(x: bounds.maxX, y: bounds.midY),
-            anchor: .trailing,
-            proposal: ProposedViewSize(width: cache, height: height)
-        )
-    }
-
-    func makeCache(subviews: Subviews) -> CGFloat { 0 }
-    func updateCache(_ cache: inout CGFloat, subviews: Subviews) {
-        // Invalidate when trailing content changes (e.g. rating, duration).
-        cache = 0
+extension SongRow: Equatable {
+    static func == (lhs: SongRow, rhs: SongRow) -> Bool {
+        lhs.song.id == rhs.song.id
+            && lhs.song.starred == rhs.song.starred
+            && lhs.song.userRating == rhs.song.userRating
+            && lhs.song.title == rhs.song.title
+            && lhs.song.artist == rhs.song.artist
+            && lhs.song.album == rhs.song.album
+            && lhs.song.duration == rhs.song.duration
+            && lhs.index == rhs.index
+            && lhs.showAlbum == rhs.showAlbum
+            && lhs.showsArtist == rhs.showsArtist
+            && lhs.isCurrentOverride == rhs.isCurrentOverride
+            && lhs.isSelected == rhs.isSelected
     }
 }
 

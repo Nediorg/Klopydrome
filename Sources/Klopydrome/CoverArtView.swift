@@ -80,7 +80,7 @@ struct CoverArtView: View {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(shadow ? 0.30 : 0), radius: shadowRadius, y: shadowY)
+        .coverShadow(enabled: shadow, radius: shadowRadius, yOffset: shadowY)
         .accessibilityLabel(coverArt ?? String(localized: "Обложка"))
         .accessibilityAddTraits(.isImage)
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
@@ -158,5 +158,16 @@ struct VisualEffectView: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func coverShadow(enabled: Bool, radius: CGFloat, yOffset: CGFloat) -> some View {
+        if enabled {
+            self.shadow(color: .black.opacity(0.30), radius: radius, y: yOffset)
+        } else {
+            self
+        }
     }
 }

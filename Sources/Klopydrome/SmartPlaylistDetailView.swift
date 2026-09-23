@@ -143,6 +143,7 @@ struct SmartPlaylistDetailView: View {
                 resolveSelection: { selection.selectedSongs(from: allSongs) },
                 onSelect: { selection.toggle(song.id, allSongs: allSongs) }
             )
+            .equatable()
         }
     }
 

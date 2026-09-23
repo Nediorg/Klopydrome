@@ -259,6 +259,7 @@ struct AlbumDetailView: View {
                             resolveSelection: { selection.selectedSongs(from: ordered) },
                             onSelect: { selection.toggle(song.id, allSongs: ordered) }
                         )
+                        .equatable()
                     }
                     if showDiscHeaders && group.disc != groups.last?.disc {
                         Divider().opacity(0.2).padding(.vertical, 4)

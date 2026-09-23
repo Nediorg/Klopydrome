@@ -26,7 +26,7 @@ struct PlaylistDetailView: View {
     /// entire list becoming a layout cost on the main actor.
     @State private var displayedCount = 0
     @State private var selection = SongRowSelection()
-    private let pageSize = 300
+    private let pageSize = 100
 
     private var state: PlaylistLoadState? { app.playlistLoadState(for: playlist) }
     private var rows: [SubsonicSong] { state?.songs ?? [] }
@@ -230,6 +230,7 @@ struct PlaylistDetailView: View {
                     resolveSelection: { selection.selectedSongs(from: allSongs) },
                     onSelect: { selection.toggle(song.id, allSongs: allSongs) }
                 )
+                .equatable()
             }
             // Sentinel: appears when the user scrolls near the bottom of the
             // current page window. Grows the window by one page.
