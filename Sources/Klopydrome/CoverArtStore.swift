@@ -44,9 +44,9 @@ final class CoverArtStore: @unchecked Sendable {
     /// occupy tens of MB of RAM.
     private static let maxDecodedSide: CGFloat = 2048
 
-    private let memory = NSCache<NSString, NSImage>()
+    let memory = NSCache<NSString, NSImage>()
     private var inflight: [String: InflightTask] = [:]
-    private let lock = NSLock()
+    let lock = NSLock()
 
     /// Artwork keys that failed to resolve. Each hit is returned instantly as
     /// `nil` so a dead or missing cover isn't re-requested on every
@@ -61,7 +61,7 @@ final class CoverArtStore: @unchecked Sendable {
     /// Index of which sizes have been cached per coverArt, for the
     /// "use larger cached for smaller request" fallback. 0 represents
     /// original (nil requestedSize). Guarded by `lock`.
-    private var cachedSizes: [String: Set<Int>] = [:]
+    var cachedSizes: [String: Set<Int>] = [:]
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -75,7 +75,7 @@ final class CoverArtStore: @unchecked Sendable {
     private let gate = AsyncGate(capacity: CoverArtStore.maxConcurrentFetches)
 
     private var client: SubsonicClient?
-    private var cache: CacheManager?
+    private(set) var cache: CacheManager?
     private var coverResolution: CoverResolution = .high
 
     private init() {
@@ -149,7 +149,7 @@ final class CoverArtStore: @unchecked Sendable {
         if result.image != nil {
             coverLogger.debug("loaded coverArt=\(coverArt, privacy: .private) key=\(key, privacy: .private)")
             lock.withLock {
-                cachedSizes[coverArt, default: []].insert(requested ?? 0)
+                _ = cachedSizes[coverArt, default: []].insert(requested ?? 0)
             }
         } else {
             coverLogger.debug("miss coverArt=\(coverArt, privacy: .private) key=\(key, privacy: .private)")

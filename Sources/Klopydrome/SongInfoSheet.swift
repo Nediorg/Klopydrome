@@ -83,8 +83,14 @@ struct SongInfoSheet: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            QuickLookCover(coverArt: song.coverArt, size: 64, cornerRadius: 6, shadow: false)
-                .frame(width: 64, height: 64)
+            QuickLookCover(
+                coverArt: song.coverArt,
+                size: 64,
+                cornerRadius: 6,
+                shadow: false,
+                title: song.album ?? song.displayTitle
+            )
+            .frame(width: 64, height: 64)
                 .help("Быстрый просмотр обложки".localized)
 
             VStack(alignment: .leading, spacing: 3) {

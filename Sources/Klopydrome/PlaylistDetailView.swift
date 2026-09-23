@@ -120,7 +120,7 @@ struct PlaylistDetailView: View {
 
     private func header(_ detail: PlaylistDetail) -> some View {
         HStack(alignment: .top, spacing: 24) {
-            QuickLookCover(coverArt: detail.coverArt)
+            QuickLookCover(coverArt: detail.coverArt, title: detail.displayName)
                 .frame(width: 220, height: 220)
                 .help("Быстрый просмотр обложки".localized)
                 .accessibilityLabel("Предпросмотр обложки".localized)
