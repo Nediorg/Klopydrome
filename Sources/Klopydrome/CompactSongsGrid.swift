@@ -47,6 +47,10 @@ struct CompactSongsSection: View {
         songs.count > 9
     }
 
+    private var songsIdentity: String {
+        "\(songs.count)-\(songs.first?.id ?? "")"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -57,7 +61,7 @@ struct CompactSongsSection: View {
                 collapsedCarousel
             }
         }
-        .onChange(of: songs.map(\.id)) {
+        .onChange(of: songsIdentity) {
             expanded = false
             expandedLimit = 45
         }
@@ -202,16 +206,18 @@ struct CompactSongColumn: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
+        let currentID = app.player.currentSong?.id
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element.globalIndex) { offset, item in
                 CompactSongRow(
                     song: item.song,
                     subtitle: subtitle?(item.song),
-                    isCurrent: app.player.currentSong?.id == item.song.id,
+                    isCurrent: currentID == item.song.id,
                     onPlay: {
                         app.play(allSongs, at: item.globalIndex)
                     }
                 )
+                .equatable()
 
                 if offset < items.count - 1 {
                     Divider()
@@ -232,6 +238,7 @@ struct CompactSongRow: View {
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
+    @State private var hoverTracker = HoverTracker()
 
     private var isPlaying: Bool { isCurrent && app.player.isPlaying }
 
@@ -301,19 +308,24 @@ struct CompactSongRow: View {
                 .opacity(isStarred ? 1 : (hovering ? 1 : 0))
                 .allowsHitTesting(hovering || isStarred)
 
-                Menu {
-                    SongActionItems(app: app, song: song, onPlay: onPlay)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                if hovering {
+                    Menu {
+                        SongActionItems(app: app, song: song, onPlay: onPlay)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .transition(.opacity)
+                } else {
+                    Color.clear
                         .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .opacity(hovering ? 1 : 0)
             }
         }
         .padding(.horizontal, 6)
@@ -324,10 +336,44 @@ struct CompactSongRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onPlay() }
-        .onHover { hovering = $0 }
+        .onHover { isInside in
+            hoverTracker.isInside = isInside
+            if isInside {
+                if !ScrollGate.shared.isScrolling {
+                    hovering = true
+                }
+            } else {
+                if hovering {
+                    hovering = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
+            if hoverTracker.isInside && !hovering {
+                hovering = true
+            }
+        }
+        .onDisappear {
+            hoverTracker.isInside = false
+            hovering = false
+        }
         .animation(.snappy(duration: 0.12), value: hovering)
         .contextMenu {
             SongActionItems(app: app, song: song, onPlay: onPlay)
         }
+    }
+}
+
+extension CompactSongRow: Equatable {
+    static func == (lhs: CompactSongRow, rhs: CompactSongRow) -> Bool {
+        lhs.song.id == rhs.song.id
+            && lhs.song.starred == rhs.song.starred
+            && lhs.song.userRating == rhs.song.userRating
+            && lhs.song.title == rhs.song.title
+            && lhs.song.artist == rhs.song.artist
+            && lhs.song.album == rhs.song.album
+            && lhs.song.duration == rhs.song.duration
+            && lhs.subtitle == rhs.subtitle
+            && lhs.isCurrent == rhs.isCurrent
     }
 }

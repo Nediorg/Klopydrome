@@ -25,6 +25,7 @@ final class CoverArtStore: @unchecked Sendable {
     /// `Task` itself is a struct. Only ever read under `lock`.
     private final class InflightTask: @unchecked Sendable {
         let task: Task<FetchOutcome, Never>
+        var subscriberCount: Int = 1
         init(_ task: Task<FetchOutcome, Never>) { self.task = task }
     }
 
@@ -36,7 +37,7 @@ final class CoverArtStore: @unchecked Sendable {
     /// `width * height * 4` bytes, so a large grid can't pin hundreds of MB:
     /// beyond this the cache evicts least-recently-used entries (re-reads
     /// hit the disk cache, so the thrash cost is a cheap decode).
-    private static let memoryCacheCostLimit = 64 << 20
+    private static let memoryCacheCostLimit = 384 << 20
 
     /// Largest decoded side for artwork requested without a pixel cap
     /// (`.original` covers, artist URLs). The disk cache keeps full quality;
@@ -76,10 +77,11 @@ final class CoverArtStore: @unchecked Sendable {
 
     private var client: SubsonicClient?
     private(set) var cache: CacheManager?
-    private var coverResolution: CoverResolution = .high
+    private(set) var coverResolution: CoverResolution = .high
 
     private init() {
         memory.totalCostLimit = Self.memoryCacheCostLimit
+        memory.countLimit = 1500
     }
 
     func configure(client: SubsonicClient?, cache: CacheManager?, coverResolution: CoverResolution = .high) {
@@ -111,20 +113,10 @@ final class CoverArtStore: @unchecked Sendable {
         guard let coverArt, !coverArt.isEmpty else { return nil }
         let requested = coverResolution.requestedSize(forDisplayPixels: size)
         let key = "\(coverArt)-\(requested.map(String.init) ?? "orig")"
-        return memory.object(forKey: key as NSString)
-    }
-
-    /// File URL for the already-cached thumbnail (no network). Copied to a
-    /// temp `.jpg` so Quick Look recognises it as image (cached file is `.img`).
-    func cachedThumbnailFileURL(coverArt: String?, displayPixels: Int) async -> URL? {
-        guard let coverArt, !coverArt.isEmpty, let cache else { return nil }
-        let requested = coverResolution.requestedSize(forDisplayPixels: displayPixels)
-        let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: requested ?? 0)
-        guard let data = await cache.readData(for: .covers, key: cacheKey) else { return nil }
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cover-thumb-\(coverArt).jpg")
-        try? data.write(to: tmp, options: .atomic)
-        return tmp
+        if let exact = memory.object(forKey: key as NSString) {
+            return exact
+        }
+        return largerCachedImage(for: coverArt, requested: requested)
     }
 
     func image(coverArt: String?, size: Int) async -> ImageBox {
@@ -182,22 +174,6 @@ final class CoverArtStore: @unchecked Sendable {
             }
         }
         return nil
-    }
-
-    /// File URL for the full-resolution cover, downloading it if needed. Copied
-    /// to a temp `.jpg` so Quick Look recognises it as image.
-    func fullCoverFileURL(coverArt: String?) async -> URL? {
-        guard let coverArt, !coverArt.isEmpty else { return nil }
-        let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: 0)
-        if let cache, !(await cache.hasFile(for: .covers, key: cacheKey)) {
-            _ = await resolveCover(coverArt: coverArt, size: nil)
-        }
-        guard let cache, await cache.hasFile(for: .covers, key: cacheKey),
-              let data = await cache.readData(for: .covers, key: cacheKey) else { return nil }
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cover-\(coverArt).jpg")
-        try? data.write(to: tmp, options: .atomic)
-        return tmp
     }
 
     /// Synchronously retrieves an artist image from memory cache if present.
@@ -258,6 +234,7 @@ final class CoverArtStore: @unchecked Sendable {
         // decision (new vs. shared task) is made synchronously under the lock.
         let decision: (isNew: Bool, holder: InflightTask) = lock.withLock {
             if let existing = inflight[key] {
+                existing.subscriberCount += 1
                 return (false, existing)
             }
             let holder = InflightTask(Task<FetchOutcome, Never> { await loader() })
@@ -265,7 +242,20 @@ final class CoverArtStore: @unchecked Sendable {
             return (true, holder)
         }
 
-        let outcome = await decision.holder.task.value
+        let outcome = await withTaskCancellationHandler {
+            await decision.holder.task.value
+        } onCancel: { [weak self] in
+            guard let self else { return }
+            self.lock.withLock {
+                decision.holder.subscriberCount -= 1
+                if decision.holder.subscriberCount <= 0 {
+                    decision.holder.task.cancel()
+                    if self.inflight[key] === decision.holder {
+                        self.inflight.removeValue(forKey: key)
+                    }
+                }
+            }
+        }
         if decision.isNew {
             retireIfCurrent(key: key, holder: decision.holder, outcome: outcome)
         }
@@ -300,7 +290,7 @@ final class CoverArtStore: @unchecked Sendable {
         }
     }
 
-    private func resolveCover(coverArt: String, size: Int?) async -> FetchOutcome {
+    func resolveCover(coverArt: String, size: Int?) async -> FetchOutcome {
         let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: size ?? 0)
         if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
            let image = NSImage(data: data) {
@@ -342,9 +332,14 @@ final class CoverArtStore: @unchecked Sendable {
     /// bounded by the concurrency gate. Classifies the outcome so transient
     /// failures never latch into `failedKeys`.
     private func fetch(url: URL, cacheKey: String?, requestedSize: Int?) async -> FetchOutcome {
+        guard !Task.isCancelled else { return .transient }
         coverLogger.debug("gate acquire url=\(url.absoluteString, privacy: .private)")
         guard await gate.acquire() else {
             coverLogger.debug("gate denied url=\(url.absoluteString, privacy: .private)")
+            return .transient
+        }
+        guard !Task.isCancelled else {
+            await gate.release()
             return .transient
         }
         coverLogger.debug("gate acquired url=\(url.absoluteString, privacy: .private)")

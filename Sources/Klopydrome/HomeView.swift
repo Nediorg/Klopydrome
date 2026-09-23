@@ -228,6 +228,7 @@ struct AlbumCard: View {
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
+    @State private var hoverTracker = HoverTracker()
 
     private var isStarred: Bool { app.isStarred(album) }
 
@@ -259,7 +260,27 @@ struct AlbumCard: View {
                 .transition(.opacity)
             }
         }
-        .onHover { hovering = $0 }
+        .onHover { isInside in
+            hoverTracker.isInside = isInside
+            if isInside {
+                if !ScrollGate.shared.isScrolling {
+                    hovering = true
+                }
+            } else {
+                if hovering {
+                    hovering = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
+            if hoverTracker.isInside && !hovering {
+                hovering = true
+            }
+        }
+        .onDisappear {
+            hoverTracker.isInside = false
+            hovering = false
+        }
         .accessibilityLabel(album.displayName)
         .accessibilityAction(named: isStarred ? "Убрать из избранного".localized : "В избранное".localized) {
             app.toggleStar(album)
@@ -351,5 +372,21 @@ struct AlbumCardPlaceholder: View {
                 .redacted(reason: .placeholder)
         }
         .frame(width: width, alignment: .leading)
+    }
+}
+
+extension AlbumCard: Equatable {
+    static func == (lhs: AlbumCard, rhs: AlbumCard) -> Bool {
+        lhs.album.id == rhs.album.id
+            && lhs.album.title == rhs.album.title
+            && lhs.album.name == rhs.album.name
+            && lhs.album.artist == rhs.album.artist
+            && lhs.album.year == rhs.album.year
+            && lhs.album.coverArt == rhs.album.coverArt
+            && lhs.album.starred == rhs.album.starred
+            && lhs.width == rhs.width
+            && lhs.showsArtist == rhs.showsArtist
+            && lhs.showsYear == rhs.showsYear
+            && lhs.reservesTitleLines == rhs.reservesTitleLines
     }
 }

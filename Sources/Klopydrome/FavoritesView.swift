@@ -11,6 +11,7 @@ struct FavoritesView: View {
         app.library.playlists.filter { app.isFollowed($0) }
     }
     @State private var loading = true
+    @State private var albumsExpanded = false
     /// Set when the favorites fetch fails, so an error renders with retry
     /// instead of a misleading "Нет избранного".
     @State private var loadError: String?
@@ -119,21 +120,57 @@ struct FavoritesView: View {
 
     private var albumSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Альбомы".localized)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 16) {
+            Button {
+                withAnimation(Motion.spring(Motion.expand)) {
+                    albumsExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Альбомы".localized)
+                        .font(.title3.bold())
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(albumsExpanded ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(albumsExpanded ? "Свернуть".localized : "Раскрыть".localized)
+            .accessibilityLabel(albumsExpanded ? "Свернуть".localized : "Раскрыть".localized)
+
+            if albumsExpanded {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 16) {
                     ForEach(albums) { album in
                         Button {
                             app.openAlbumInLibrary(album)
                         } label: {
-                            AlbumCard(album: album)
+                            AlbumCard(album: album, width: 150)
+                                .equatable()
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 .padding(.vertical, 4)
+                .transition(.opacity)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ForEach(albums) { album in
+                            Button {
+                                app.openAlbumInLibrary(album)
+                            } label: {
+                                AlbumCard(album: album)
+                                    .equatable()
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .scrollClipDisabled()
+                .transition(.opacity)
             }
-            .scrollClipDisabled()
         }
     }
 

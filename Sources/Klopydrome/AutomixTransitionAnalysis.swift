@@ -143,36 +143,39 @@ enum AutomixAudioAnalyzer {
         start: AVAudioFramePosition,
         frames: AVAudioFramePosition
     ) -> [Float] {
-        guard frames > 0,
-              frames <= AVAudioFramePosition(UInt32.max),
-              let buffer = AVAudioPCMBuffer(
-                pcmFormat: format,
-                frameCapacity: AVAudioFrameCount(frames)
-              ) else {
-            return []
-        }
-        file.framePosition = start
-        guard (try? file.read(into: buffer, frameCount: AVAudioFrameCount(frames))) != nil,
-              let channels = buffer.floatChannelData else {
-            return []
-        }
-
-        let sampleCount = Int(buffer.frameLength)
-        let channelCount = Int(format.channelCount)
+        guard frames > 0, frames <= AVAudioFramePosition(UInt32.max) else { return [] }
         let window = max(1, Int(format.sampleRate * 0.1))
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(window)
+        ) else { return [] }
+
+        file.framePosition = start
+        var remaining = frames
         var result: [Float] = []
-        for offset in stride(from: 0, to: sampleCount, by: window) {
-            let upper = min(sampleCount, offset + window)
+        result.reserveCapacity(Int(frames) / window + 1)
+        let channelCount = Int(format.channelCount)
+
+        while remaining > 0 {
+            let chunk = AVAudioFrameCount(min(AVAudioFramePosition(window), remaining))
+            do {
+                try file.read(into: buffer, frameCount: chunk)
+            } catch {
+                break
+            }
+            guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { break }
+            let sampleCount = Int(buffer.frameLength)
             var energy: Float = 0
-            for index in offset..<upper {
+            for index in 0..<sampleCount {
                 for channel in 0..<channelCount {
                     let sample = channels[channel][index]
                     energy += sample * sample
                 }
             }
-            let count = Float((upper - offset) * channelCount)
+            let count = Float(sampleCount * channelCount)
             let rms = sqrt(energy / max(1, count))
             result.append(20 * log10(max(rms, 0.000_01)))
+            remaining -= AVAudioFramePosition(buffer.frameLength)
         }
         return result
     }

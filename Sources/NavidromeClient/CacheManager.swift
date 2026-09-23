@@ -297,6 +297,7 @@ public actor CacheManager {
     }
 
     private func evictIfNeeded() async {
+        await ensureTotals()
         // Per-kind limits — only scan a store when its counter exceeds the limit.
         for kind in CacheKind.allCases {
             let limit = kindLimit(kind)

@@ -35,6 +35,8 @@ struct SongRow: View {
     private var isStarred: Bool { app.isStarred(song) }
     private var isCurrentPlaying: Bool { isCurrent && app.player.isPlaying }
     private var starForeground: Color { AMColor.accent }
+    private var isNarrow: Bool { !showAlbum && !showsArtist }
+    private var rowCornerRadius: CGFloat { isNarrow ? 4 : 6 }
 
     /// Songs that context-menu bulk actions apply to.
     private var actionTargets: [SubsonicSong] {
@@ -67,15 +69,18 @@ struct SongRow: View {
                 trailingContent
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.vertical, isNarrow ? 2 : 5)
+            .frame(height: isNarrow ? 26 : nil)
             .background {
                 if isCurrent {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous).fill(AMColor.accent)
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(AMColor.accent)
                 } else if isSelected {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
                         .fill(AMColor.sidebarSelection.opacity(0.55))
                 } else if hovering {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06))
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
                 }
             }
             .contentShape(Rectangle())
@@ -143,7 +148,7 @@ struct SongRow: View {
                             .foregroundStyle(fgSecondary)
                     }
                 }
-                .frame(width: 22, alignment: .trailing)
+                .frame(width: 22, height: isNarrow ? 20 : nil, alignment: .trailing)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     if isCurrent {
@@ -221,7 +226,7 @@ struct SongRow: View {
                     }
                 } label: {
                     Image(systemName: isCachedLocally ? "checkmark.circle.fill" : "arrow.down.circle")
-                        .font(.system(size: 14))
+                        .font(.system(size: isNarrow ? 12 : 14))
                         .foregroundStyle(isCachedLocally ? AMColor.accent : Color.secondary)
                         .symbolEffect(.bounce, value: isCachedLocally)
                 }
@@ -229,17 +234,17 @@ struct SongRow: View {
                 .help(isCachedLocally ? "Удалить загрузку".localized : "Загрузить".localized)
                 .accessibilityLabel(isCachedLocally ? "Удалить загрузку".localized
                                                     : (isDownloading ? "Загрузка".localized : "Загрузить".localized))
-                .frame(width: 18, height: 18)
+                .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
                 .contentShape(Rectangle())
                 .transition(.opacity)
                 .accessibilityHidden(false)
             } else {
                 Color.clear
-                    .frame(width: 18, height: 18)
+                    .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
             }
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
-                    .font(.caption.monospacedDigit())
+                    .font((isNarrow ? Font.caption2 : Font.caption).monospacedDigit())
                     .foregroundStyle(fgSecondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -248,18 +253,15 @@ struct SongRow: View {
                 SongEllipsisMenu(song: song,
                                  foregroundStyle: isCurrent ? .white : .secondary,
                                  app: app,
-                                 extraMenuItems: extraMenuItems)
+                                 extraMenuItems: extraMenuItems,
+                                 compact: isNarrow)
                     .transition(.opacity)
             } else {
                 Color.clear
-                    .frame(width: 36, height: 28)
+                    .frame(width: isNarrow ? 28 : 36, height: isNarrow ? 20 : 28)
             }
         }
     }
-}
-
-private final class HoverTracker {
-    var isInside = false
 }
 
 extension SongRow: Equatable {

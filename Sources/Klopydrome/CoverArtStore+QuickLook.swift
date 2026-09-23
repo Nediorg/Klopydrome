@@ -25,10 +25,23 @@ extension CoverArtStore {
         return nil
     }
 
+    /// Dedicated directory inside system temp for exported cover files (e.g. Quick Look).
+    /// Cleaned on startup to prevent disk bloat.
+    static let tempCoversDirectory: URL = {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("KlopydromeCovers", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+            for item in items {
+                try? FileManager.default.removeItem(at: item)
+            }
+        }
+        return dir
+    }()
+
     /// Returns true if the full-resolution original cover is already cached on disk.
     func isFullCoverCached(coverArt: String?) async -> Bool {
         guard let coverArt, !coverArt.isEmpty else { return false }
-        let fullTempURL = FileManager.default.temporaryDirectory
+        let fullTempURL = Self.tempCoversDirectory
             .appendingPathComponent("cover-\(coverArt).jpg")
         if FileManager.default.fileExists(atPath: fullTempURL.path),
            let size = (try? fullTempURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), size > 0 {
@@ -46,7 +59,7 @@ extension CoverArtStore {
         guard let coverArt, !coverArt.isEmpty else { return nil }
 
         // 1. If full-resolution cover was already copied to temp, return it.
-        let fullTempURL = FileManager.default.temporaryDirectory
+        let fullTempURL = Self.tempCoversDirectory
             .appendingPathComponent("cover-\(coverArt).jpg")
         if FileManager.default.fileExists(atPath: fullTempURL.path),
            let size = (try? fullTempURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), size > 0 {
@@ -62,7 +75,7 @@ extension CoverArtStore {
         }
 
         // 3. If thumbnail was already copied to temp, return it.
-        let thumbTempURL = FileManager.default.temporaryDirectory
+        let thumbTempURL = Self.tempCoversDirectory
             .appendingPathComponent("cover-thumb-\(coverArt).jpg")
         if FileManager.default.fileExists(atPath: thumbTempURL.path),
            let size = (try? thumbTempURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), size > 0 {
@@ -79,7 +92,7 @@ extension CoverArtStore {
            let tiffData = image.tiffRepresentation,
            let bitmap = NSBitmapImageRep(data: tiffData),
            let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.9]) {
-            let memTempURL = FileManager.default.temporaryDirectory
+            let memTempURL = Self.tempCoversDirectory
                 .appendingPathComponent("cover-preview-\(coverArt).jpg")
             try? jpegData.write(to: memTempURL, options: .atomic)
             return memTempURL
@@ -87,5 +100,34 @@ extension CoverArtStore {
 
         // 6. Cold fallback: fetch original full-resolution cover from server.
         return await fullCoverFileURL(coverArt: coverArt)
+    }
+
+    /// File URL for the already-cached thumbnail (no network). Copied to a
+    /// temp `.jpg` so Quick Look recognises it as image (cached file is `.img`).
+    func cachedThumbnailFileURL(coverArt: String?, displayPixels: Int) async -> URL? {
+        guard let coverArt, !coverArt.isEmpty, let cache else { return nil }
+        let requested = coverResolution.requestedSize(forDisplayPixels: displayPixels)
+        let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: requested ?? 0)
+        guard let data = await cache.readData(for: .covers, key: cacheKey) else { return nil }
+        let tmp = Self.tempCoversDirectory
+            .appendingPathComponent("cover-thumb-\(coverArt).jpg")
+        try? data.write(to: tmp, options: .atomic)
+        return tmp
+    }
+
+    /// File URL for the full-resolution cover, downloading it if needed. Copied
+    /// to a temp `.jpg` so Quick Look recognises it as image.
+    func fullCoverFileURL(coverArt: String?) async -> URL? {
+        guard let coverArt, !coverArt.isEmpty else { return nil }
+        let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: 0)
+        if let cache, !(await cache.hasFile(for: .covers, key: cacheKey)) {
+            _ = await resolveCover(coverArt: coverArt, size: nil)
+        }
+        guard let cache, await cache.hasFile(for: .covers, key: cacheKey),
+              let data = await cache.readData(for: .covers, key: cacheKey) else { return nil }
+        let tmp = Self.tempCoversDirectory
+            .appendingPathComponent("cover-\(coverArt).jpg")
+        try? data.write(to: tmp, options: .atomic)
+        return tmp
     }
 }

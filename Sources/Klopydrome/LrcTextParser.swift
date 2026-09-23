@@ -13,20 +13,27 @@ import NavidromeClient
 enum LrcTextParser {
     static func parse(_ text: String) -> [SyncedLine] {
         var offsetMs: Double?
-        for line in text.split(separator: "\n") {
-            if let offset = Self.parseOffset(from: line) {
+        var rawLines: [(starts: [Double], text: Substring)] = []
+
+        text.enumerateLines { line, _ in
+            let lineSub = line[...]
+            if let offset = Self.parseOffset(from: lineSub) {
                 offsetMs = offset
+                return
             }
+            let starts = Self.parseTimestamps(from: lineSub)
+            guard !starts.isEmpty else { return }
+            let value = Self.textAfterMarkers(in: lineSub)
+            rawLines.append((starts, value))
         }
 
+        let effectiveOffset = offsetMs ?? 0
         var timed: [SyncedLine] = []
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let starts = Self.parseTimestamps(from: line)
-            guard !starts.isEmpty else { continue }
-            let value = Self.textAfterMarkers(in: line).trimmingCharacters(in: .whitespaces)
+        timed.reserveCapacity(rawLines.count)
+        for (starts, value) in rawLines {
+            let trimmed = value.trimmingCharacters(in: .whitespaces)
             for start in starts {
-                let shifted = start - (offsetMs ?? 0)
-                timed.append(SyncedLine(start: shifted, value: value))
+                timed.append(SyncedLine(start: start - effectiveOffset, value: trimmed))
             }
         }
         return timed

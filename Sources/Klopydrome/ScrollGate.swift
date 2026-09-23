@@ -52,3 +52,9 @@ final class ScrollGate {
         }
     }
 }
+
+/// Reference-type tracker for cursor presence, avoiding SwiftUI view invalidation
+/// during raw mouse enter/exit events while scrolling is active.
+final class HoverTracker {
+    var isInside = false
+}

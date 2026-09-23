@@ -330,6 +330,7 @@ struct SongEllipsisMenu: View {
     var foregroundStyle: Color = .secondary
     var app: AppState?
     var extraMenuItems: (() -> AnyView)?
+    var compact: Bool = false
 
     @Environment(AppState.self) private var envApp
 
@@ -343,9 +344,9 @@ struct SongEllipsisMenu: View {
             SongActionItems(app: resolvedApp, song: song, selection: [song])
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: compact ? 12 : 14, weight: .medium))
                 .foregroundStyle(foregroundStyle)
-                .frame(width: 36, height: 28)
+                .frame(width: compact ? 28 : 36, height: compact ? 20 : 28)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)

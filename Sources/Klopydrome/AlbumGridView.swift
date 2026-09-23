@@ -137,6 +137,7 @@ struct AlbumGridView: View {
                                         app.openAlbumInLibrary(album)
                                     } label: {
                                         AlbumCard(album: album, width: cardWidth, reservesTitleLines: true)
+                                            .equatable()
                                     }
                                     .buttonStyle(.plain)
                                 }

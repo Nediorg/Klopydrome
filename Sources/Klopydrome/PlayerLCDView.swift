@@ -240,9 +240,17 @@ struct TopTrailingControlsView: View {
     var body: some View {
         HStack(spacing: 2) {
             if let song {
-                NowPlayingEllipsisMenu(song: song)
-                    .opacity(nowHovered ? 1 : 0)
-                    .allowsHitTesting(nowHovered)
+                if nowHovered {
+                    NowPlayingEllipsisMenu(song: song)
+                        .transition(.opacity)
+                } else {
+                    Color.clear
+                        .frame(
+                            width: Self.actionButtonSide - 4,
+                            height: Self.actionButtonSide - 4
+                        )
+                        .padding(.trailing, 3)
+                }
             }
 
             Button {
