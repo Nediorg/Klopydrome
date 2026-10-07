@@ -21,30 +21,30 @@ struct AlbumDetailView: View {
         songs.contains { PlaybackFormat.isLossless($0.suffix) }
     }
 
+    @State private var loadError: String?
+
     var body: some View {
-        Group {
-            if detail != nil || loading {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        header(displayedDetail)
-                        if songs.isEmpty && loading {
-                            skeletonRows
-                        } else {
-                            trackList(displayedDetail)
-                        }
-                        if let artistId = displayedDetail.artistId ?? album.artistId,
-                           let name = displayedDetail.artist ?? album.artist, !artistId.isEmpty {
-                            MoreByArtist(artistId: artistId, artistName: name)
-                                .padding(.top, 8)
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                header(displayedDetail)
+                if songs.isEmpty && loading {
+                    skeletonRows
+                } else if songs.isEmpty, let loadError {
+                    emptyErrorState(loadError)
+                } else {
+                    if let loadError {
+                        inlineErrorNotice(loadError)
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
+                    trackList(displayedDetail)
                 }
-            } else {
-                ContentUnavailableView("Альбом недоступен", systemImage: "rectangle.slash")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let artistId = displayedDetail.artistId ?? album.artistId,
+                   let name = displayedDetail.artist ?? album.artist, !artistId.isEmpty {
+                    MoreByArtist(artistId: artistId, artistName: name)
+                        .padding(.top, 8)
+                }
             }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: LoadID(albumID: album.id, offlineSession: app.isOfflineSession)) {
@@ -289,8 +289,53 @@ struct AlbumDetailView: View {
             footer(detail)
         }
     }
+}
 
-    private func footer(_ detail: AlbumDetail) -> some View {
+// MARK: - Load & Helpers
+
+extension AlbumDetailView {
+    func emptyErrorState(_ error: String) -> some View {
+        ContentUnavailableView {
+            Label("Не удалось загрузить треки".localized, systemImage: "exclamationmark.triangle")
+        } description: {
+            Text(error)
+        } actions: {
+            Button("Повторить".localized) {
+                Task { await load() }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 40)
+        .padding(.bottom, 60)
+    }
+
+    func inlineErrorNotice(_ error: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.orange)
+            Text(error)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            Button("Повторить".localized) {
+                Task { await load() }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    func footer(_ detail: AlbumDetail) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             let total = songs.reduce(0) { $0 + ($1.duration ?? 0) }
             Text("\(songs.count) \(Pluralized.song(songs.count)) · \(Player.format(seconds: Double(total)))")
@@ -303,28 +348,39 @@ struct AlbumDetailView: View {
         .padding(.top, 4)
     }
 
-    private var createdDate: String? {
+    var createdDate: String? {
         SubsonicDate.longDate(detail?.created)
     }
 
-    private func load() async {
+    func load() async {
         let albumID = album.id
         let isOffline = app.isOfflineSession
-        detail = nil
         loading = true
+        loadError = nil
         defer {
             if !Task.isCancelled { loading = false }
         }
 
         if isOffline {
-            detail = await app.offlineAlbumDetail(for: albumID)
+            let offline = await app.offlineAlbumDetail(for: albumID)
+            if !Task.isCancelled {
+                detail = offline
+            }
             return
         }
         guard let client = app.client else { return }
-        let loadedDetail = try? await client.getAlbum(id: albumID)
-        guard !Task.isCancelled else { return }
-        detail = loadedDetail
-        if let loadedDetail { await app.persistOfflineAlbumDetail(loadedDetail) }
+        do {
+            let loadedDetail = try await client.getAlbum(id: albumID)
+            guard !Task.isCancelled else { return }
+            detail = loadedDetail
+            await app.persistOfflineAlbumDetail(loadedDetail)
+        } catch {
+            guard !Task.isCancelled else { return }
+            if detail == nil {
+                detail = await app.offlineAlbumDetail(for: albumID)
+            }
+            loadError = error.localizedDescription
+        }
     }
 }
 

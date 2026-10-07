@@ -15,12 +15,16 @@ struct PlaylistLoadState {
     var isComplete = false
     var error: String?
 
-    init(summary: PlaylistSummary) {
+    init(summary: PlaylistSummary, existing: PlaylistLoadState? = nil) {
         changed = summary.changed
         songCount = summary.songCount
+        detail = existing?.detail
+        songs = existing?.songs ?? []
     }
 
     func matches(_ summary: PlaylistSummary) -> Bool {
-        changed == summary.changed && songCount == summary.songCount
+        // As long as it's the same logical playlist state or in the middle of loading,
+        // match it so the view doesn't flicker or lose cached/loaded tracks.
+        (changed == summary.changed && songCount == summary.songCount) || !songs.isEmpty
     }
 }

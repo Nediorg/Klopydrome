@@ -3,7 +3,7 @@ import NavidromeClient
 
 struct PlaylistDetailView: View {
     let playlist: PlaylistSummary
-    @Environment(AppState.self) private var app
+    @Environment(AppState.self) var app
 
     private enum ActiveEditor: Identifiable {
         case playlist(PlaylistSummary)
@@ -19,7 +19,7 @@ struct PlaylistDetailView: View {
 
     @State private var activeEditor: ActiveEditor?
     @State private var confirmingDelete = false
-    @State private var isPreparingPlayback = false
+    @State var isPreparingPlayback = false
 
     /// The shared loader retains every song for Player, but SwiftUI only builds a
     /// bounded prefix. A large playlist can therefore begin playing without its
@@ -41,25 +41,18 @@ struct PlaylistDetailView: View {
     }
 
     var body: some View {
-        Group {
-            if state?.detail == nil, let loadError, !loading {
-                ContentUnavailableView {
-                    Label("Плейлист недоступен", systemImage: "music.note.list")
-                } description: {
-                    Text(loadError)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                header(currentDetail)
+                    .padding(.bottom, 28)
+                if let loadError, !rows.isEmpty {
+                    inlineErrorNotice(loadError)
+                        .padding(.bottom, 16)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        header(currentDetail)
-                            .padding(.bottom, 28)
-                        songList(currentDetail)
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
-                }
+                songList(currentDetail)
             }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: playlist.id) {
@@ -220,6 +213,8 @@ struct PlaylistDetailView: View {
         let allSongs = rows
         if rows.isEmpty && loading {
             skeletonRows
+        } else if rows.isEmpty, let loadError {
+            emptyErrorState(loadError)
         } else {
             ForEach(Array(displayedSongs.enumerated()), id: \.offset) { index, song in
                 SongRow(
@@ -278,34 +273,6 @@ struct PlaylistDetailView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             Divider().opacity(0.3)
-        }
-    }
-
-    private func startPlayback(shuffled: Bool) async {
-        isPreparingPlayback = true
-        defer { isPreparingPlayback = false }
-        if shuffled {
-            await app.playShuffled(playlist)
-        } else {
-            await app.play(playlist)
-        }
-    }
-
-    private func remove(at index: Int, from detail: PlaylistDetail) {
-        guard let client = app.client else { return }
-        Task {
-            try? await client.updatePlaylist(id: detail.id, removeIndexes: [index])
-            app.invalidatePlaylistDetail(for: detail.id)
-            app.loadPlaylistIfNeeded(playlist, forceReload: true)
-        }
-    }
-
-    private func delete(_ detail: PlaylistDetail) {
-        guard let client = app.client else { return }
-        Task {
-            try? await client.deletePlaylist(id: detail.id)
-            app.invalidatePlaylistDetail(for: detail.id)
-            await app.refreshPlaylists()
         }
     }
 }

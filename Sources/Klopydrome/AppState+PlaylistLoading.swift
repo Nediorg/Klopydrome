@@ -15,10 +15,12 @@ extension AppState {
     /// playback actions. Repeated callers join the existing request instead of
     /// opening another `getPlaylist` connection.
     func loadPlaylistIfNeeded(_ playlist: PlaylistSummary, forceReload: Bool = false) {
+        let existing = playlistLoadStates[playlist.id]
         if forceReload {
-            cancelPlaylistLoad(for: playlist.id)
-        }
-        if let state = playlistLoadState(for: playlist), state.isLoading || state.isComplete {
+            playlistLoadTasks[playlist.id]?.cancel()
+            playlistLoadTasks[playlist.id] = nil
+            playlistLoadTokens[playlist.id] = nil
+        } else if let state = playlistLoadState(for: playlist), state.isLoading || state.isComplete {
             return
         }
         if !forceReload, let cached = cachedPlaylistDetail(for: playlist) {
@@ -33,7 +35,7 @@ extension AppState {
                     }
                 } else {
                     await MainActor.run {
-                        var state = PlaylistLoadState(summary: playlist)
+                        var state = PlaylistLoadState(summary: playlist, existing: existing)
                         state.isLoading = false
                         self.playlistLoadStates[playlist.id] = state
                     }
@@ -42,15 +44,16 @@ extension AppState {
             return
         }
         guard let client else {
-            playlistLoadStates[playlist.id] = PlaylistLoadState(summary: playlist)
+            playlistLoadStates[playlist.id] = PlaylistLoadState(summary: playlist, existing: existing)
             return
         }
 
         let id = playlist.id
         let token = UUID()
         playlistLoadTokens[id] = token
-        var state = PlaylistLoadState(summary: playlist)
+        var state = PlaylistLoadState(summary: playlist, existing: existing)
         state.isLoading = true
+        state.error = nil
         playlistLoadStates[id] = state
         playlistLoadTasks[id] = Task { [weak self, client] in
             await self?.streamPlaylist(playlist, client: client, token: token)
@@ -163,6 +166,10 @@ extension AppState {
         } catch {
             guard playlistLoadTokens[id] == token, !Task.isCancelled else { return }
             var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
+            if state.songs.isEmpty, let offline = await offlinePlaylistDetail(for: id) {
+                state.detail = offline
+                state.songs = offline.entry ?? []
+            }
             state.isLoading = false
             state.error = error.localizedDescription
             playlistLoadStates[id] = state
@@ -214,5 +221,17 @@ extension AppState {
             validUntil: source.validUntil,
             entry: songs
         )
+    }
+
+    /// Debug helper for Developer Mode: simulates a network error on the specified playlist
+    func simulatePlaylistLoadError(for playlistID: String, message: String = "The request timed out.") {
+        cancelPlaylistLoad(for: playlistID)
+        if let summary = library.playlists.first(where: { $0.id == playlistID }) ?? nav.selectedPlaylist {
+            var state = PlaylistLoadState(summary: summary)
+            state.isLoading = false
+            state.error = message
+            state.songs = []
+            playlistLoadStates[playlistID] = state
+        }
     }
 }

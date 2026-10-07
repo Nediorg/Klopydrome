@@ -3,6 +3,7 @@ import AppKit
 
 struct AppCommandMenus: Commands {
     let app: AppState
+    @AppStorage("debugShowPlayerState") private var isDeveloperMode = false
 
     @CommandsBuilder
     var body: some Commands {
@@ -15,6 +16,11 @@ struct AppCommandMenus: Commands {
             }
             .keyboardShortcut("r", modifiers: [.command, .option])
             .disabled(!app.isConnected || app.isOfflineSession || app.isServerScanning)
+
+            if isDeveloperMode {
+                Divider()
+                developerMenuSection
+            }
         }
         playbackMenu
         controlsMenu
@@ -229,5 +235,40 @@ struct AppCommandMenus: Commands {
             .version: build,
             .credits: credits
         ])
+    }
+
+    @ViewBuilder
+    private var developerMenuSection: some View {
+        Menu("Developer Tools") {
+            Button("Simulate Error on Current Playlist") {
+                let current = app.nav.history.last ?? app.nav.selectedPlaylist.map { .playlist($0) }
+                if case .playlist(let summary) = current {
+                    app.simulatePlaylistLoadError(for: summary.id, message: "The request timed out (Simulated).")
+                }
+            }
+
+            Button("Force Reload Current View") {
+                let current = app.nav.history.last ?? app.nav.selectedPlaylist.map { .playlist($0) }
+                if case .playlist(let summary) = current {
+                    app.loadPlaylistIfNeeded(summary, forceReload: true)
+                }
+            }
+
+            Divider()
+
+            Button("Clear All Playlist Load States") {
+                app.cancelPlaylistLoads()
+            }
+
+            Button("Clear Image & Metadata In-Memory Cache") {
+                CoverArtStore.shared.clearMemoryCache()
+            }
+
+            Divider()
+
+            Button("Drop Active Server Connection") {
+                app.disconnect()
+            }
+        }
     }
 }
