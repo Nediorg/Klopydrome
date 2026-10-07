@@ -69,7 +69,8 @@ struct SongRow: View {
                 leadingContent
                 trailingContent
             }
-            .padding(.horizontal, 8)
+            .padding(.leading, showAlbum ? 5 : 8)
+            .padding(.trailing, 8)
             .padding(.vertical, isNarrow ? 2 : 5)
             .frame(height: isNarrow ? 26 : nil)
             .background {
@@ -131,7 +132,7 @@ struct SongRow: View {
 
     @ViewBuilder
     private var leadingContent: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: showAlbum ? 8 : 10) {
             if !showAlbum {
                 ZStack {
                     if isCurrent {
