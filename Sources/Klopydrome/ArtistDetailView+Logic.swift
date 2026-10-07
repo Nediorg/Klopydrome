@@ -90,4 +90,56 @@ extension ArtistDetailView {
             return (firstSong.track ?? 0) < (secondSong.track ?? 0)
         }
     }
+
+    func loadOfflineArtist() {
+        let artistID = artist.id
+        let artistName = artist.name
+
+        var allOfflineSongs = app.downloadedSongs
+        let playlistSongs = app.library.playlistDetails.values.compactMap(\.entry).flatMap { $0 }
+        let knownIDs = Set(allOfflineSongs.map(\.id))
+        for song in playlistSongs where !knownIDs.contains(song.id) {
+            allOfflineSongs.append(song)
+        }
+
+        let matchingSongs = allOfflineSongs.filter { song in
+            song.artistId == artistID ||
+            song.albumArtistId == artistID ||
+            (song.artist?.localizedCaseInsensitiveCompare(artistName) == .orderedSame) ||
+            (song.albumArtist?.localizedCaseInsensitiveCompare(artistName) == .orderedSame)
+        }
+
+        let matchingAlbums = app.library.albums.filter { album in
+            album.artistId == artistID ||
+            (album.artist?.localizedCaseInsensitiveCompare(artistName) == .orderedSame)
+        }
+
+        let guestAlbumIDs = Set(matchingSongs.compactMap { song -> String? in
+            let isLead = song.artistId == artistID ||
+                         song.albumArtistId == artistID ||
+                         (song.albumArtist?.localizedCaseInsensitiveCompare(artistName) == .orderedSame)
+            if !isLead, let albId = song.albumId ?? song.parent {
+                return albId
+            }
+            return nil
+        })
+        let guestAlbums = app.library.albums.filter { album in
+            guestAlbumIDs.contains(album.id) && !matchingAlbums.contains(where: { $0.id == album.id })
+        }
+
+        allSongs = matchingSongs
+        topSongs = Array(sortTopSongs(matchingSongs).prefix(27))
+        appearsOn = guestAlbums
+
+        let cover = matchingAlbums.first?.coverArt ?? matchingSongs.first?.coverArt ?? artist.artistImageUrl
+
+        detail = ArtistDetail(
+            id: artistID,
+            name: artistName,
+            coverArt: cover,
+            albumCount: matchingAlbums.count,
+            artistImageUrl: artist.artistImageUrl,
+            album: matchingAlbums
+        )
+    }
 }

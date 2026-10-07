@@ -13,9 +13,25 @@ struct SidebarView: View {
         case playlistID(String)
     }
 
-    @State private var selection: Selection?
     @State private var activeSheet: SidebarSheet?
     @State private var confirmingDeleteID: String?
+
+    private var currentSelection: Selection {
+        if let playlist = app.nav.selectedPlaylist {
+            return .playlistID(playlist.id)
+        }
+        return .section(app.nav.selected)
+    }
+
+    private var selectionBinding: Binding<Selection?> {
+        Binding(
+            get: { currentSelection },
+            set: { newValue in
+                guard let newValue else { return }
+                select(newValue)
+            }
+        )
+    }
 
     /// Presentations owned by the sidebar. Merged into one `.sheet(item:)`
     /// because SwiftUI only honours the last `.sheet` modifier on a view.
@@ -38,18 +54,12 @@ struct SidebarView: View {
     private var playlists: [PlaylistSummary] { app.library.playlists }
 
     var body: some View {
-        List(selection: $selection) {
+        List(selection: selectionBinding) {
             Section {
                 sidebarRow("Главная", .home)
             }
 
-            Section("Медиатека".localized) {
-                sidebarRow("Недавно добавленные", .recentlyAdded)
-                sidebarRow("Артисты", .artists)
-                sidebarRow("Альбомы", .albums)
-                sidebarRow("Песни", .songs)
-                sidebarRow("Избранное", .favorites)
-            }
+            SidebarLibrarySection(selection: currentSelection, select: select)
 
             Section {
                 Button {
@@ -57,7 +67,7 @@ struct SidebarView: View {
                 } label: {
                     playlistRow("Все плейлисты",
                                 icon: icon(for: .playlists),
-                                isSelected: selection == .section(.playlists))
+                                isSelected: currentSelection == .section(.playlists))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                 }
@@ -71,7 +81,7 @@ struct SidebarView: View {
                     } label: {
                         playlistRow(playlist.displayName,
                                     icon: playlist.isSmart ? "gearshape" : "music.note.list",
-                                    isSelected: selection == .playlistID(playlist.id))
+                                    isSelected: currentSelection == .playlistID(playlist.id))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
@@ -93,33 +103,35 @@ struct SidebarView: View {
                     .contextMenu { playlistContextMenu }
             }
 
-            Section {
-                ForEach(sharedPlaylists) { playlist in
-                    Button {
-                        select(.playlistID(playlist.id))
-                    } label: {
-                        playlistRow(playlist.displayName,
-                                    icon: "arrow.turn.down.right",
-                                    isSelected: selection == .playlistID(playlist.id))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .tag(Selection.playlistID(playlist.id))
-                    .contextMenu {
-                        PlaylistContextMenuItems(playlist: playlist) {
-                            beginRename(playlist)
-                        } onEditRules: {
-                            editRules(playlist)
-                        } onDelete: {
-                            confirmingDeleteID = playlist.id
+            if !sharedPlaylists.isEmpty {
+                Section {
+                    ForEach(sharedPlaylists) { playlist in
+                        Button {
+                            select(.playlistID(playlist.id))
+                        } label: {
+                            playlistRow(playlist.displayName,
+                                        icon: "arrow.turn.down.right",
+                                        isSelected: currentSelection == .playlistID(playlist.id))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .tag(Selection.playlistID(playlist.id))
+                        .contextMenu {
+                            PlaylistContextMenuItems(playlist: playlist) {
+                                beginRename(playlist)
+                            } onEditRules: {
+                                editRules(playlist)
+                            } onDelete: {
+                                confirmingDeleteID = playlist.id
+                            }
                         }
                     }
+                } header: {
+                    Text("Общие плейлисты".localized)
+                        .contextMenu { playlistContextMenu }
                 }
-            } header: {
-                Text("Общие плейлисты".localized)
-                    .contextMenu { playlistContextMenu }
             }
         }
         // Native macOS sidebar selection: the system draws the picked row as a
@@ -131,6 +143,27 @@ struct SidebarView: View {
         .contentMargins(.top, LayoutMetrics.trafficLightInset, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if app.isServerScanning {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Сканирование медиатеки…".localized)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(.ultraThinMaterial, ignoresSafeAreaEdges: .bottom)
+                }
+
+                if app.isOfflineSession {
+                    SidebarOfflineCard()
+                }
+            }
+        }
         .background(.thinMaterial, ignoresSafeAreaEdges: .all)
         .navigationSplitViewColumnWidth(
             min: LayoutMetrics.sidebarMinWidth,
@@ -178,28 +211,6 @@ struct SidebarView: View {
         .submitLabel(.search)
         .onSubmit(of: .search) { submitSearch() }
         .task(id: app.isConnected) { await loadPlaylists() }
-        .onChange(of: selection) { _, newValue in
-            if let newValue { select(newValue) }
-        }
-        .onChange(of: app.nav.selected) { _, newSection in
-            if app.nav.selectedPlaylist == nil {
-                selection = .section(newSection)
-            }
-        }
-        .onChange(of: app.nav.selectedPlaylist) { _, newPlaylist in
-            if let newPlaylist {
-                selection = .playlistID(newPlaylist.id)
-            } else {
-                selection = .section(app.nav.selected)
-            }
-        }
-        .onAppear {
-            if let selectedPlaylist = app.nav.selectedPlaylist {
-                selection = .playlistID(selectedPlaylist.id)
-            } else {
-                selection = .section(app.nav.selected)
-            }
-        }
     }
 
     /// Applies a sidebar selection to app state and signals the detail column
@@ -207,7 +218,6 @@ struct SidebarView: View {
     /// explicit row tap and on List selection changes, so re-clicking the
     /// already-active item re-navigates instead of being ignored.
     private func select(_ newValue: Selection) {
-        selection = newValue
         applySelection(newValue)
         app.nav.history.removeAll()
         app.nav.navVersion += 1
@@ -255,21 +265,35 @@ struct SidebarView: View {
         activeSheet = .editServerSmartPlaylist(ServerSmartPlaylist(summary: playlist))
     }
 
+    private var username: String {
+        app.effectiveUsername
+    }
+
     /// Only the current user's own playlists render in the sidebar; curated and
     /// algorithmic collections owned by others are excluded.
     private var personalPlaylists: [PlaylistSummary] {
-        guard let username = app.client?.config.username, !username.isEmpty else {
+        guard !username.isEmpty else {
             return playlists
         }
-        return playlists.filter { $0.owner == nil || $0.owner == username }
+        return playlists.filter { playlist in
+            guard let owner = playlist.owner?.trimmingCharacters(in: .whitespacesAndNewlines), !owner.isEmpty else {
+                return true
+            }
+            return owner.localizedCaseInsensitiveCompare(username) == .orderedSame
+        }
     }
 
     /// Playlists owned by someone else (shared into the library).
     private var sharedPlaylists: [PlaylistSummary] {
-        guard let username = app.client?.config.username, !username.isEmpty else {
+        guard !username.isEmpty else {
             return []
         }
-        return playlists.filter { $0.owner != nil && $0.owner != username }
+        return playlists.filter { playlist in
+            guard let owner = playlist.owner?.trimmingCharacters(in: .whitespacesAndNewlines), !owner.isEmpty else {
+                return false
+            }
+            return owner.localizedCaseInsensitiveCompare(username) != .orderedSame
+        }
     }
 
     private func submitSearch() {
@@ -293,7 +317,7 @@ struct SidebarView: View {
     /// a size-only fix via `LabelStyle` forfeits the automatic accent/white
     /// tint (icon stays white), so the `isSelected` tint has to be explicit.
     private func sidebarRow(_ text: String, _ section: NavigationState.Section) -> some View {
-        let isSelected = selection == .section(section)
+        let isSelected = currentSelection == .section(section)
         return Button {
             select(.section(section))
         } label: {

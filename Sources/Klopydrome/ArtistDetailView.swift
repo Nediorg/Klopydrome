@@ -5,19 +5,14 @@ struct ArtistDetailView: View {
     let artist: Artist
     @Environment(AppState.self) var app
 
-    @State private var detail: ArtistDetail?
+    @State var detail: ArtistDetail?
     @State private var loading = true
-    @State private var topSongs: [SubsonicSong]?
+    @State var topSongs: [SubsonicSong]?
     /// Every song of the artist, fetched once by `load()` and reused by
     /// "Gather & Play" instead of issuing a duplicate request burst.
-    @State private var allSongs: [SubsonicSong] = []
+    @State var allSongs: [SubsonicSong] = []
     @State private var gatheringSongs = false
     @State private var artistInfo: ArtistInfoPayload?
-    /// The discography crawl, spawned in the background by `load()` so the page
-    /// renders the instant the (fast) artist info lands. Cancelled when this
-    /// view goes away. "Gather & Play" awaits it instead of issuing a fresh
-    /// request burst.
-    @State private var discographyTask: Task<Void, Never>?
     @State private var showInfoSheet = false
 
     /// Albums fetched concurrently at a time; keeps a big artist from issuing
@@ -27,7 +22,7 @@ struct ArtistDetailView: View {
     /// Sort chosen for the album shelf; defaults to release date.
     @State private var albumSort: ArtistAlbumSort = .release
     /// Albums this artist appears on without being the lead/album artist.
-    @State private var appearsOn: [SubsonicAlbum] = []
+    @State var appearsOn: [SubsonicAlbum] = []
     /// Expands the album shelf into a full grid when true; the header chevron toggles it.
     @State private var albumsExpanded = false
 /// Sort direction for the album shelf/grid (descending = newest first by default).
@@ -117,8 +112,7 @@ struct ArtistDetailView: View {
                 )
             }
         }
-        .task { await load() }
-        .onDisappear { discographyTask?.cancel() }
+        .task(id: "\(artist.id)|\(app.isOfflineSession)") { await load() }
     }
 
     private func appearsOnSection() -> some View {
@@ -156,12 +150,7 @@ struct ArtistDetailView: View {
         Task {
             defer { gatheringSongs = false }
             if allSongs.isEmpty {
-                // Reuse the in-flight background crawl if one is running;
-                // otherwise run it now.
-                await discographyTask?.value
-                if allSongs.isEmpty {
-                    allSongs = await allAlbumSongs()
-                }
+                allSongs = await allAlbumSongs()
             }
             if !allSongs.isEmpty { app.play(allSongs, at: 0) }
         }
@@ -188,22 +177,41 @@ struct ArtistDetailView: View {
     private func load() async {
         loading = true
         defer { loading = false }
+
+        if app.isOfflineSession || app.client == nil {
+            loadOfflineArtist()
+            return
+        }
+
         guard let client = app.client else { return }
 
         let (resolvedID, fetchedDetail) = await resolveArtistID(client: client)
         detail = fetchedDetail
         artistInfo = try? await client.getArtistInfo(id: resolvedID)
+        let name = detail?.name ?? artist.name
+
+        await loadTracks(client: client, resolvedID: resolvedID, name: name)
+
+        if appearsOn.isEmpty {
+            await loadAppearsOn(client: client)
+        }
+    }
+
+    private func loadTracks(client: SubsonicClient, resolvedID: String, name: String) async {
+        if !name.isEmpty,
+           let nativeTop = try? await client.getTopSongs(artist: name, artistId: resolvedID, count: 27),
+           !nativeTop.isEmpty {
+            topSongs = nativeTop
+            if allSongs.isEmpty { allSongs = nativeTop }
+            return
+        }
 
         if let cached = await app.cache?.cachedDiscography(for: artist.id) {
             allSongs = cached
             topSongs = Array(sortTopSongs(cached).prefix(27))
-            discographyTask?.cancel()
-            discographyTask = nil
-            await loadAppearsOn(client: client)
             return
         }
 
-        let name = detail?.name ?? artist.name
         if !name.isEmpty,
            let search = try? await client.search3(query: name, artistCount: 0, albumCount: 0, songCount: 500) {
             let (lead, guestAlbums) = processSearchSongs(search.songs, artistID: resolvedID, name: name)
@@ -212,23 +220,9 @@ struct ArtistDetailView: View {
                 topSongs = Array(sortTopSongs(lead).prefix(27))
                 await app.cache?.cacheDiscography(lead, for: artist.id)
             }
-            if !guestAlbums.isEmpty {
+            if !guestAlbums.isEmpty && appearsOn.isEmpty {
                 appearsOn = guestAlbums
             }
-        }
-
-        if allSongs.isEmpty && !albums.isEmpty {
-            discographyTask?.cancel()
-            discographyTask = Task {
-                await crawlDiscography()
-                if !Task.isCancelled, !allSongs.isEmpty {
-                    await app.cache?.cacheDiscography(allSongs, for: artist.id)
-                }
-            }
-        }
-
-        if appearsOn.isEmpty {
-            await loadAppearsOn(client: client)
         }
     }
 
@@ -390,40 +384,5 @@ private extension ArtistDetailView {
             await app.cache?.cacheDiscography(all, for: artist.id)
         }
         return all
-    }
-
-    /// Crawls every album's tracklist in batches of `albumBatchSize`, updating
-    /// `allSongs` and the top-songs shelf as each batch lands — the page stays
-    /// responsive and top songs appear before the crawl drains a large
-    /// discography.
-    func crawlDiscography() async {
-        guard let client = app.client else { return }
-        let ids = albums.map(\.id)
-        var results: [SubsonicSong] = []
-        var start = 0
-        while start < ids.count {
-            if Task.isCancelled { break }
-            let end = min(start + albumBatchSize, ids.count)
-            let batch = await withTaskGroup(of: [SubsonicSong].self) { group in
-                for id in ids[start..<end] {
-                    group.addTask {
-                        try? Task.checkCancellation()
-                        return (try? await client.getAlbum(id: id))?.song ?? []
-                    }
-                }
-                var chunk: [SubsonicSong] = []
-                for await songs in group {
-                    chunk.append(contentsOf: songs)
-                }
-                return chunk
-            }
-            results.append(contentsOf: batch)
-            if !Task.isCancelled {
-                allSongs = results
-                topSongs = Array(sortTopSongs(results).prefix(27))
-            }
-            start = end
-            await Task.yield()
-        }
     }
 }

@@ -5,7 +5,12 @@ import NavidromeClient
 struct ArtistsView: View {
     @Environment(AppState.self) private var app
 
-    private var indexes: [ArtistIndex] { app.library.artistIndexes }
+    private var indexes: [ArtistIndex] {
+        if app.isOfflineSession {
+            return app.offlineArtistIndexes(from: app.downloadedSongs)
+        }
+        return app.library.artistIndexes
+    }
 
     @State private var loading = true
     /// Set when the index fetch fails, so an error renders with retry instead
@@ -34,7 +39,11 @@ struct ArtistsView: View {
                                     app.openArtistInLibrary(artist)
                                 } label: {
                                     HStack {
-                                        CircularArtistArt(name: artist.name, imageURL: artist.artistImageUrl)
+                                        CircularArtistArt(
+                                            name: artist.name,
+                                            imageURL: artist.artistImageUrl,
+                                            coverArt: artist.coverArt ?? app.coverArtForArtist(artist)
+                                        )
                                         Text(artist.name)
                                         Spacer()
                                         if let count = artist.albumCount {
@@ -57,8 +66,16 @@ struct ArtistsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { await loadIfNeeded() }
-        .refreshable { await load() }
+        .task(id: "\(app.isConnected)|\(app.isOfflineSession)|\(app.nav.navVersion)") {
+            await loadIfNeeded()
+        }
+        .refreshable {
+            if app.isOfflineSession {
+                _ = await app.reconnect()
+            } else {
+                await load()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
             if loadError != nil {
                 Task { await load() }
@@ -69,12 +86,27 @@ struct ArtistsView: View {
     /// Fetches the artist index only when it has never been loaded, so a revisit
     /// to the tab is instant. Pull-to-refresh still forces a full reload.
     private func loadIfNeeded() async {
-        guard !app.library.artistIndexesLoaded else { return }
+        if app.isOfflineSession {
+            loading = false
+            return
+        }
+        guard app.client != nil else { return }
+        guard !app.library.artistIndexesLoaded else {
+            loading = false
+            return
+        }
         await load()
     }
 
     private func load() async {
-        guard let client = app.client else { return }
+        if app.isOfflineSession {
+            loading = false
+            return
+        }
+        guard let client = app.client else {
+            loading = false
+            return
+        }
         if app.library.artistIndexes.isEmpty { loading = true }
         defer { loading = false }
         do {
@@ -83,15 +115,25 @@ struct ArtistsView: View {
             app.library.artistIndexes = fresh
             app.library.artistIndexesLoaded = true
         } catch {
-            if app.library.artistIndexes.isEmpty { loadError = error.localizedDescription }
+            if app.library.artistIndexes.isEmpty {
+                loadError = error.localizedDescription
+            }
         }
     }
 }
 
 struct CircularArtistArt: View {
     let name: String
-    var imageURL: String? = nil
-    var size: CGFloat = 40
+    var imageURL: String?
+    var coverArt: String?
+    var size: CGFloat
+
+    init(name: String, imageURL: String? = nil, coverArt: String? = nil, size: CGFloat = 40) {
+        self.name = name
+        self.imageURL = imageURL
+        self.coverArt = coverArt
+        self.size = size
+    }
 
     @State private var image: NSImage?
     /// Same foreground-retry nonce as cover tiles: re-fires the task below
@@ -110,6 +152,8 @@ struct CircularArtistArt: View {
                 Image(nsImage: img)
                     .resizable()
                     .scaledToFill()
+            } else if let cover = coverArt, !cover.isEmpty {
+                CoverArtView(coverArt: cover, size: size, cornerRadius: size / 2)
             } else {
                 Text(initial)
                     .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
