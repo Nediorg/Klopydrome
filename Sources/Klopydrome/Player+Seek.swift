@@ -25,6 +25,7 @@ extension Player {
 
         if engineKind == .mpv {
             heldSeekTarget = clamped
+            heldSeekTargetTimestamp = CFAbsoluteTimeGetCurrent()
             guard mpvEngine.isLoaded else {
                 pendingSeekTime = clamped
                 currentTime = clamped
@@ -34,7 +35,11 @@ extension Player {
                 setTranscodeSeek(to: clamped)
                 return
             }
-            currentTime = mpvEngine.seek(to: clamped)
+            currentTime = clamped
+            let accepted = mpvEngine.seek(to: clamped)
+            if !accepted {
+                pendingSeekTime = clamped
+            }
             return
         }
 
@@ -65,11 +70,19 @@ extension Player {
         }
     }
 
-    /// Applies a seek that was requested before the track finished loading.
+    /// Applies a seek that was requested before the track finished loading or buffering.
     func applyPendingSeekIfNeeded() {
-        guard let pendingSeekTime else { return }
-        self.pendingSeekTime = nil
-        seek(to: pendingSeekTime)
+        if let pendingSeekTime {
+            self.pendingSeekTime = nil
+            seek(to: pendingSeekTime)
+            return
+        }
+        if engineKind == .mpv, mpvEngine.isLoaded, !mpvEngine.isBuffering {
+            let target = heldSeekTarget ?? currentTime
+            if target > 1.0, abs(target - mpvRealPosition) > 1.0 {
+                seek(to: target)
+            }
+        }
     }
 
     /// Begin a scrub session: the time observer stops reporting so the drag
@@ -90,7 +103,9 @@ extension Player {
             // move the preview; `endScrub` commits the real reposition.
             // On remote transcodes, live scrubbing against a non-seekable pipe
             // is not supported; hold the preview and commit on release.
-            if engineKind == .mpv, !mpvEngine.isLoaded { pendingSeekTime = clamped }
+            if engineKind == .mpv, !mpvEngine.isLoaded || mpvEngine.isBuffering || !mpvEngine.isSeekable {
+                pendingSeekTime = clamped
+            }
             if engineKind != .mpv, avPlayer.currentItem == nil { pendingSeekTime = clamped }
             return
         }
@@ -128,6 +143,7 @@ extension Player {
         } else {
             avPlayer.pause()
         }
+        isBuffering = false
         isPlaying = false
         updateNowPlayingInfo()
     }
@@ -142,7 +158,7 @@ extension Player {
         if engineKind == .mpv {
             if mpvEngine.isLoaded {
                 mpvEngine.play()
-            } else {
+            } else if !isLoading {
                 onTrackRequest?(song)
             }
             if automix.activeCrossfade != nil { automix.preloadedMPVEngine.play() }

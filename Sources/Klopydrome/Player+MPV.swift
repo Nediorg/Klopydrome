@@ -21,8 +21,8 @@ extension Player {
                     // `load` (previous track's duration or 0). `trackDuration`
                     // falls back to `currentSong.duration` until mpv reports the
                     // real `duration` via the property-change event.
-                    self.isBuffering = false
-                    self.isLoading = false
+                    self.isBuffering = self.isPlaying ? self.mpvEngine.isBuffering : false
+                    if self.mpvEngine.isLoaded { self.isLoading = false }
                     if self.mpvSeekRestartActive {
                         // A transcode seek restart: the fresh pipe is already
                         // streaming from the target offset on the server.
@@ -70,49 +70,67 @@ extension Player {
         mpvEngine.onStreamRecordFinished = { [weak self] url in
             self?.onStreamRecordFinished?(url)
         }
-        mpvEngine.onTimeUpdate = { [weak self] seconds in
+        mpvEngine.onFileLoaded = { [weak self] in
             Task { @MainActor in
                 guard let self, self.engineKind == .mpv else { return }
-                // Resolve the pipe-relative engine clock against the absolute
-                // stream start (0 for normal loads, the restart offset after a
-                // live-transcode seek), so timers/lyrics/scrubber and the
-                // preload/crossfade triggers always see real track seconds.
-                let display = seconds + self.mpvStreamOffset
-                if !self.isScrubbing && !self.isSeekInFlight {
-                    // Before a restart's fresh pipe is loaded and stepped, a
-                    // tick is either the old pipe's pre-restart position or the
-                    // newborn pipe's 0 — offset by the new start they read as a
-                    // far-forward target and would release the held clock.
-                    // Ignore them; only the stepped pipe's clock is real.
-                    if self.mpvSeekRestartActive && !self.mpvRestartStepped {
-                        // keep currentTime at the held target
-                    } else if let held = self.heldSeekTarget {
-                        // Hold a seeked target on screen until the real position
-                        // catches up, so a fresh load or a restart can't snap the
-                        // timeline back to 0 (or the pre-seek spot).
-                        if abs(display - held) <= 1.0 || display >= held {
-                            self.heldSeekTarget = nil
-                            self.currentTime = display
-                        } else if self.currentTime < held {
-                            self.currentTime = held
-                        }
-                    } else {
-                        self.currentTime = display
-                    }
+                self.isLoading = false
+                if self.isPlaying {
+                    self.mpvEngine.play()
+                } else {
+                    self.mpvEngine.pause()
                 }
-                self.duration = self.mpvEngine.duration > 0
-                    ? self.mpvEngine.duration + self.mpvStreamOffset
-                    : 0
-                self.reportNowPlayingSecond(display)
-                self.evaluateNextTrackPreload(at: display)
-                self.evaluateAutomixCrossfade(at: display)
-                // Rapid seeks during a transcode-restart buffering are coalesced
-                // into `pendingSeekTime`; apply them once the pipe is playing
-                // again (isBuffering clears on the first time-pos tick).
-                if self.mpvSeekRestartActive {
+                self.applyPendingSeekIfNeeded()
+                self.updateNowPlayingInfo()
+            }
+        }
+        mpvEngine.onSeekableUpdate = { [weak self] seekable in
+            Task { @MainActor in
+                guard let self, self.engineKind == .mpv else { return }
+                if seekable {
                     self.applyPendingSeekIfNeeded()
                 }
             }
+        }
+        mpvEngine.onBufferingUpdate = { [weak self] buffering in
+            Task { @MainActor in
+                guard let self, self.engineKind == .mpv else { return }
+                self.isBuffering = buffering
+                if !buffering {
+                    self.applyPendingSeekIfNeeded()
+                }
+            }
+        }
+        mpvEngine.onTimeUpdate = { [weak self] seconds in
+            Task { @MainActor in
+                self?.handleMPVTimeUpdate(seconds)
+            }
+        }
+    }
+
+    private func handleMPVTimeUpdate(_ seconds: Double) {
+        guard engineKind == .mpv else { return }
+        let display = seconds + mpvStreamOffset
+        if !isScrubbing && !isSeekInFlight {
+            if mpvSeekRestartActive && !mpvRestartStepped {
+                // keep currentTime at the held target
+            } else if let held = heldSeekTarget {
+                let elapsed = CFAbsoluteTimeGetCurrent() - heldSeekTargetTimestamp
+                if abs(display - held) <= 1.0 || display >= held || elapsed > 3.0 {
+                    heldSeekTarget = nil
+                    currentTime = display
+                } else if currentTime < held {
+                    currentTime = held
+                }
+            } else {
+                currentTime = display
+            }
+        }
+        duration = mpvEngine.duration > 0 ? mpvEngine.duration + mpvStreamOffset : 0
+        reportNowPlayingSecond(display)
+        evaluateNextTrackPreload(at: display)
+        evaluateAutomixCrossfade(at: display)
+        if mpvSeekRestartActive {
+            applyPendingSeekIfNeeded()
         }
     }
 }

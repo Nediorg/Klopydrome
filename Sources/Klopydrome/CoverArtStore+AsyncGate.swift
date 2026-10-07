@@ -38,6 +38,14 @@ actor AsyncGate {
         }
     }
 
+    /// Executes work within a granted gate slot, guaranteeing slot release on
+    /// completion or cancellation. Returns `nil` if cancelled before acquisition.
+    func execute<T>(_ work: () async -> T) async -> T? {
+        guard await acquire() else { return nil }
+        defer { release() }
+        return await work()
+    }
+
     /// Frees a slot, handing it to the next non-cancelled waiter.
     func release() {
         active -= 1

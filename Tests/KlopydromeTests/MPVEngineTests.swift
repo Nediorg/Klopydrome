@@ -46,4 +46,46 @@ final class MPVEngineTests: XCTestCase {
 
         XCTAssertEqual(messages, ["MPV could not open the audio stream (code -12)."])
     }
+
+    func testBufferingNotificationWhenPausedForCache() {
+        let engine = MPVPlaybackEngine()
+        var bufferingStates: [Bool] = []
+        engine.onBufferingUpdate = { bufferingStates.append($0) }
+
+        engine.setPausedForCache(true)
+        XCTAssertTrue(engine.isBuffering)
+        XCTAssertEqual(bufferingStates, [true])
+
+        engine.setPausedForCache(false)
+        XCTAssertFalse(engine.isBuffering)
+        XCTAssertEqual(bufferingStates, [true, false])
+    }
+
+    func testFileLoadedNotification() {
+        let engine = MPVPlaybackEngine()
+        var fileLoaded = false
+        engine.onFileLoaded = { fileLoaded = true }
+
+        XCTAssertFalse(engine.isLoaded)
+        engine.handleFileLoaded()
+        XCTAssertTrue(engine.isLoaded)
+        XCTAssertTrue(fileLoaded)
+    }
+
+    func testSeekFailsWhenNotLoaded() {
+        let engine = MPVPlaybackEngine()
+        XCTAssertFalse(engine.isLoaded)
+        let accepted = engine.seek(to: 45.0)
+        XCTAssertFalse(accepted, "Seek must not succeed before file is loaded")
+    }
+
+    func testSeekableNotification() {
+        let engine = MPVPlaybackEngine()
+        var seekableStates: [Bool] = []
+        engine.onSeekableUpdate = { seekableStates.append($0) }
+
+        engine.setSeekable(true)
+        XCTAssertTrue(engine.isSeekable)
+        XCTAssertEqual(seekableStates, [true])
+    }
 }

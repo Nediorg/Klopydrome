@@ -40,11 +40,11 @@ final class MiniPlayerResizeGeometryTests: XCTestCase {
 
     func testHorizontalGrowStopsAtPanelMinimum() {
         let size = MiniPlayerResizeGeometry.contentSize(
-            requested: NSSize(width: 700, height: 720),
+            requested: NSSize(width: 600, height: 720),
             current: NSSize(width: 420, height: 720)
         )
 
-        XCTAssertEqual(size.width, 700, accuracy: 0.001)
+        XCTAssertEqual(size.width, 600, accuracy: 0.001)
         XCTAssertEqual(
             size.height - size.width,
             MiniPlayerLayout.minimumDetailHeight,
@@ -124,5 +124,24 @@ final class MiniPlayerResizeGeometryTests: XCTestCase {
 
         XCTAssertEqual(size.width, 470, accuracy: 0.001)
         XCTAssertEqual(size.height, 470, accuracy: 0.001)
+    }
+
+    func testCollapsedKeepsMaximumSide() {
+        let size = MiniPlayerResizeGeometry.collapsedSize(
+            requested: NSSize(width: 800, height: 800),
+            current: NSSize(width: 420, height: 420)
+        )
+
+        XCTAssertEqual(size.width, MiniPlayerLayout.maximumCompactSide, accuracy: 0.001)
+        XCTAssertEqual(size.height, MiniPlayerLayout.maximumCompactSide, accuracy: 0.001)
+    }
+
+    func testDetailContentWidthClampedToMaximum() {
+        let size = MiniPlayerResizeGeometry.contentSize(
+            requested: NSSize(width: 750, height: 900),
+            current: NSSize(width: 420, height: 720)
+        )
+
+        XCTAssertEqual(size.width, MiniPlayerLayout.maximumCompactSide, accuracy: 0.001)
     }
 }

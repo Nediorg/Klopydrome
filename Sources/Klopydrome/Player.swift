@@ -99,10 +99,12 @@ final class Player {
     @ObservationIgnored var mpvFailureFallback = MPVFailureFallback()
     let automix = AutomixPreparation()
     let shuffleState = ShuffleState()
-    nonisolated(unsafe) var timeObserverToken: Any?
-    nonisolated(unsafe) var endObserver: NSObjectProtocol?
-    nonisolated(unsafe) var statusObserver: NSKeyValueObservation?
-    nonisolated(unsafe) var itemStatusObserver: NSKeyValueObservation?
+    @ObservationIgnored var timeObserverToken: Any?
+    @ObservationIgnored var endObserver: NSObjectProtocol?
+    @ObservationIgnored var statusObserver: NSKeyValueObservation?
+    @ObservationIgnored var itemStatusObserver: NSKeyValueObservation?
+    @ObservationIgnored var timeControlStatusObserver: NSKeyValueObservation?
+    @ObservationIgnored var heldSeekTargetTimestamp: CFAbsoluteTime = 0
     var lastInfoSecond = -1
     @ObservationIgnored var nowPlayingArtworkTask: Task<Void, Never>?
     @ObservationIgnored var systemMediaActivationObserver: NSObjectProtocol?
@@ -212,6 +214,14 @@ final class Player {
             }
         }
 
+        timeControlStatusObserver = avPlayer.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.engineKind == .avPlayer else { return }
+                self.isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                if player.timeControlStatus == .playing { self.isLoading = false }
+            }
+        }
+
         // The MPV engine drives its own clock; the AVPlayer time observer
         // must not overwrite `currentTime`/`duration` while it's running.
         setUpMPVEngine()
@@ -230,6 +240,7 @@ final class Player {
         }
         statusObserver?.invalidate()
         itemStatusObserver?.invalidate()
+        timeControlStatusObserver?.invalidate()
     }
 
     // MARK: Queue
@@ -366,9 +377,11 @@ final class Player {
         hasReportedFailure = false
         isBuffering = true
         duration = 0
-        currentTime = 0
-        pendingSeekTime = nil
-        heldSeekTarget = nil
+        let targetSeek = pendingSeekTime ?? (currentTime > 0 ? currentTime : nil)
+        currentTime = targetSeek ?? 0
+        pendingSeekTime = targetSeek
+        heldSeekTarget = targetSeek
+        if targetSeek != nil { heldSeekTargetTimestamp = CFAbsoluteTimeGetCurrent() }
         transcodeRestartResidual = nil
         mpvStreamOffset = 0
         mpvSeekRestartActive = false

@@ -4,7 +4,7 @@ import SwiftUI
 /// Owns one native mini-player panel. Artwork and lyrics/queue are sibling
 /// hosting views so the lower section physically slides out of the same window.
 @MainActor
-final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
+final class MiniPlayerPanelController: NSObject {
     static let shared = MiniPlayerPanelController()
 
     private var panel: NSPanel?
@@ -18,6 +18,7 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
     private weak var app: AppState?
     private weak var mainWindow: NSWindow?
 
+    var isPanelActive: Bool { panel != nil }
     var isVisible: Bool { panel?.isVisible == true }
 
     func show(app: AppState) {
@@ -36,6 +37,9 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
 
     func activate() {
         guard let panel else { return }
+        if panel.isMiniaturized {
+            panel.deminiaturize(nil)
+        }
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -57,17 +61,7 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        panel.delegate = self
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.isMovableByWindowBackground = true
-        panel.hidesOnDeactivate = false
-        panel.tabbingMode = .disallowed
-        panel.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
-        panel.minSize = .zero
-        panel.contentMinSize = .zero
+        configurePanelProperties(panel)
 
         let contentHost = NSView(frame: NSRect(origin: .zero, size: compactSize))
         contentHost.wantsLayer = true
@@ -96,6 +90,30 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
         self.artworkHost = artworkHost
         updateChrome(controlsVisible: false, activePanel: nil)
         return panel
+    }
+
+    private func configurePanelProperties(_ panel: NSPanel) {
+        panel.delegate = self
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.isMovableByWindowBackground = true
+        panel.hidesOnDeactivate = false
+        panel.tabbingMode = .disallowed
+        panel.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        let minSize = NSSize(
+            width: MiniPlayerLayout.minimumCompactSide,
+            height: MiniPlayerLayout.minimumCompactSide
+        )
+        let maxSize = NSSize(
+            width: MiniPlayerLayout.maximumCompactSide,
+            height: MiniPlayerLayout.maximumCompactSide + MiniPlayerLayout.panelHeight + 200
+        )
+        panel.minSize = minSize
+        panel.maxSize = maxSize
+        panel.contentMinSize = minSize
+        panel.contentMaxSize = maxSize
     }
 
     private func position(_ panel: NSPanel, relativeTo sourceWindow: NSWindow?) {
@@ -133,48 +151,13 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        let requestedContentSize = sender.contentRect(
-            forFrameRect: NSRect(origin: .zero, size: frameSize)
-        ).size
-        let currentContentSize = sender.contentView?.bounds.size ?? requestedContentSize
-        let contentSize: NSSize
-        if configuredPanel != nil {
-            contentSize = MiniPlayerResizeGeometry.contentSize(
-                requested: requestedContentSize,
-                current: currentContentSize
-            )
-        } else {
-            contentSize = MiniPlayerResizeGeometry.collapsedSize(
-                requested: requestedContentSize,
-                current: currentContentSize
-            )
-        }
-        MiniPlayerResizeGeometry.lastDebugLine =
-            "req \(Int(requestedContentSize.width))×\(Int(requestedContentSize.height)) "
-            + "cur \(Int(currentContentSize.width))×\(Int(currentContentSize.height)) → "
-            + "\(Int(contentSize.width))×\(Int(contentSize.height))"
-        return sender.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        panel = nil
-        contentHost = nil
-        artworkHost = nil
-        detailClipHost = nil
-        detailHost = nil
-        detailCollapsedHeightConstraint = nil
-        detailBottomConstraint = nil
-        configuredPanel = nil
-        mainWindow?.makeKeyAndOrderFront(nil)
-        mainWindow = nil
-        NotificationCenter.default.post(name: .miniPlayerDidClose, object: nil)
-    }
-
     private func presentDetail(_ kind: AppState.PlayerPanelTab, in panel: NSPanel) {
         let currentContentSize = panel.contentView?.bounds.size
             ?? panel.contentRect(forFrameRect: panel.frame).size
-        let side = max(MiniPlayerLayout.minimumCompactSide, currentContentSize.width)
+        let side = min(
+            max(MiniPlayerLayout.minimumCompactSide, currentContentSize.width),
+            MiniPlayerLayout.maximumCompactSide
+        )
         installDetailHost(for: kind)
         detailCollapsedHeightConstraint?.isActive = false
         detailBottomConstraint?.isActive = true
@@ -200,7 +183,10 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
     private func dismissDetail(in panel: NSPanel) {
         let currentContentSize = panel.contentView?.bounds.size
             ?? panel.contentRect(forFrameRect: panel.frame).size
-        let side = max(MiniPlayerLayout.minimumCompactSide, currentContentSize.width)
+        let side = min(
+            max(MiniPlayerLayout.minimumCompactSide, currentContentSize.width),
+            MiniPlayerLayout.maximumCompactSide
+        )
         let targetSize = NSSize(width: side, height: side)
         let targetFrame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: targetSize))
         let anchored = NSRect(
@@ -285,6 +271,86 @@ final class MiniPlayerPanelController: NSObject, NSWindowDelegate {
     }
 }
 
+extension MiniPlayerPanelController: NSWindowDelegate {
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        let requestedContentSize = sender.contentRect(
+            forFrameRect: NSRect(origin: .zero, size: frameSize)
+        ).size
+        let currentContentSize = sender.contentView?.bounds.size ?? requestedContentSize
+        let contentSize: NSSize
+        if configuredPanel != nil {
+            contentSize = MiniPlayerResizeGeometry.contentSize(
+                requested: requestedContentSize,
+                current: currentContentSize
+            )
+        } else {
+            contentSize = MiniPlayerResizeGeometry.collapsedSize(
+                requested: requestedContentSize,
+                current: currentContentSize
+            )
+        }
+        MiniPlayerResizeGeometry.lastDebugLine =
+            "req \(Int(requestedContentSize.width))×\(Int(requestedContentSize.height)) "
+            + "cur \(Int(currentContentSize.width))×\(Int(currentContentSize.height)) → "
+            + "\(Int(contentSize.width))×\(Int(contentSize.height))"
+        return sender.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+    }
+
+    func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame: NSRect) -> NSRect {
+        guard let screen = window.screen ?? NSScreen.main else { return defaultFrame }
+        let visibleFrame = screen.visibleFrame
+        let targetSide = MiniPlayerLayout.maximumCompactSide
+        let currentContentSize = window.contentView?.bounds.size
+            ?? window.contentRect(forFrameRect: window.frame).size
+
+        let targetContentHeight: CGFloat
+        if configuredPanel != nil {
+            let currentDetailHeight = max(
+                MiniPlayerLayout.minimumDetailHeight,
+                currentContentSize.height - currentContentSize.width
+            )
+            targetContentHeight = targetSide + currentDetailHeight
+        } else {
+            targetContentHeight = targetSide
+        }
+
+        let targetContentSize = NSSize(width: targetSide, height: targetContentHeight)
+        let targetFrameSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: targetContentSize)).size
+
+        var originX = window.frame.minX
+        var originY = window.frame.maxY - targetFrameSize.height
+
+        if originX + targetFrameSize.width > visibleFrame.maxX {
+            originX = visibleFrame.maxX - targetFrameSize.width
+        }
+        if originX < visibleFrame.minX {
+            originX = visibleFrame.minX
+        }
+        if originY < visibleFrame.minY {
+            originY = visibleFrame.minY
+        }
+        if originY + targetFrameSize.height > visibleFrame.maxY {
+            originY = visibleFrame.maxY - targetFrameSize.height
+        }
+
+        return NSRect(origin: NSPoint(x: originX, y: originY), size: targetFrameSize)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        panel = nil
+        contentHost = nil
+        artworkHost = nil
+        detailClipHost = nil
+        detailHost = nil
+        detailCollapsedHeightConstraint = nil
+        detailBottomConstraint = nil
+        configuredPanel = nil
+        mainWindow?.makeKeyAndOrderFront(nil)
+        mainWindow = nil
+        NotificationCenter.default.post(name: .miniPlayerDidClose, object: nil)
+    }
+}
+
 extension Notification.Name {
     static let miniPlayerDidOpen = Notification.Name("miniPlayerDidOpen")
     static let miniPlayerDidClose = Notification.Name("miniPlayerDidClose")
@@ -302,7 +368,10 @@ enum MiniPlayerResizeGeometry {
     /// takes the difference out of the panel (never below its minimum). Every
     /// other drag routes the height delta into the panel.
     static func contentSize(requested: NSSize, current: NSSize) -> NSSize {
-        let side = max(MiniPlayerLayout.minimumCompactSide, requested.width)
+        let side = min(
+            max(MiniPlayerLayout.minimumCompactSide, requested.width),
+            MiniPlayerLayout.maximumCompactSide
+        )
         let widthChanged = abs(requested.width - current.width) > 0.5
         let heightChanged = abs(requested.height - current.height) > 0.5
         if widthChanged && !heightChanged {
@@ -328,7 +397,10 @@ enum MiniPlayerResizeGeometry {
         } else {
             side = max(requested.width, requested.height)
         }
-        let clamped = max(MiniPlayerLayout.minimumCompactSide, side)
+        let clamped = min(
+            max(MiniPlayerLayout.minimumCompactSide, side),
+            MiniPlayerLayout.maximumCompactSide
+        )
         return NSSize(width: clamped, height: clamped)
     }
 }
@@ -336,6 +408,7 @@ enum MiniPlayerResizeGeometry {
 enum MiniPlayerLayout {
     static let compactSide: CGFloat = 420
     static let minimumCompactSide: CGFloat = 320
+    static let maximumCompactSide: CGFloat = 600
     static let panelHeight: CGFloat = 300
     static let minimumDetailHeight: CGFloat = 180
     static let panelAnimationDuration: TimeInterval = 0.22

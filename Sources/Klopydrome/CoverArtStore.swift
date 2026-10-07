@@ -3,7 +3,7 @@ import NavidromeClient
 import AppKit
 import os
 
-private let coverLogger = Logger(subsystem: "Klopydrome", category: "covers")
+let coverLogger = Logger(subsystem: "Klopydrome", category: "covers")
 
 /// Thread-safe, memory + disk cached cover artwork.
 ///
@@ -21,12 +21,16 @@ final class CoverArtStore: @unchecked Sendable {
     /// `NSImage` isn't `Sendable`; box it so results can cross actor boundaries.
     struct ImageBox: @unchecked Sendable { let image: NSImage? }
 
-    /// Class wrapper so in-flight tasks can be compared by identity (`===`);
+    /// Class wrapper so in-flight tasks can be identified and compared;
     /// `Task` itself is a struct. Only ever read under `lock`.
     private final class InflightTask: @unchecked Sendable {
+        let id: UUID
         let task: Task<FetchOutcome, Never>
         var subscriberCount: Int = 1
-        init(_ task: Task<FetchOutcome, Never>) { self.task = task }
+        init(id: UUID = UUID(), _ task: Task<FetchOutcome, Never>) {
+            self.id = id
+            self.task = task
+        }
     }
 
     /// Keeps concurrent network fetches bounded so a big cold grid can't spawn
@@ -43,7 +47,7 @@ final class CoverArtStore: @unchecked Sendable {
     /// (`.original` covers, artist URLs). The disk cache keeps full quality;
     /// only the in-memory bitmap is bounded so a multi-megapixel cover can't
     /// occupy tens of MB of RAM.
-    private static let maxDecodedSide: CGFloat = 2048
+    static let maxDecodedSide: CGFloat = 2048
 
     let memory = NSCache<NSString, NSImage>()
     private var inflight: [String: InflightTask] = [:]
@@ -64,7 +68,7 @@ final class CoverArtStore: @unchecked Sendable {
     /// original (nil requestedSize). Guarded by `lock`.
     var cachedSizes: [String: Set<Int>] = [:]
 
-    private let session: URLSession = {
+    let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
@@ -73,9 +77,9 @@ final class CoverArtStore: @unchecked Sendable {
 
     /// Bounds concurrent network fetches without blocking a thread while
     /// waiting: suspended callers park in continuations instead.
-    private let gate = AsyncGate(capacity: CoverArtStore.maxConcurrentFetches)
+    let gate = AsyncGate(capacity: CoverArtStore.maxConcurrentFetches)
 
-    private var client: SubsonicClient?
+    private(set) var client: SubsonicClient?
     private(set) var cache: CacheManager?
     private(set) var coverResolution: CoverResolution = .high
 
@@ -237,7 +241,13 @@ final class CoverArtStore: @unchecked Sendable {
                 existing.subscriberCount += 1
                 return (false, existing)
             }
-            let holder = InflightTask(Task<FetchOutcome, Never> { await loader() })
+            let taskID = UUID()
+            let task = Task<FetchOutcome, Never> { [weak self] in
+                let outcome = await loader()
+                self?.retireIfCurrent(key: key, taskID: taskID, outcome: outcome)
+                return outcome
+            }
+            let holder = InflightTask(id: taskID, task)
             inflight[key] = holder
             return (true, holder)
         }
@@ -250,14 +260,11 @@ final class CoverArtStore: @unchecked Sendable {
                 decision.holder.subscriberCount -= 1
                 if decision.holder.subscriberCount <= 0 {
                     decision.holder.task.cancel()
-                    if self.inflight[key] === decision.holder {
+                    if self.inflight[key]?.id == decision.holder.id {
                         self.inflight.removeValue(forKey: key)
                     }
                 }
             }
-        }
-        if decision.isNew {
-            retireIfCurrent(key: key, holder: decision.holder, outcome: outcome)
         }
         if case .image(let image) = outcome { return ImageBox(image: image) }
         return ImageBox(image: nil)
@@ -267,9 +274,9 @@ final class CoverArtStore: @unchecked Sendable {
     /// still-current task may touch the registry: after a `configure` the key
     /// may already belong to the next server's task, which must not be
     /// disturbed. Extracted so `load()` stays under the complexity gate.
-    private func retireIfCurrent(key: String, holder: InflightTask, outcome: FetchOutcome) {
+    private func retireIfCurrent(key: String, taskID: UUID, outcome: FetchOutcome) {
         let isCurrent = lock.withLock { () -> Bool in
-            guard inflight[key] === holder else { return false }
+            guard inflight[key]?.id == taskID else { return false }
             inflight.removeValue(forKey: key)
             return true
         }
@@ -290,107 +297,6 @@ final class CoverArtStore: @unchecked Sendable {
         }
     }
 
-    func resolveCover(coverArt: String, size: Int?) async -> FetchOutcome {
-        let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: size ?? 0)
-        if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
-           let image = NSImage(data: data) {
-            // swiftlint:disable:next line_length
-            coverLogger.debug("disk hit coverArt=\(coverArt, privacy: .private) size=\(size.map(String.init) ?? "orig", privacy: .private)")
-            return .image(bounded(image, requestedSize: size))
-        }
-        guard let client, let url = client.coverArtURL(id: coverArt, size: size) else {
-            // swiftlint:disable:next line_length
-            coverLogger.error("no client/url for coverArt=\(coverArt, privacy: .private) size=\(size.map(String.init) ?? "orig", privacy: .private)")
-            return .dead
-        }
-        coverLogger.debug("fetch coverArt=\(coverArt, privacy: .private) url=\(url.absoluteString, privacy: .private)")
-        return await fetch(url: url, cacheKey: cacheKey, requestedSize: size)
-    }
-
-    private func resolveArtist(artistURL: String, size: Int) async -> FetchOutcome {
-        let resolved: URL?
-        if let url = URL(string: artistURL), url.scheme != nil {
-            resolved = url
-        } else if let base = client?.config.baseURL {
-            resolved = URL(string: artistURL, relativeTo: base)?.absoluteURL
-        } else {
-            resolved = nil
-        }
-        guard let resolved else { return .dead }
-        // Artist URLs are resolved absolute URLs; key the disk cache by it so
-        // repeated visits don't re-download full-resolution artwork.
-        let cacheKey = CacheManager.metadataKey(endpoint: "artistImage",
-                                                params: [URLQueryItem(name: "url", value: resolved.absoluteString)])
-        if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
-           let image = NSImage(data: data) {
-            return .image(bounded(image, requestedSize: size))
-        }
-        return await fetch(url: resolved, cacheKey: cacheKey, requestedSize: size)
-    }
-
-    /// Downloads cover art via `URLSession` (proper timeouts, cancellable),
-    /// bounded by the concurrency gate. Classifies the outcome so transient
-    /// failures never latch into `failedKeys`.
-    private func fetch(url: URL, cacheKey: String?, requestedSize: Int?) async -> FetchOutcome {
-        guard !Task.isCancelled else { return .transient }
-        coverLogger.debug("gate acquire url=\(url.absoluteString, privacy: .private)")
-        guard await gate.acquire() else {
-            coverLogger.debug("gate denied url=\(url.absoluteString, privacy: .private)")
-            return .transient
-        }
-        guard !Task.isCancelled else {
-            await gate.release()
-            return .transient
-        }
-        coverLogger.debug("gate acquired url=\(url.absoluteString, privacy: .private)")
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                await gate.release()
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                coverLogger.debug("fetch http \(code) url=\(url.absoluteString, privacy: .private)")
-                // 404 = genuinely missing art; anything else (500, auth) may
-                // recover, so don't latch it for the full TTL.
-                return code == 404 ? .dead : .transient
-            }
-            guard let image = NSImage(data: data) else {
-                await gate.release()
-                coverLogger.debug("fetch bad data url=\(url.absoluteString, privacy: .private) bytes=\(data.count)")
-                return .dead
-            }
-            // Validate BEFORE writing: an error payload (HTML/JSON behind a
-            // 200, or truncated bytes) must never poison the disk cache.
-            if let cacheKey, let cache {
-                _ = try? await cache.write(data: data, to: .covers, key: cacheKey)
-            }
-            let out = bounded(image, requestedSize: requestedSize)
-            await gate.release()
-            coverLogger.debug("fetch ok url=\(url.absoluteString, privacy: .private) bytes=\(data.count)")
-            return .image(out)
-        } catch {
-            await gate.release()
-            // swiftlint:disable:next line_length
-            coverLogger.error("fetch error url=\(url.absoluteString, privacy: .private) \(error.localizedDescription, privacy: .private)")
-            return Self.classifyFetchError(error)
-        }
-    }
-
-    /// Maps a fetch throw to transient (retryable, never latched) vs dead.
-    /// Covers cancellation explicitly: `URLSession` surfaces task-cancel as
-    /// `URLError.cancelled`, and structured cancellation may surface as
-    /// `CancellationError` — neither means the artwork is gone.
-    static func classifyFetchError(_ error: Error) -> FetchOutcome {
-        if error is CancellationError { return .transient }
-        if Task.isCancelled { return .transient }
-        guard let code = (error as? URLError)?.code else { return .dead }
-        switch code {
-        case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cancelled:
-            return .transient
-        default:
-            return .dead
-        }
-    }
-
     private static func cost(of image: NSImage) -> Int {
         // Approximate the decoded RGBA footprint (4 bytes/pixel). NSImage.size
         // is in points but for server artwork (no @2x scale info) it equals
@@ -398,31 +304,5 @@ final class CoverArtStore: @unchecked Sendable {
         let width = max(1, Int(image.size.width.rounded()))
         let height = max(1, Int(image.size.height.rounded()))
         return width * height * 4
-    }
-
-    /// Downsamples artwork that exceeded its requested display size (or the
-    /// `maxDecodedSide` cap for `.original`/artist URLs, which have no server
-    /// size parameter) so the memory cache never holds multi-megapixel
-    /// bitmaps. The disk cache still stores the full-resolution data; only
-    /// the decoded in-memory representation is bounded.
-    private func bounded(_ image: NSImage, requestedSize: Int?) -> NSImage {
-        let targetSide = requestedSize.map(CGFloat.init) ?? Self.maxDecodedSide
-        let largest = max(image.size.width, image.size.height)
-        guard largest > targetSide else { return image }
-        let scale = targetSide / largest
-        let targetSize = NSSize(width: image.size.width * scale,
-                                height: image.size.height * scale)
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let ctx = CGContext(data: nil,
-                                  width: Int(targetSize.width.rounded()),
-                                  height: Int(targetSize.height.rounded()),
-                                  bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return image }
-        ctx.interpolationQuality = .high
-        ctx.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
-        guard let scaled = ctx.makeImage() else { return image }
-        return NSImage(cgImage: scaled, size: targetSize)
     }
 }

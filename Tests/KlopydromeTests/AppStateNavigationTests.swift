@@ -110,4 +110,73 @@ final class AppStateNavigationTests: XCTestCase {
         XCTAssertEqual(app.nav.history.last, .song(song))
         XCTAssertNotNil(app.nav.selectedPlaylist)
     }
+
+    func testOpenArtistInLibraryFromPlaylistPreservesSelectedPlaylist() {
+        let app = AppState()
+        let playlist = PlaylistSummary(id: "pl-1", name: "PL", songCount: 3)
+        app.nav.selectedPlaylist = playlist
+        let artist = Artist(id: "art-1", name: "Daft Punk")
+
+        app.openArtistInLibrary(artist)
+
+        XCTAssertEqual(app.nav.history.last, .artist(artist))
+        XCTAssertEqual(app.nav.selectedPlaylist?.id, "pl-1")
+
+        app.navigateBack()
+        XCTAssertTrue(app.nav.history.isEmpty)
+        XCTAssertEqual(app.nav.selectedPlaylist?.id, "pl-1")
+    }
+
+    func testOpenAlbumInLibraryFromPlaylistPreservesSelectedPlaylist() {
+        let app = AppState()
+        let playlist = PlaylistSummary(id: "pl-1", name: "PL", songCount: 3)
+        app.nav.selectedPlaylist = playlist
+        let album = SubsonicAlbum(id: "alb-1", title: "Discovery")
+
+        app.openAlbumInLibrary(album)
+
+        XCTAssertEqual(app.nav.history.last, .album(album))
+        XCTAssertEqual(app.nav.selectedPlaylist?.id, "pl-1")
+
+        app.navigateBack()
+        XCTAssertTrue(app.nav.history.isEmpty)
+        XCTAssertEqual(app.nav.selectedPlaylist?.id, "pl-1")
+    }
+
+    // MARK: - Login Overlay Visibility
+
+    func testShouldShowLoginViewGatesTransitions() {
+        let app = AppState()
+        // Launch gate suppresses login
+        XCTAssertTrue(app.isLaunching)
+        XCTAssertFalse(app.shouldShowLoginView)
+
+        // Post-launch idle disconnected state shows login
+        app.isLaunching = false
+        XCTAssertTrue(app.shouldShowLoginView)
+
+        // Preparing offline session suppresses login
+        app.isPreparingOfflineSession = true
+        XCTAssertFalse(app.shouldShowLoginView)
+        app.isPreparingOfflineSession = false
+        XCTAssertTrue(app.shouldShowLoginView)
+
+        // Active offline session suppresses login
+        app.isOfflineSession = true
+        XCTAssertFalse(app.shouldShowLoginView)
+        app.isOfflineSession = false
+        XCTAssertTrue(app.shouldShowLoginView)
+
+        // Foreground reconnect suppresses login
+        app.isReconnecting = true
+        XCTAssertFalse(app.shouldShowLoginView)
+        app.isReconnecting = false
+        XCTAssertTrue(app.shouldShowLoginView)
+
+        // Background reconnect suppresses login
+        app.isBackgroundReconnecting = true
+        XCTAssertFalse(app.shouldShowLoginView)
+        app.isBackgroundReconnecting = false
+        XCTAssertTrue(app.shouldShowLoginView)
+    }
 }

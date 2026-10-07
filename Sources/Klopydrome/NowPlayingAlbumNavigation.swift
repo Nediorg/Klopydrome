@@ -51,7 +51,6 @@ extension AppState {
     /// the navigation state it observes changes.
     func openAlbumInLibrary(_ album: SubsonicAlbum) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.selectedPlaylist = nil
         nav.history.append(.album(album))
         nav.navVersion += 1
     }
@@ -67,14 +66,12 @@ extension AppState {
 
     func openArtistInLibrary(_ artist: Artist) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.selectedPlaylist = nil
         nav.history.append(.artist(artist))
         nav.navVersion += 1
     }
 
     func openAlbumArtistInLibrary(_ song: SubsonicSong) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.selectedPlaylist = nil
         if let albumArtistId = song.albumArtistId {
             nav.history.append(.artist(Artist(id: albumArtistId, name: song.effectiveAlbumArtist)))
             nav.navVersion += 1
@@ -82,6 +79,7 @@ extension AppState {
             nav.history.append(.artist(Artist(id: artistId, name: song.effectiveAlbumArtist)))
             nav.navVersion += 1
         } else {
+            nav.selectedPlaylist = nil
             nav.searchQuery = song.effectiveAlbumArtist
             nav.selected = .search
             nav.history.removeAll()

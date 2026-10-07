@@ -226,13 +226,7 @@ private struct MiniPlayerControlsLayer: View {
                     progressColor: .white,
                     progressOpacity: 0.62
                 )
-                HStack {
-                    Text(app.player.formattedCurrentTime())
-                    Spacer()
-                    Text(app.player.formattedRemainingTime())
-                }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.62))
+                MiniPlayerTimeRow()
             }
             .padding(.top, 18)
 

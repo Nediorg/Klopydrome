@@ -65,11 +65,11 @@ struct LoginView: View {
         VStack(spacing: 16) {
             VStack(spacing: 10) {
                 Image(systemName: "person.crop.circle")
-                    .font(.system(size: 28, weight: .medium))
+                    .font(.system(size: 32, weight: .light))
                     .foregroundStyle(Color.accentColor)
-                    .frame(width: 60, height: 60)
+                    .frame(width: 56, height: 56)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        Circle()
                             .fill(Color.accentColor.opacity(0.12))
                     )
                     .accessibilityHidden(true)
@@ -82,9 +82,19 @@ struct LoginView: View {
             }
             .padding(.top, 12)
 
-            VStack(spacing: 0) {
-                joinedRow(icon: "network", title: "Адрес сервера".localized, focus: .server) {
-                    TextField("server.example.com:4533", text: $urlText)
+            // Input fields
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Адрес сервера".localized)
+                        .font(.subheadline.weight(.medium))
+
+                    TextField("https://music.example.com:4533", text: $urlText)
+                        .textFieldStyle(.plain)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 8)
+                        .loginFieldChrome(isFocused: focusedField == .server) {
+                            focusedField = .server
+                        }
                         .disableAutocorrection(true)
                         .textContentType(.URL)
                         .focused($focusedField, equals: .server)
@@ -92,10 +102,17 @@ struct LoginView: View {
                         .accessibilityLabel("Адрес сервера".localized)
                 }
 
-                Divider().padding(.leading, 42)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Имя пользователя".localized)
+                        .font(.subheadline.weight(.medium))
 
-                joinedRow(icon: "person", title: "Имя пользователя".localized, focus: .username) {
-                    TextField("", text: $username)
+                    TextField("Имя пользователя".localized, text: $username)
+                        .textFieldStyle(.plain)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 8)
+                        .loginFieldChrome(isFocused: focusedField == .username) {
+                            focusedField = .username
+                        }
                         .disableAutocorrection(true)
                         .textContentType(.username)
                         .focused($focusedField, equals: .username)
@@ -103,29 +120,33 @@ struct LoginView: View {
                         .accessibilityLabel("Имя пользователя".localized)
                 }
 
-                Divider().padding(.leading, 42)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Пароль".localized)
+                        .font(.subheadline.weight(.medium))
 
-                joinedRow(icon: "lock", title: "Пароль".localized, focus: .password) {
-                    Group {
-                        if showPassword {
-                            TextField("", text: $password)
-                                .focused($focusedField, equals: .password)
-                        } else {
-                            SecureField("", text: $password)
-                                .focused($focusedField, equals: .password)
+                    HStack(spacing: 6) {
+                        Group {
+                            if showPassword {
+                                TextField("Пароль".localized, text: $password)
+                                    .focused($focusedField, equals: .password)
+                            } else {
+                                SecureField("Пароль".localized, text: $password)
+                                    .focused($focusedField, equals: .password)
+                            }
                         }
-                    }
-                    .textContentType(.password)
-                    .onSubmit { connect() }
-                    .accessibilityLabel("Пароль".localized)
-                    .overlay(alignment: .trailing) {
+                        .textFieldStyle(.plain)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .textContentType(.password)
+                        .onSubmit { connect() }
+                        .accessibilityLabel("Пароль".localized)
+
                         Button {
                             showPassword.toggle()
                         } label: {
                             Image(systemName: showPassword ? "eye.slash" : "eye")
+                                .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(.secondary)
-                                .frame(width: 24, height: 24)
-                                .padding(.trailing, 8)
+                                .frame(width: 20, height: 20)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -133,20 +154,14 @@ struct LoginView: View {
                         .accessibilityLabel((showPassword ? "Скрыть пароль" : "Показать пароль").localized)
                         .help((showPassword ? "Скрыть пароль" : "Показать пароль").localized)
                     }
+                    .padding(.leading, 8)
+                    .padding(.trailing, 6)
+                    .loginFieldChrome(isFocused: focusedField == .password) {
+                        focusedField = .password
+                    }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor))
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(
-                        focusedField == nil ? Color.primary.opacity(0.12) : Color.accentColor,
-                        lineWidth: 1.5
-                    )
-            }
-            .animation(.easeOut(duration: 0.15), value: focusedField)
+            .padding(.vertical, 4)
 
             if let errorMessage {
                 HStack(spacing: 8) {
@@ -184,6 +199,7 @@ struct LoginView: View {
             .controlSize(.large)
             .disabled(busy || serverAddress.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                       || username.isEmpty || password.isEmpty)
+            .keyboardShortcut(.defaultAction)
             .confirmationDialog(
                 "Подключиться по незащищённому соединению?",
                 isPresented: $confirmInsecure,
@@ -216,11 +232,11 @@ struct LoginView: View {
             }
             .buttonStyle(.plain)
             .hoverBrighten()
-            .accessibilityLabel("Дополнительно")
-            .accessibilityValue(showAdvanced ? "Развернуто" : "Свернуто")
+            .accessibilityLabel("Дополнительно".localized)
+            .accessibilityValue((showAdvanced ? "Развернуто" : "Свернуто").localized)
 
             if showAdvanced {
-                Picker("Аутентификация", selection: $authMode) {
+                Picker("Аутентификация".localized, selection: $authMode) {
                     Text("Токен (рекомендуется)".localized).tag(AuthMode.token)
                     Text("Пароль (устаревший)".localized).tag(AuthMode.passwordMD5)
                 }
@@ -234,9 +250,9 @@ struct LoginView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(width: 320)
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 32)
         .padding(.vertical, 28)
+        .frame(maxWidth: .infinity)
         .onAppear {
             prefill()
             if serverAddress.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -246,42 +262,6 @@ struct LoginView: View {
             } else {
                 focusedField = .password
             }
-        }
-    }
-
-    /// One row of the joined field group: leading icon + plain field content.
-    /// The `.focused` binding lives on the `TextField`/`SecureField` itself
-    /// (a wrapper never receives focus); the group ring reads `focusedField`.
-    @ViewBuilder
-    private func joinedRow<Content: View>(
-        icon: String,
-        title: String,
-        focus: LoginField,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
-                content()
-                    .textFieldStyle(.plain)
-                    .font(.body)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(minHeight: 52)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Tapping the icon/label area focuses the field (plain fields
-            // have no chrome of their own to tap).
-            if focusedField != focus { focusedField = focus }
         }
     }
 
@@ -314,5 +294,66 @@ struct LoginView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+}
+
+// MARK: - Login Field Styling
+
+private struct LoginFieldChrome: ViewModifier {
+    let isFocused: Bool
+    let onActivate: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .frame(height: 30)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color(nsColor: .textBackgroundColor))
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.accentColor.opacity(isFocused ? 0.10 : 0))
+                IBeamCursorArea(onMouseDown: onActivate)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(
+                        isFocused ? Color.accentColor : Color(nsColor: .separatorColor),
+                        lineWidth: isFocused ? 2 : 1
+                    )
+                    .allowsHitTesting(false)
+            }
+            .animation(.easeInOut(duration: 0.15), value: isFocused)
+    }
+}
+
+private extension View {
+    func loginFieldChrome(isFocused: Bool, onActivate: @escaping () -> Void) -> some View {
+        modifier(LoginFieldChrome(isFocused: isFocused, onActivate: onActivate))
+    }
+}
+
+private struct IBeamCursorArea: NSViewRepresentable {
+    let onMouseDown: () -> Void
+
+    func makeNSView(context: Context) -> IBeamCursorView {
+        let view = IBeamCursorView()
+        view.onMouseDown = onMouseDown
+        return view
+    }
+
+    func updateNSView(_ nsView: IBeamCursorView, context: Context) {
+        nsView.onMouseDown = onMouseDown
+    }
+}
+
+private final class IBeamCursorView: NSView {
+    var onMouseDown: (() -> Void)?
+
+    override func resetCursorRects() {
+        discardCursorRects()
+        addCursorRect(bounds, cursor: .iBeam)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onMouseDown?()
     }
 }

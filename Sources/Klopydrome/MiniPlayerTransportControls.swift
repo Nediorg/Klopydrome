@@ -61,8 +61,8 @@ struct MiniPlayerTransportControls: View {
         }
         .buttonStyle(.plain)
         .disabled(!app.player.hasQueue)
-        .help("Играть/Пауза")
-        .accessibilityLabel(app.player.isPlaying ? "Пауза" : "Играть")
+        .help("Играть/Пауза".localized)
+        .accessibilityLabel(app.player.isPlaying ? "Пауза".localized : "Играть".localized)
         .contentTransition(.symbolEffect(.replace, options: .speed(1.8)))
         .animation(.snappy(duration: 0.14, extraBounce: 0), value: app.player.isPlaying)
     }
@@ -109,5 +109,21 @@ struct MiniPlayerTransportControls: View {
 
     private var repeatIcon: String {
         app.player.repeatMode == .one ? "repeat.1" : "repeat"
+    }
+}
+
+/// Dedicated subview isolating formatted playback time tracking so that
+/// `MiniPlayerControlsLayer` does not re-evaluate its entire body on every audio tick.
+struct MiniPlayerTimeRow: View {
+    @Environment(AppState.self) private var app
+
+    var body: some View {
+        HStack {
+            Text(app.player.formattedCurrentTime())
+            Spacer()
+            Text(app.player.formattedRemainingTime())
+        }
+        .font(.caption.monospacedDigit())
+        .foregroundStyle(.white.opacity(0.62))
     }
 }

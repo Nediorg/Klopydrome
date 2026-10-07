@@ -10,14 +10,16 @@ struct MiniPlayerPanelView: View {
     let panel: AppState.PlayerPanelTab
 
     var body: some View {
-        Group {
-            switch panel {
-            case .lyrics:
+        ZStack {
+            if panel == .lyrics {
                 LyricsView()
-            case .queue:
+                    .transition(.identity)
+            } else if panel == .queue {
                 MiniPlayerQueueView()
+                    .transition(.identity)
             }
         }
+        .animation(nil, value: panel)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background {
             ZStack {

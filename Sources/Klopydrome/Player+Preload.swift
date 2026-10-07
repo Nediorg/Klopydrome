@@ -18,6 +18,9 @@ extension Player {
     /// preparation. It must never report transport events into the main player.
     func setUpMPVPreloader() {
         automix.preloadedMPVEngine.volume = 0
+        automix.preloadedMPVEngine.replayGainMode = automix.replayGainMode
+        automix.preloadedMPVEngine.replayGainPreampDB = automix.replayGainPreampDB
+        automix.preloadedMPVEngine.silenceTrimMode = automix.silenceTrimMode
         automix.preloadedMPVEngine.onFailure = { [weak self] _ in
             Task { @MainActor in self?.resetPreloadedNext() }
         }

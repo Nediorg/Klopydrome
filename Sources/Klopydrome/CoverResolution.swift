@@ -16,15 +16,19 @@ enum CoverResolution: String, Codable, CaseIterable, Identifiable {
     }
 
     /// Discrete size buckets to prevent cache fragmentation from arbitrary fractional
-    /// or window-resize-dependent pixel values.
-    private static let buckets = [80, 160, 240, 360, 500, 750, 1000]
+    /// or window-resize-dependent pixel values:
+    /// - 240: thumbnails (up to 120pt @2x: song rows, search pills, LCD, downloads, avatars)
+    /// - 720: cards & headers (up to 360pt @2x: shelves, grids, headers, mini-player)
+    /// - 1200: extra large screens / hero displays
+    /// - 2048: maximum retina ceiling
+    static let buckets = [240, 720, 1200, 2048]
 
     private static func bucketed(_ pixels: Int, cap: Int) -> Int {
         let target = min(max(1, pixels), cap)
         for bucket in buckets where bucket >= target {
             return min(bucket, cap)
         }
-        return target
+        return min(buckets.last ?? target, cap)
     }
 
     /// Pixel size to request from the server for a given display-pixel need.
@@ -37,5 +41,13 @@ enum CoverResolution: String, Codable, CaseIterable, Identifiable {
         case .medium: return Self.bucketed(displayPixels, cap: 500)
         case .low: return Self.bucketed(displayPixels, cap: 200)
         }
+    }
+
+    /// Candidate sizes larger than `requested` (in ascending order of size, with 0/original last)
+    /// to check on disk before falling back to network fetch.
+    static func candidateLargerSizes(than requested: Int) -> [Int] {
+        var larger = buckets.filter { $0 > requested }
+        larger.append(0) // 0 represents original full-resolution
+        return larger
     }
 }

@@ -60,8 +60,12 @@ final class MPVPlaybackEngine {
     var onTrackEnded: (() -> Void)?
     var onFailure: ((String) -> Void)?
     var onTimeUpdate: ((Double) -> Void)?
+    var onBufferingUpdate: ((Bool) -> Void)?
     var onStreamRecordFinished: ((URL) -> Void)?
+    var onFileLoaded: (() -> Void)?
+    var onSeekableUpdate: ((Bool) -> Void)?
 
+    private var isPausedForCache = false
     private var streamRecordURL: URL?
     private var streamRecordIsContiguous = false
 
@@ -131,6 +135,7 @@ final class MPVPlaybackEngine {
         mpv_observe_property(mpv, 0, "seekable", MPV_FORMAT_FLAG)
         mpv_observe_property(mpv, 0, "pause", MPV_FORMAT_FLAG)
         mpv_observe_property(mpv, 0, "eof-reached", MPV_FORMAT_FLAG)
+        mpv_observe_property(mpv, 0, "paused-for-cache", MPV_FORMAT_FLAG)
         mpv_set_wakeup_callback(mpv, MPVPlaybackEngine.wakeup, Unmanaged.passUnretained(pump).toOpaque())
 
         if mpv_initialize(mpv) < 0 {
@@ -156,12 +161,23 @@ final class MPVPlaybackEngine {
 
     // MARK: - Event pump callbacks
 
+    @MainActor func updateBuffering(_ value: Bool) {
+        guard isBuffering != value else { return }
+        isBuffering = value
+        onBufferingUpdate?(value)
+    }
+
+    @MainActor func setPausedForCache(_ value: Bool) {
+        isPausedForCache = value
+        updateBuffering(value)
+    }
+
     /// Called on the main actor by `EventPump` (throttled to ~10 Hz for
     /// `time-pos`). All libmpv parsing already happened off-thread, so this is
     /// only the cheap UI-state assignment — no main-thread busy loop.
     @MainActor func applyTimePos(_ pos: Double) {
         currentTimeValue = pos
-        isBuffering = false
+        updateBuffering(isPausedForCache)
         onTimeUpdate?(pos)
     }
 
@@ -172,7 +188,15 @@ final class MPVPlaybackEngine {
     }
 
     @MainActor func setSeekable(_ value: Bool) {
+        guard isSeekable != value else { return }
         isSeekable = value
+        onSeekableUpdate?(value)
+    }
+
+    @MainActor func handleFileLoaded() {
+        isLoaded = true
+        isEnded = false
+        onFileLoaded?()
     }
 
     @MainActor func handleTrackEnded() {
@@ -183,7 +207,8 @@ final class MPVPlaybackEngine {
         // advancing to the next track.
         if duration > 0, currentTimeValue + 3 < duration {
             isEnded = false
-            isBuffering = false
+            isPausedForCache = false
+            updateBuffering(false)
             play()
             return
         }
@@ -193,6 +218,8 @@ final class MPVPlaybackEngine {
         if !isEnded {
             isEnded = true
             isPlaying = false
+            isPausedForCache = false
+            updateBuffering(false)
             onTrackEnded?()
         }
     }
@@ -203,7 +230,8 @@ final class MPVPlaybackEngine {
         isLoaded = false
         isEnded = true
         isPlaying = false
-        isBuffering = false
+        isPausedForCache = false
+        updateBuffering(false)
         onFailure?(L10n.format("format.mpv.openFailure", Int(errorCode)))
     }
 
@@ -211,12 +239,13 @@ final class MPVPlaybackEngine {
     func load(url: URL, streamRecordURL: URL? = nil) async throws -> FormatInfo {
         try ensureMpv()
         configureStreamRecord(streamRecordURL)
-        isLoaded = true
+        isLoaded = false
         isEnded = false
-        isBuffering = true
+        updateBuffering(true)
         isSeekable = false
         currentTimeValue = 0
         duration = 0
+        setPaused(!isPlaying)
         mpvCommand(["loadfile", url.absoluteString, "replace"])
         return FormatInfo(duration: duration, sampleRate: sampleRate, channels: channels)
     }
@@ -224,40 +253,44 @@ final class MPVPlaybackEngine {
     // MARK: - Transport
 
     func play() {
-        guard isLoaded, !isPlaying else { return }
         isPlaying = true
         setPaused(false)
-        isBuffering = false
+        updateBuffering(isPausedForCache)
     }
 
     func pause() {
-        guard isPlaying else { return }
         isPlaying = false
-        isBuffering = false
+        updateBuffering(false)
         setPaused(true)
     }
 
     func stop() {
         clearStreamRecord(removeFile: true)
+        isLoaded = false
         isPlaying = false
         isEnded = false
-        isBuffering = false
+        isPausedForCache = false
+        updateBuffering(false)
         mpvCommand(["stop"])
         currentTimeValue = 0
     }
 
     /// Seeks to `seconds` (absolute). mpv performs the seek; the landed position
-    /// is reflected by `currentTime` via `time-pos` events. Returns the clamped
-    /// request so the UI can update immediately.
+    /// is reflected by `currentTime` via `time-pos` events. Returns whether the command was accepted.
     @discardableResult
-    func seek(to seconds: Double) -> Double {
-        // A seek can create discontinuities in stream-record output, so only a
-        // naturally completed, contiguous playback is eligible for auto-cache.
+    func seek(to seconds: Double) -> Bool {
+        guard isLoaded else { return false }
         streamRecordIsContiguous = false
         let clamped = max(0, seconds)
-        isBuffering = true
-        mpvCommand(["seek", String(clamped), "absolute"])
-        return clamped
+        if isPlaying {
+            updateBuffering(true)
+        }
+        let status = mpvCommand(["seek", String(clamped), "absolute"])
+        if status >= 0 {
+            currentTimeValue = clamped
+            return true
+        }
+        return false
     }
 
     // MARK: - Time
@@ -289,19 +322,21 @@ final class MPVPlaybackEngine {
     }
 
     // MARK: - mpv command/property helpers
-    private func mpvCommand(_ parts: [String]) {
-        guard let mpv else { return }
+    @discardableResult
+    private func mpvCommand(_ parts: [String]) -> Int32 {
+        guard let mpv else { return -1 }
         var args: [UnsafePointer<CChar>?] = []
         for part in parts {
             args.append(strdup(part).map { UnsafePointer($0) })
         }
         args.append(nil)
-        _ = args.withUnsafeMutableBufferPointer { buffer in
+        let status = args.withUnsafeMutableBufferPointer { buffer in
             mpv_command(mpv, buffer.baseAddress)
         }
         for arg in args.dropLast() {
             if let arg { free(UnsafeMutablePointer(mutating: arg)) }
         }
+        return status
     }
 
     private func setPaused(_ paused: Bool) {
@@ -381,6 +416,10 @@ private final class EventPump: @unchecked Sendable {
             handlePropertyChange(event)
         case MPV_EVENT_END_FILE:
             handleEndFile(event)
+        case MPV_EVENT_FILE_LOADED:
+            DispatchQueue.main.async { [weak self] in
+                self?.engine?.handleFileLoaded()
+            }
         default:
             break
         }
@@ -410,6 +449,11 @@ private final class EventPump: @unchecked Sendable {
             let flag = fptr.pointee != 0
             DispatchQueue.main.async { [weak self] in
                 self?.engine?.setSeekable(flag)
+            }
+        } else if name == "paused-for-cache", let fptr = prop.data?.assumingMemoryBound(to: Int32.self) {
+            let flag = fptr.pointee != 0
+            DispatchQueue.main.async { [weak self] in
+                self?.engine?.setPausedForCache(flag)
             }
         }
     }

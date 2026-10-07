@@ -117,8 +117,9 @@ extension Player {
         }
         let crossesBuffer = abs(target - mpvRealPosition) >= transcodedSeekCushion
         guard !crossesBuffer else {
-            if mpvSeekRestartActive && mpvEngine.isBuffering {
+            if mpvEngine.isBuffering {
                 pendingSeekTime = target
+                currentTime = target
                 return
             }
             performTranscodeRestart(at: target)

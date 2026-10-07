@@ -44,9 +44,22 @@ private final class KlopydromeApplicationDelegate: NSObject, NSApplicationDelega
         _ sender: NSApplication,
         hasVisibleWindows flag: Bool
     ) -> Bool {
-        guard MiniPlayerPanelController.shared.isVisible else { return true }
-        MiniPlayerPanelController.shared.activate()
-        return false
+        if MiniPlayerPanelController.shared.isPanelActive {
+            MiniPlayerPanelController.shared.activate()
+            return false
+        }
+        if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) && $0.canBecomeMain }) {
+            if mainWindow.isMiniaturized {
+                mainWindow.deminiaturize(nil)
+            }
+            mainWindow.makeKeyAndOrderFront(nil)
+            return false
+        }
+        return true
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        false
     }
 }
 
@@ -66,11 +79,10 @@ struct ContentView: View {
                 }
             // Non-sheet dim: a sheet disables the whole window chrome
             // (the toolbar items look "hidden" until it dismisses).
-            // Hidden during a background auto-reconnect: credentials aren't
-            // needed mid-attempt (manual login owns its own flow).
+            // Hidden during background reconnect, offline transitions, or offline sessions.
             // MainView stays mounted (toolbar registration untouched); the
             // opaque backdrop hides its unloaded tabs behind the login card.
-            if !app.isLaunching && !app.isConnected && !app.isOfflineSession && !app.isBackgroundReconnecting {
+            if app.shouldShowLoginView {
                 AMColor.background.ignoresSafeArea()
                 Image(systemName: "music.note.list")
                     .font(.system(size: 180, weight: .ultraLight))
