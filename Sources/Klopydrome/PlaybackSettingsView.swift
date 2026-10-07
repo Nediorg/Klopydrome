@@ -59,7 +59,7 @@ struct PlaybackSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Движок", selection: playbackEngineBinding) {
+                Picker("Движок".localized, selection: playbackEngineBinding) {
                     ForEach(PlaybackEngine.allCases) { engine in
                         Text(engine.label.localized).tag(engine)
                     }
@@ -73,7 +73,30 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("Предзагружать следующую песню", isOn: nextTrackPreloadingEnabled)
+                Picker("Кодек".localized, selection: Bindable(app).serverConfig.format) {
+                    Text("Оригинал".localized).tag(String?.none)
+                    Text("Opus").tag(String?.some("opus"))
+                    Text("MP3").tag(String?.some("mp3"))
+                    Text("M4A (AAC)").tag(String?.some("m4a"))
+                    Text("FLAC").tag(String?.some("flac"))
+                }
+
+                Picker("Битрейт".localized, selection: Bindable(app).serverConfig.maxBitRate) {
+                    Text("Оригинал".localized).tag(0)
+                    Text("320 kbps").tag(320)
+                    Text("256 kbps").tag(256)
+                    Text("192 kbps").tag(192)
+                    Text("128 kbps").tag(128)
+                    Text("64 kbps").tag(64)
+                }
+            } header: {
+                Text("Потоковая передача".localized)
+            } footer: {
+                Text("Параметры транскодирования на стороне сервера для потоков и загрузок.".localized)
+            }
+
+            Section {
+                Toggle("Предзагружать следующую песню".localized, isOn: nextTrackPreloadingEnabled)
             } header: {
                 Text("Предзагрузка".localized)
             } footer: {
@@ -82,11 +105,11 @@ struct PlaybackSettingsView: View {
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
-                Toggle("Авто-скробблинг", isOn: Binding(
+                Toggle("Авто-скробблинг".localized, isOn: Binding(
                     get: { app.scrobblingEnabled },
                     set: { app.scrobblingEnabled = $0 }
                 ))
-                Toggle("Запоминать очередь", isOn: Binding(
+                Toggle("Запоминать очередь".localized, isOn: Binding(
                     get: { app.queuePersistenceEnabled },
                     set: { app.queuePersistenceEnabled = $0 }
                 ))
@@ -97,7 +120,7 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("Включить плавный переход", isOn: crossfadeEnabled)
+                Toggle("Включить плавный переход".localized, isOn: crossfadeEnabled)
                 HStack {
                     Text("Длительность".localized)
                     Slider(value: crossfadeDuration, in: 1...12)
@@ -114,7 +137,7 @@ struct PlaybackSettingsView: View {
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
-                Picker("Коррекция громкости (ReplayGain)", selection: replayGainMode) {
+                Picker("Коррекция громкости (ReplayGain)".localized, selection: replayGainMode) {
                     ForEach(ReplayGainMode.allCases) { mode in
                         Text(mode.label.localized).tag(mode)
                     }
@@ -127,7 +150,7 @@ struct PlaybackSettingsView: View {
                         .frame(width: 56, alignment: .trailing)
                 }
                 .disabled(replayGainMode.wrappedValue == .off)
-                Picker("Обрезка тишины в конце", selection: silenceTrimMode) {
+                Picker("Обрезка тишины в конце".localized, selection: silenceTrimMode) {
                     ForEach(SilenceTrimMode.allCases) { mode in
                         Text(mode.label.localized).tag(mode)
                     }
@@ -138,6 +161,36 @@ struct PlaybackSettingsView: View {
                 Text("Выравнивание громкости приводит треки с тегами ReplayGain к единому уровню.".localized)
             }
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
+
+            Section {
+                HStack {
+                    Text("Смещение времени".localized)
+                    Spacer()
+                    let currentOffsetMs = Int((app.serverConfig.effectiveLyricsDefaultOffset * 1000).rounded())
+                    Text(String(format: "%+d мс".localized, currentOffsetMs))
+                        .font(.body.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                    Stepper("", onIncrement: {
+                        let offsetMilliseconds = currentOffsetMs + 50
+                        app.serverConfig.lyricsDefaultOffset = Double(offsetMilliseconds) / 1000.0
+                    }, onDecrement: {
+                        let offsetMilliseconds = currentOffsetMs - 50
+                        app.serverConfig.lyricsDefaultOffset = Double(offsetMilliseconds) / 1000.0
+                    })
+                    .labelsHidden()
+                }
+
+                if app.serverConfig.effectiveLyricsDefaultOffset != 0 {
+                    Button("Сбросить смещение".localized) {
+                        app.serverConfig.lyricsDefaultOffset = nil
+                    }
+                }
+            } header: {
+                Text("Синхронизация".localized)
+            } footer: {
+                Text("Смещение применяется ко всем песням для компенсации задержки звука.".localized)
+            }
         }
         .formStyle(.grouped)
         .padding()

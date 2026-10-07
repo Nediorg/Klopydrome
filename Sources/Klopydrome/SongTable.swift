@@ -102,11 +102,9 @@ struct SongTable: View {
                         // row would create one task per column (×8–10).
                         .task {
                             guard column == .title else { return }
-                            // Use index lookup rather than comparing songs[lastIndex].id:
-                            // after a re-sort the `song` captured here is from the old render
-                            // cycle and its id no longer matches songs[displayedCount-1].
                             guard displayedCount > 0, displayedCount < songs.count else { return }
-                            if songs.firstIndex(where: { $0.id == song.id }) == displayedCount - 1 {
+                            let tailIndex = displayedCount - 1
+                            if songs.indices.contains(tailIndex), songs[tailIndex].id == song.id {
                                 displayedCount = min(displayedCount + pageSize, songs.count)
                             }
                         }

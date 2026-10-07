@@ -23,31 +23,37 @@ struct SongActionItems: View {
     private var targets: [SubsonicSong] { selection.isEmpty ? [song] : selection }
     private var primaryCached: Bool { app.isCached(song) }
     private var primaryDownloading: Bool { app.downloadingSongIDs.contains(song.id) }
+    private var isPlayableOffline: Bool { !app.isOfflineSession || primaryCached }
 
     var body: some View {
         if let onPlay {
-            Button("Слушать") { onPlay() }
+            Button("Слушать".localized) { onPlay() }
+                .disabled(!isPlayableOffline)
         }
-        Button("Слушать следующей") { targets.forEach { app.playNext($0) } }
-        Button("В конец очереди") { targets.forEach { app.playLater($0) } }
+        Button("Слушать следующей".localized) { targets.forEach { app.playNext($0) } }
+            .disabled(!isPlayableOffline)
+        Button("В конец очереди".localized) { targets.forEach { app.playLater($0) } }
+            .disabled(!isPlayableOffline)
         Divider()
         AddToPlaylistMenu(songs: targets)
-        Button(app.isStarred(song) ? "Убрать из избранного" : "В избранное") {
+        Button((app.isStarred(song) ? "Убрать из избранного" : "В избранное").localized) {
             targets.forEach { app.toggleStar($0) }
         }
         if primaryDownloading {
-            Button("Загрузка…") {}
+            Button("Загрузка…".localized) {}
                 .disabled(true)
         } else {
-            Button(primaryCached ? "Удалить загрузку" : "Загрузить") {
+            Button((primaryCached ? "Удалить загрузку" : "Загрузить").localized) {
                 if primaryCached {
                     targets.forEach { song in Task { await app.removeFromCache(song) } }
                 } else {
                     targets.forEach { app.cacheSong($0) }
                 }
             }
+            .disabled(app.isOfflineSession && !primaryCached)
         }
         Button("Скачать".localized) { app.downloadTrack(song) }
+            .disabled(app.isOfflineSession && !primaryCached)
         Menu("Оценить".localized) {
             ForEach(1...5, id: \.self) { star in
                 Button("\(star) \(Pluralized.star(star))") {
@@ -62,6 +68,7 @@ struct SongActionItems: View {
         } label: {
             Label("Создать станцию".localized, systemImage: "dot.radiowaves.left.and.right")
         }
+        .disabled(app.isOfflineSession)
 
         if let albumId = song.albumId {
             Button {

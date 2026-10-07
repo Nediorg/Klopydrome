@@ -35,6 +35,7 @@ struct SongRow: View {
     private var isStarred: Bool { app.isStarred(song) }
     private var isCurrentPlaying: Bool { isCurrent && app.player.isPlaying }
     private var starForeground: Color { AMColor.accent }
+    private var isPlayableLocally: Bool { !app.isOfflineSession || isCachedLocally }
     private var isNarrow: Bool { !showAlbum && !showsArtist }
     private var rowCornerRadius: CGFloat { isNarrow ? 4 : 6 }
 
@@ -84,7 +85,11 @@ struct SongRow: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture(count: 2) { onPlay?(index ?? 0) }
+            .onTapGesture(count: 2) {
+                if isPlayableLocally {
+                    onPlay?(index ?? 0)
+                }
+            }
             .simultaneousGesture(TapGesture().onEnded { onSelect?() })
             .contextMenu {
                 if let extraMenuItems { extraMenuItems() }
@@ -99,6 +104,7 @@ struct SongRow: View {
         // Fixed height (not minHeight) so LazyVStack can estimate row sizes
         // without materializing them — prevents gaps in long lists.
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
+        .opacity(isPlayableLocally ? 1.0 : 0.45)
         .onHover { isInside in
             hoverTracker.isInside = isInside
             if isInside {
@@ -138,7 +144,7 @@ struct SongRow: View {
                                 .font(.system(size: 11))
                                 .foregroundStyle(fgPrimary)
                         }
-                    } else if hovering {
+                    } else if hovering && isPlayableLocally {
                         Image(systemName: "play.fill")
                             .font(.system(size: 11))
                             .foregroundStyle(fgPrimary)
@@ -153,7 +159,7 @@ struct SongRow: View {
                 .onTapGesture {
                     if isCurrent {
                         app.player.togglePlayPause()
-                    } else {
+                    } else if isPlayableLocally {
                         onPlay?(index ?? 0)
                     }
                 }
@@ -167,7 +173,7 @@ struct SongRow: View {
                         Image(systemName: "speaker.wave.2.fill")
                             .font(.system(size: 13))
                             .foregroundStyle(.white)
-                    } else if hovering {
+                    } else if hovering && isPlayableLocally {
                         Color.black.opacity(0.35)
                             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                         Image(systemName: isCurrentPlaying ? "pause.fill" : "play.fill")
@@ -180,7 +186,7 @@ struct SongRow: View {
                 .onTapGesture {
                     if isCurrent {
                         app.player.togglePlayPause()
-                    } else {
+                    } else if isPlayableLocally {
                         onPlay?(index ?? 0)
                     }
                 }
@@ -221,7 +227,7 @@ struct SongRow: View {
                 Button {
                     if isCachedLocally {
                         Task { await app.removeFromCache(song) }
-                    } else {
+                    } else if !app.isOfflineSession {
                         app.cacheSong(song)
                     }
                 } label: {
@@ -231,6 +237,7 @@ struct SongRow: View {
                         .symbolEffect(.bounce, value: isCachedLocally)
                 }
                 .buttonStyle(.plain)
+                .disabled(app.isOfflineSession && !isCachedLocally)
                 .help(isCachedLocally ? "Удалить загрузку".localized : "Загрузить".localized)
                 .accessibilityLabel(isCachedLocally ? "Удалить загрузку".localized
                                                     : (isDownloading ? "Загрузка".localized : "Загрузить".localized))
@@ -286,6 +293,7 @@ extension SongRow: Equatable {
 /// Pass `songs` for the full ordered list to support Shift+click range selection.
 struct SongRowSelection {
     var ids: Set<SubsonicSong.ID> = []
+    var anchor: SubsonicSong.ID?
 
     /// Toggle or replace selection based on current NSEvent modifier flags.
     mutating func toggle(_ id: SubsonicSong.ID, allSongs: [SubsonicSong]) {
@@ -293,15 +301,17 @@ struct SongRowSelection {
         if flags.contains(.command) {
             // Cmd+click: additive toggle
             if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
-        } else if flags.contains(.shift), let anchor = ids.first,
-                  let anchorIdx = allSongs.firstIndex(where: { $0.id == anchor }),
+            anchor = id
+        } else if flags.contains(.shift), let anchorId = anchor ?? ids.first,
+                  let anchorIdx = allSongs.firstIndex(where: { $0.id == anchorId }),
                   let targetIdx = allSongs.firstIndex(where: { $0.id == id }) {
-            // Shift+click: range from first selected item to target
+            // Shift+click: range from anchor to target
             let range = min(anchorIdx, targetIdx)...max(anchorIdx, targetIdx)
             ids = Set(allSongs[range].map(\.id))
         } else {
             // Plain click: if already the only selection, deselect; else select only this
             ids = ids == [id] ? [] : [id]
+            anchor = ids.isEmpty ? nil : id
         }
     }
 

@@ -38,6 +38,15 @@ struct ServerConfig: Codable, Equatable {
     var discordApplicationID: String?
     /// Whether a paused track stays visible in Discord. Defaults to true.
     var discordShowPaused: Bool?
+    /// Lyrics visual and timing preferences
+    var lyricsFontSize: LyricsFontSize?
+    var lyricsAnimationMotion: LyricsAnimationMotion?
+    var lyricsBlurEnabled: Bool?
+    var lyricsCountdownEnabled: Bool?
+    var lyricsDefaultOffset: Double?
+    /// Offline mode preferences
+    var autoReconnectEnabled: Bool?
+    var forceOfflineMode: Bool?
 }
 
 extension ServerConfig {
@@ -58,6 +67,13 @@ extension ServerConfig {
     var effectiveNextTrackPreloadingEnabled: Bool { nextTrackPreloadingEnabled ?? true }
     var effectiveDiscordRichPresenceEnabled: Bool { discordRichPresenceEnabled ?? false }
     var effectiveDiscordShowPaused: Bool { discordShowPaused ?? true }
+    var effectiveLyricsFontSize: LyricsFontSize { lyricsFontSize ?? .standard }
+    var effectiveLyricsAnimationMotion: LyricsAnimationMotion { lyricsAnimationMotion ?? .smooth }
+    var effectiveLyricsBlurEnabled: Bool { lyricsBlurEnabled ?? true }
+    var effectiveLyricsCountdownEnabled: Bool { true }
+    var effectiveLyricsDefaultOffset: Double { lyricsDefaultOffset ?? 0.0 }
+    var effectiveAutoReconnectEnabled: Bool { autoReconnectEnabled ?? true }
+    var effectiveForceOfflineMode: Bool { forceOfflineMode ?? false }
 
     static var empty: ServerConfig {
         ServerConfig(url: "", username: "", authMode: .token,
@@ -69,6 +85,10 @@ extension ServerConfig {
                      replayGainPreampDB: nil, silenceTrimMode: nil,
                      nextTrackPreloadingEnabled: nil,
                      discordRichPresenceEnabled: nil, discordApplicationID: nil,
-                     discordShowPaused: nil)
+                     discordShowPaused: nil,
+                     lyricsFontSize: nil, lyricsAnimationMotion: nil,
+                     lyricsBlurEnabled: nil, lyricsCountdownEnabled: nil,
+                     lyricsDefaultOffset: nil,
+                     autoReconnectEnabled: nil, forceOfflineMode: nil)
     }
 }

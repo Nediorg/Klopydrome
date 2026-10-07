@@ -14,6 +14,9 @@ final class AppState {
     /// disconnect, so it always matches the active server connection.
     var navidrome: NavidromeAPI?
     var cache: CacheManager?
+    var offlineRepository: (any OfflineRepository)?
+    var currentOfflineHost: String?
+    @ObservationIgnored var downloadCancellationTokens: [String: OSAllocatedUnfairLock<Bool>] = [:]
     var serverConfig: ServerConfig = .empty
 
     var player = Player()
@@ -52,6 +55,11 @@ final class AppState {
     var isConnecting = false
     var connectionError: String?
     var isOfflineSession = false
+    var isPreparingOfflineSession = false
+    var isReconnecting = false
+    var isServerScanning = false
+    @ObservationIgnored var scanStatusPollingTask: Task<Void, Never>?
+    var sharesManagerPresented = false
     /// True while a foreground-activation auto-reconnect is in flight (not a
     /// manual login): the login overlay stays hidden for it.
     var isBackgroundReconnecting = false
@@ -94,6 +102,9 @@ final class AppState {
     /// Kept in sync with `downloadingSongIDs` (dedupes programmatic cache hits).
     var downloadingSongs: [SubsonicSong] = []
 
+    /// Active download tasks (batches) for playlists, albums, genres, and track sets.
+    var activeDownloadTasks: [DownloadTask] = []
+
     /// Download progress (0...1) per song id. Updated incrementally by
     /// `downloadToCache` so the popover can show live progress.
     var downloadProgress: [String: Double] = [:]
@@ -107,7 +118,7 @@ final class AppState {
     /// nothing is downloading. Drives the status bar under the toolbar icon.
     var overallDownloadProgress: Double? {
         guard !downloadingSongIDs.isEmpty else { return nil }
-        let values = downloadingSongIDs.compactMap { downloadProgress[$0] }
+        let values = downloadingSongIDs.map { downloadProgress[$0] ?? 0.0 }
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
     }
@@ -142,7 +153,7 @@ final class AppState {
     private var activeCacheTasks: Set<String> = []
     /// Songs the user has asked to cancel mid-download; checked in the batch
     /// loop so a cancelled song is skipped after its in-flight write stops.
-    private var cancelledDownloads: Set<String> = []
+    var cancelledDownloads: Set<String> = []
     /// Stream-cache keys known to exist on disk. Seeded once from a directory
     /// scan and maintained on download/remove, so `isCached(_:)` is O(1) and a
     /// song list never performs a `FileManager` probe per visible row. LRU
@@ -178,38 +189,7 @@ final class AppState {
     }
 
     init() {
-        player.onDiscordPresenceUpdate = { [weak self] in
-            self?.refreshDiscordRichPresence()
-        }
-        DiscordRPCTransport.onStatusChange = { [weak self] status in
-            Task { @MainActor in
-                guard let self, self.discordConnectionStatus != status else { return }
-                self.discordConnectionStatus = status
-            }
-        }
-        player.onTrackRequest = { [weak self] song in
-            self?.startCurrent(song)
-        }
-        player.onStreamRecordFinished = { [weak self] url in
-            Task { await self?.finishAutomaticPlaybackCache(at: url) }
-        }
-        player.onTrackEnded = { [weak self] in
-            guard let self else { return }
-            self.discordSnoozeSongID = nil
-            if self.scrobblingEnabled, let ended = self.player.currentSong {
-                let id = ended.id
-                Task { try? await self.client?.scrobble(id: id, submission: true) }
-            }
-            self.player.trackDidFinish()
-        }
-        player.onTrackCrossfaded = { [weak self] ended in
-            guard let self else { return }
-            self.discordSnoozeSongID = nil
-            if self.scrobblingEnabled {
-                let id = ended.id
-                Task { try? await self.client?.scrobble(id: id, submission: true) }
-            }
-        }
+        configurePlayerLifecycle()
         loadPersisted()
         restorePlaybackExitPreferences()
         player.configureAutomix(
@@ -227,6 +207,11 @@ final class AppState {
         loadSmartPlaylists()
         loadFollowedPlaylists()
         queuePersistenceEnabled = UserDefaults.standard.object(forKey: queuePersistenceKey) as? Bool ?? false
+        NetworkMonitor.shared.onConnectivityRestored = { [weak self] in
+            Task { @MainActor [weak self] in
+                await self?.handleNetworkRestored()
+            }
+        }
     }
 
     // MARK: Persistence
@@ -261,6 +246,10 @@ final class AppState {
 
     func reconnectIfPossible() async {
         defer { isLaunching = false }
+        if serverConfig.effectiveForceOfflineMode {
+            _ = await beginOfflineSession()
+            return
+        }
         guard serverConfig.url.isEmpty == false else { return }
         guard let password = passwordForLoginPrefill() else {
             if await beginOfflineSession() {
@@ -282,14 +271,14 @@ final class AppState {
                 group.cancelAll()
             }
         } catch is CancellationError {
-            connectionError = "Нет соединения с сервером."
+            connectionError = "Нет соединения с сервером.".localized
             if await beginOfflineSession() {
-                connectionError = "Нет сети. Доступны сохранённые песни."
+                connectionError = "Нет сети. Доступны сохранённые песни.".localized
             }
         } catch {
             connectionError = error.localizedDescription
             if await beginOfflineSession() {
-                connectionError = "Нет сети. Доступны сохранённые песни."
+                connectionError = "Нет сети. Доступны сохранённые песни.".localized
             }
         }
     }
@@ -319,6 +308,7 @@ final class AppState {
             library = LibraryCache()
             withMutation(keyPath: \.starOverrides) { starOverrides = [:] }
             withMutation(keyPath: \.ratingOverrides) { ratingOverrides = [:] }
+            availableGenres = []
 
             self.client = client
             self.navidrome = NavidromeAPI(baseURL: base, username: username, password: password)
@@ -330,6 +320,7 @@ final class AppState {
             Task { await self.seedCachedStreamKeys() }
             serverConfig = updatedConfig
             isOfflineSession = false
+            await setupOfflineRepository(host: base.host ?? "default")
             await applyCacheLimits()
             await restoreOfflineCatalog()
             self.connectionError = nil
@@ -344,6 +335,7 @@ final class AppState {
             if queuePersistenceEnabled {
                 await restoreQueueFromServer()
             }
+            Task { await self.checkServerScanStatus() }
         } catch {
             connectionError = error.localizedDescription
             self.client = nil
@@ -377,16 +369,22 @@ final class AppState {
         scrobbleTask = nil
         downloadingSongIDs = []
         downloadingSongs = []
+        activeDownloadTasks = []
         downloadProgress = [:]
         downloadedSongs = []
         cancelledDownloads = []
         activeCacheTasks = []
+        downloadCancellationTokens = [:]
+        offlineRepository = nil
+        currentOfflineHost = nil
         cachedStreamKeys = []
         cachedStreamKeysSeeded = false
         player.isCaching = false
         library = LibraryCache()
         withMutation(keyPath: \.starOverrides) { starOverrides = [:] }
         withMutation(keyPath: \.ratingOverrides) { ratingOverrides = [:] }
+        availableGenres = []
+        stopScanStatusPolling()
         CoverArtStore.shared.configure(client: nil, cache: nil)
         UserDefaults.standard.removeObject(forKey: configKey)
         KeychainStore.delete(account: serverConfig.username)
@@ -433,8 +431,9 @@ final class AppState {
 
     /// Fetches an album's tracks and starts playing it from index 0.
     func play(_ album: SubsonicAlbum) {
-        if let offline = offlineAlbumDetail(for: album.id)?.song, !offline.isEmpty {
-            play(offline)
+        let localTracks = downloadedSongs.filter { ($0.albumId ?? $0.parent) == album.id }
+        if !localTracks.isEmpty {
+            play(localTracks)
             return
         }
         guard let client else { return }
@@ -541,7 +540,7 @@ final class AppState {
         }
     }
 
-    private func startCurrent(_ song: SubsonicSong) {
+    func startCurrent(_ song: SubsonicSong) {
         if discordSnoozeSongID != song.id {
             discordSnoozeSongID = nil
         }
@@ -610,64 +609,6 @@ final class AppState {
 
     // MARK: Cache management
 
-    func cacheSong(_ song: SubsonicSong) {
-        guard !isCached(song) else { return }
-        register(downloading: song)
-        Task {
-            await downloadToCache(song)
-            unregisterDownload(from: [song])
-        }
-    }
-
-    func cacheSongs(_ songs: [SubsonicSong]) {
-        let targets = songs.filter { !isCached($0) }
-        guard !targets.isEmpty else { return }
-        for song in targets { register(downloading: song) }
-        Task {
-            for song in targets {
-                if isCached(song) { continue }
-                await downloadToCache(song)
-            }
-            unregisterDownload(from: targets)
-        }
-    }
-
-    /// Downloads every track of an album for offline listening.
-    func cacheAlbum(_ album: SubsonicAlbum) {
-        guard let client else { return }
-        Task {
-            let songs = (try? await client.getAlbum(id: album.id))?.song ?? []
-            guard !songs.isEmpty else { return }
-            await MainActor.run { self.cacheSongs(songs) }
-        }
-    }
-
-    /// Downloads every track of the album the currently playing song belongs to.
-    func cacheCurrentAlbum() {
-        guard let currentSong = player.currentSong, let albumId = currentSong.albumId else { return }
-        guard let client else { return }
-        Task {
-            let songs = (try? await client.getAlbum(id: albumId))?.song ?? []
-            guard !songs.isEmpty else { return }
-            await MainActor.run { self.cacheSongs(songs) }
-        }
-    }
-
-    /// Downloads every track of a playlist for offline listening.
-    func cachePlaylist(_ playlist: PlaylistSummary) {
-        Task {
-            let songs = await playlistSongs(for: playlist)
-            guard !songs.isEmpty else { return }
-            await MainActor.run { self.cacheSongs(songs) }
-        }
-    }
-
-    /// Downloads every track of the currently visible playlist when one is selected.
-    func cacheCurrentPlaylist() {
-        guard let playlist = nav.selectedPlaylist else { return }
-        cachePlaylist(playlist)
-    }
-
     func removeFromCache(_ song: SubsonicSong) async {
         guard let cache else { return }
         let key = CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song))
@@ -683,6 +624,7 @@ final class AppState {
     /// current batch write finishes, then `downloadToCache` tears down.
     func cancelDownload(_ song: SubsonicSong) {
         cancelledDownloads.insert(song.id)
+        downloadCancellationTokens[song.id]?.withLock { $0 = true }
     }
 
     /// Streams a song straight to a temp file and moves it into the stream cache,
@@ -694,16 +636,19 @@ final class AppState {
             downloadProgress.removeValue(forKey: song.id)
             return
         }
+        let token = OSAllocatedUnfairLock<Bool>(initialState: cancelledDownloads.contains(song.id))
+        downloadCancellationTokens[song.id] = token
+        defer {
+            downloadCancellationTokens.removeValue(forKey: song.id)
+        }
         let key = CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song))
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         do {
+            downloadProgress[song.id] = 0.0
             try await TrackDownload.streamToFile(
                 url: url,
                 destination: temp,
-                isCancelled: { @Sendable [weak self] in
-                    guard let self else { return true }
-                    return await MainActor.run { self.cancelledDownloads.contains(song.id) }
-                },
+                isCancelled: { @Sendable in token.withLock { $0 } },
                 onProgress: { @Sendable [weak self] progress in
                     Task { @MainActor in self?.downloadProgress[song.id] = progress }
                 }
@@ -724,18 +669,24 @@ final class AppState {
 
     /// Track a song as currently downloading. Updates both `downloadingSongIDs`
     /// and the richer `downloadingSongs` list in start order.
-    private func register(downloading song: SubsonicSong) {
+    func register(downloading song: SubsonicSong) {
         downloadingSongIDs.insert(song.id)
         if !downloadingSongs.contains(where: { $0.id == song.id }) {
             downloadingSongs.append(song)
         }
+        if downloadProgress[song.id] == nil {
+            downloadProgress[song.id] = 0.0
+        }
     }
 
     /// Clear a finished download from both the ID set and the ordered list.
-    private func unregisterDownload(from songs: [SubsonicSong]) {
+    func unregisterDownload(from songs: [SubsonicSong]) {
         let ids = Set(songs.map(\.id))
         downloadingSongIDs.subtract(ids)
         downloadingSongs.removeAll { ids.contains($0.id) }
+        for id in ids {
+            downloadProgress.removeValue(forKey: id)
+        }
     }
 
     /// Add a freshly-downloaded song to the offline list, newest first, de-duped.
@@ -815,46 +766,6 @@ final class AppState {
     func invalidatePlaylistDetail(for playlistID: String) {
         cancelPlaylistLoad(for: playlistID)
         library.playlistDetails[playlistID] = nil
-    }
-
-    /// Plays a playlist's tracks from the start, sharing the detail request
-    /// with any open playlist screen instead of waiting for its rows to render.
-    func play(_ playlist: PlaylistSummary) async {
-        let songs = await playlistSongs(for: playlist)
-        guard !songs.isEmpty else { return }
-        play(songs, at: 0)
-    }
-
-    /// Shuffles a playlist's tracks through the shared detail request.
-    func playShuffled(_ playlist: PlaylistSummary) async {
-        let songs = await playlistSongs(for: playlist)
-        guard !songs.isEmpty else { return }
-        playShuffled(songs)
-    }
-
-    /// Queues a playlist's tracks to play immediately after the current song.
-    func playNext(_ playlist: PlaylistSummary) async {
-        let songs = await playlistSongs(for: playlist)
-        guard !songs.isEmpty else { return }
-        guard !player.queue.isEmpty else {
-            play(songs, at: 0)
-            return
-        }
-        var queue = player.queue
-        let insertAt = (player.currentIndex + 1) % queue.count
-        queue.insert(contentsOf: songs, at: insertAt)
-        player.queue = queue
-    }
-
-    /// Queues a playlist's tracks at the end of the queue ("В конец очереди").
-    func playLater(_ playlist: PlaylistSummary) async {
-        let songs = await playlistSongs(for: playlist)
-        guard !songs.isEmpty else { return }
-        guard !player.queue.isEmpty else {
-            play(songs, at: 0)
-            return
-        }
-        player.queue.append(contentsOf: songs)
     }
 
     /// Duplicates a playlist (content + comment) under a new name.

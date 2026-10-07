@@ -166,6 +166,13 @@ struct PlaylistDetailView: View {
             .foregroundStyle(AMColor.secondaryText)
     }
 
+    private var playableSongs: [SubsonicSong] {
+        if app.isOfflineSession {
+            return rows.filter { app.isCached($0) }
+        }
+        return rows
+    }
+
     private func actionRow(_ detail: PlaylistDetail) -> some View {
         HStack(spacing: 10) {
             ActionPill(
@@ -175,7 +182,7 @@ struct PlaylistDetailView: View {
             ) {
                 Task { await startPlayback(shuffled: false) }
             }
-            .disabled(isPreparingPlayback)
+            .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
 
             ActionPill(
                 title: "Перемешать",
@@ -184,7 +191,7 @@ struct PlaylistDetailView: View {
             ) {
                 Task { await startPlayback(shuffled: true) }
             }
-            .disabled(isPreparingPlayback)
+            .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
 
             Spacer()
             HStack(spacing: 8) {
@@ -224,7 +231,15 @@ struct PlaylistDetailView: View {
                         ? { AnyView(Button("Убрать из плейлиста".localized) { remove(at: index, from: detail) }) }
                         : nil,
                     onPlay: { rowIndex in
-                        app.play(rows, at: rowIndex)
+                        if app.isOfflineSession {
+                            let playable = playableSongs
+                            guard rowIndex < displayedSongs.count else { return }
+                            let clickedSong = displayedSongs[rowIndex]
+                            let playIndex = playable.firstIndex(where: { $0.id == clickedSong.id }) ?? 0
+                            app.play(playable, at: playIndex)
+                        } else {
+                            app.play(rows, at: rowIndex)
+                        }
                     },
                     isSelected: selection.isSelected(song.id),
                     resolveSelection: { selection.selectedSongs(from: allSongs) },

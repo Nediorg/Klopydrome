@@ -92,15 +92,16 @@ struct DetailColumn: View {
     var isMiniPlayerVisible: Bool
 
     var body: some View {
-        DetailView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .trailing) {
-                if app.queuePanelVisible {
-                    PlayerPanelView()
-                        .transition(.move(edge: .trailing))
-                        .zIndex(2)
-                }
+        ZStack(alignment: .trailing) {
+            DetailView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if app.queuePanelVisible {
+                PlayerPanelView()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(2)
             }
+        }
             .safeAreaInset(edge: .top, spacing: 0) {
                 PlayerHeaderBar(
                     showDownloads: $showDownloads,
@@ -146,6 +147,8 @@ struct DetailView: View {
                 ArtistDetailView(artist: artist)
             case .song(let song):
                 SongDetailView(song: song)
+            case .genre(let genreName):
+                GenreDetailView(genreName: genreName)
             }
         } else if let playlist = app.nav.selectedPlaylist {
             PlaylistDetailView(playlist: playlist)
@@ -157,6 +160,7 @@ struct DetailView: View {
             case .songs: SongsView()
             case .artists: ArtistsView()
             case .albums: AlbumGridView(config: .albums)
+            case .genres: GenresView()
             case .favorites: FavoritesView()
             case .search: SearchResultsView(query: app.nav.searchQuery.trimmingCharacters(in: .whitespaces))
             }
@@ -182,9 +186,9 @@ struct MinimalScrubber: View {
     @State private var dragProgress: CGFloat?
 
     /// Sweep shows only while the player is actually loading/stalled, never during
-    /// plain playback (background caching ahead is not "loading").
+    /// plain playback (background caching ahead is not "loading") or while paused.
     private var isLoading: Bool {
-        app.player.isBuffering || app.player.isLoading
+        app.player.isPlaying && (app.player.isBuffering || app.player.isLoading)
     }
 
     private var trackDuration: Double { app.player.trackDuration }
@@ -267,15 +271,18 @@ struct MinimalScrubber: View {
                     Rectangle()
                         .stroke(Color.primary.opacity(0.18), lineWidth: 1)
                 }
+
             if isLoading {
                 SweepBar(width: width, trackHeight: trackHeight)
-            } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(isLCDHovered ? 0.85 : 0.65))
-                    .frame(height: trackHeight)
-                    .scaleEffect(x: trackProgress, anchor: .leading)
-                marker(width: width)
+                    .opacity(0.6)
             }
+
+            Rectangle()
+                .fill(Color.secondary.opacity(isLCDHovered ? 0.85 : 0.65))
+                .frame(height: trackHeight)
+                .scaleEffect(x: trackProgress, anchor: .leading)
+
+            marker(width: width)
         }
         .frame(width: width, height: trackHeight)
         .clipped()

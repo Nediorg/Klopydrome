@@ -25,6 +25,10 @@ enum Pluralized {
         localizedNoun("plural.track", count: count)
     }
 
+    static func visit(_ count: Int) -> String {
+        localizedNoun("plural.visit", count: count)
+    }
+
     private static func localizedNoun(_ key: String, count: Int) -> String {
         let form = isRussian ? russianForm(for: count) : (count == 1 ? "one" : "other")
         return L10n.text("\(key).\(form)")

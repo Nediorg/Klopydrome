@@ -174,14 +174,23 @@ struct AlbumDetailView: View {
 
     // MARK: Action row
 
+    private var playableSongs: [SubsonicSong] {
+        if app.isOfflineSession {
+            return orderedSongs.filter { app.isCached($0) }
+        }
+        return orderedSongs
+    }
+
     private var actionRow: some View {
         HStack(spacing: 10) {
             ActionPill(title: "Слушать", systemImage: "play.fill", filled: true) {
-                if !songs.isEmpty { app.play(songs, at: 0) }
+                if !playableSongs.isEmpty { app.play(playableSongs, at: 0) }
             }
+            .disabled(playableSongs.isEmpty)
             ActionPill(title: "Перемешать", systemImage: "shuffle", filled: true) {
-                if !songs.isEmpty { app.playShuffled(songs) }
+                if !playableSongs.isEmpty { app.playShuffled(playableSongs) }
             }
+            .disabled(playableSongs.isEmpty)
             Spacer()
             HStack(spacing: 8) {
                 RoundFavoriteButton(isStarred: app.isStarred(album)) {
@@ -221,6 +230,16 @@ struct AlbumDetailView: View {
         return artists.count > 1
     }
 
+    private func playTrack(_ song: SubsonicSong, globalIndex: Int, ordered: [SubsonicSong]) {
+        if app.isOfflineSession {
+            let playable = playableSongs
+            let playIndex = playable.firstIndex(where: { $0.id == song.id }) ?? 0
+            app.play(playable, at: playIndex)
+        } else {
+            app.play(ordered, at: globalIndex)
+        }
+    }
+
     private func trackList(_ detail: AlbumDetail) -> some View {
         let currentID = app.player.currentSong?.id
         let groups = groupedSongs
@@ -254,7 +273,7 @@ struct AlbumDetailView: View {
                             showAlbum: false,
                             showsArtist: rowShowsArtist,
                             isCurrentOverride: currentID == song.id,
-                            onPlay: { _ in app.play(ordered, at: globalIndex) },
+                            onPlay: { _ in playTrack(song, globalIndex: globalIndex, ordered: ordered) },
                             isSelected: selection.isSelected(song.id),
                             resolveSelection: { selection.selectedSongs(from: ordered) },
                             onSelect: { selection.toggle(song.id, allSongs: ordered) }
@@ -262,7 +281,7 @@ struct AlbumDetailView: View {
                         .equatable()
                     }
                     if showDiscHeaders && group.disc != groups.last?.disc {
-                        Divider().opacity(0.2).padding(.vertical, 4)
+                        Color.clear.frame(height: 3)
                     }
                 }
             }
@@ -298,7 +317,7 @@ struct AlbumDetailView: View {
         }
 
         if isOffline {
-            detail = app.offlineAlbumDetail(for: albumID)
+            detail = await app.offlineAlbumDetail(for: albumID)
             return
         }
         guard let client = app.client else { return }
@@ -316,46 +335,62 @@ private struct MoreByArtist: View {
     @Environment(AppState.self) private var app
 
     @State private var albums: [SubsonicAlbum] = []
+    @State private var loaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                app.openArtistInLibrary(Artist(id: artistId, name: artistName))
-            } label: {
-                HStack(spacing: 6) {
-                    Text(L10n.format("format.album.moreByArtist", artistName))
-                        .font(.title2.bold())
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if albums.isEmpty {
-                ProgressView()
-                    .padding(.vertical, 20)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 16) {
-                        ForEach(albums) { album in
-                            Button {
-                                app.openAlbumInLibrary(album)
-                            } label: {
-                                AlbumCard(album: album, width: 160)
-                            }
-                            .buttonStyle(.plain)
-                        }
+        if !albums.isEmpty || !loaded {
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    app.openArtistInLibrary(Artist(id: artistId, name: artistName))
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(L10n.format("format.album.moreByArtist", artistName))
+                            .font(.title2.bold())
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .padding(.bottom, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if !loaded {
+                    ProgressView()
+                        .padding(.vertical, 20)
+                } else if !albums.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 16) {
+                            ForEach(albums) { album in
+                                Button {
+                                    app.openAlbumInLibrary(album)
+                                } label: {
+                                    AlbumCard(album: album)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.bottom, 4)
+                    }
                 }
             }
+            .task { await load() }
         }
-        .task { await load() }
     }
 
     private func load() async {
-        guard albums.isEmpty, let client = app.client else { return }
+        guard albums.isEmpty, !loaded else { return }
+        if app.isOfflineSession {
+            albums = app.library.albums.filter {
+                ($0.artistId != nil && $0.artistId == artistId) ||
+                ($0.artist != nil && $0.artist == artistName)
+            }
+            loaded = true
+            return
+        }
+        guard let client = app.client else {
+            loaded = true
+            return
+        }
+        defer { loaded = true }
         let artist = try? await client.getArtist(id: artistId)
         albums = artist?.album ?? []
     }

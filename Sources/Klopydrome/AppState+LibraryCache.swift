@@ -38,6 +38,18 @@ final class LibraryCache {
     var songsLoaded = false
     var homeShelvesLoaded = false
 
+    /// Clears the loaded flags after a server library scan completes so
+    /// tabs refresh their data on subsequent visits.
+    func invalidateForScan() {
+        albumsLoaded = false
+        recentAlbumsLoaded = false
+        artistIndexesLoaded = false
+        favoritesLoaded = false
+        playlistsLoaded = false
+        songsLoaded = false
+        homeShelvesLoaded = false
+    }
+
     /// Finds a cached artist by name across the alphabetical index and favorites.
     func findArtist(named name: String) -> Artist? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

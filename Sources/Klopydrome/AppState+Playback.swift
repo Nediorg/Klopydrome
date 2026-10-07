@@ -96,4 +96,63 @@ extension AppState {
             player.playURL(url)
         }
     }
+
+    /// Sets up playback engine event callbacks and Discord RPC status hooks.
+    func configurePlayerLifecycle() {
+        player.onDiscordPresenceUpdate = { [weak self] in
+            self?.refreshDiscordRichPresence()
+        }
+        DiscordRPCTransport.onStatusChange = { [weak self] status in
+            Task { @MainActor in
+                guard let self, self.discordConnectionStatus != status else { return }
+                self.discordConnectionStatus = status
+            }
+        }
+        player.onTrackRequest = { [weak self] song in
+            self?.startCurrent(song)
+        }
+        player.onStreamRecordFinished = { [weak self] url in
+            Task { await self?.finishAutomaticPlaybackCache(at: url) }
+        }
+        player.onTrackEnded = { [weak self] in
+            guard let self else { return }
+            self.discordSnoozeSongID = nil
+            if self.scrobblingEnabled, let ended = self.player.currentSong {
+                let id = ended.id
+                Task { try? await self.client?.scrobble(id: id, submission: true) }
+            }
+            self.player.trackDidFinish()
+        }
+        player.onTrackCrossfaded = { [weak self] ended in
+            guard let self else { return }
+            self.discordSnoozeSongID = nil
+            if self.scrobblingEnabled {
+                let id = ended.id
+                Task { try? await self.client?.scrobble(id: id, submission: true) }
+            }
+        }
+    }
+
+    /// Queues multiple songs to play immediately after the current track.
+    func playNext(_ songs: [SubsonicSong]) {
+        guard !songs.isEmpty else { return }
+        guard !player.queue.isEmpty else {
+            play(songs, at: 0)
+            return
+        }
+        var queue = player.queue
+        let insertAt = min(player.currentIndex + 1, queue.count)
+        queue.insert(contentsOf: songs, at: insertAt)
+        player.queue = queue
+    }
+
+    /// Queues multiple songs at the end of the current play queue.
+    func playLater(_ songs: [SubsonicSong]) {
+        guard !songs.isEmpty else { return }
+        guard !player.queue.isEmpty else {
+            play(songs, at: 0)
+            return
+        }
+        player.queue.append(contentsOf: songs)
+    }
 }

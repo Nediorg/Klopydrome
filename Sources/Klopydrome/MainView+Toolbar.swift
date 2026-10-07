@@ -106,7 +106,14 @@ struct PlayerHeaderBar: View {
                 .transition(.opacity)
             }
 
-            if app.player.crossfadeStatusText != nil {
+            if app.player.lastError != nil {
+                HStack {
+                    Spacer()
+                    PlayerErrorToolbarIndicator()
+                }
+                .frame(width: width + 2 * (24 + 8))
+                .transition(.opacity)
+            } else if app.player.isCrossfading {
                 HStack {
                     Spacer()
                     CrossfadeToolbarIndicator()
@@ -116,7 +123,8 @@ struct PlayerHeaderBar: View {
             }
         }
         .animation(.snappy(duration: 0.2), value: app.hasDownloadContent)
-        .animation(.snappy(duration: 0.2), value: app.player.crossfadeStatusText != nil)
+        .animation(.snappy(duration: 0.2), value: app.player.isCrossfading)
+        .animation(.snappy(duration: 0.2), value: app.player.lastError != nil)
     }
 
     private var rightControls: some View {

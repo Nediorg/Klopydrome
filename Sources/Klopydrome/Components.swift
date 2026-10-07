@@ -351,9 +351,11 @@ struct SongEllipsisMenu: View {
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
+        .frame(width: compact ? 28 : 36, height: compact ? 20 : 28)
+        .contentShape(Rectangle())
         .tint(foregroundStyle)
-        .help("Ещё")
-        .accessibilityLabel("Действия для песни")
+        .help("Ещё".localized)
+        .accessibilityLabel("Действия для песни".localized)
     }
 }
 

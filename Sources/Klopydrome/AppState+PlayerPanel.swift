@@ -19,11 +19,15 @@ extension AppState {
     }
 
     func setPlayerPanel(_ tab: PlayerPanelTab, visible: Bool) {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            if visible {
-                showLyrics = tab == .lyrics
-                queuePanelVisible = true
-            } else if visiblePlayerPanel == tab {
+        if visible {
+            showLyrics = tab == .lyrics
+            if !queuePanelVisible {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    queuePanelVisible = true
+                }
+            }
+        } else if visiblePlayerPanel == tab {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 queuePanelVisible = false
             }
         }

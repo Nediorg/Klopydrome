@@ -8,85 +8,19 @@ struct AppSettingsView: View {
     var body: some View {
         TabView {
             GeneralSettingsView()
-                .tabItem { Label("Общие", systemImage: "gearshape") }
+                .tabItem { Label("Общие".localized, systemImage: "gearshape") }
+            AppearanceSettingsView()
+                .tabItem { Label("Внешний вид".localized, systemImage: "paintpalette") }
             PlaybackSettingsView()
-                .tabItem { Label("Воспроизведение", systemImage: "play.circle") }
+                .tabItem { Label("Воспроизведение".localized, systemImage: "play.circle") }
             CacheSettingsView()
-                .tabItem { Label("Кэш", systemImage: "internaldrive") }
+                .tabItem { Label("Кэш".localized, systemImage: "internaldrive") }
             AdvancedSettingsView()
-                .tabItem { Label("Расширенные", systemImage: "slider.horizontal.3") }
+                .tabItem { Label("Расширенные".localized, systemImage: "slider.horizontal.3") }
+            SharesManagerView()
+                .tabItem { Label("Ссылки".localized, systemImage: "link") }
         }
-        .frame(width: 520, height: 460)
-    }
-}
-
-private struct GeneralSettingsView: View {
-    @Environment(AppState.self) private var app
-    @State private var showLogout = false
-
-    var body: some View {
-        Form {
-            Section {
-                Picker("Кодек", selection: Bindable(app).serverConfig.format) {
-                    Text("Оригинальный (решает сервер)".localized).tag(String?.none)
-                    Text("Opus").tag(String?.some("opus"))
-                    Text("MP3").tag(String?.some("mp3"))
-                    Text("M4A (AAC)").tag(String?.some("m4a"))
-                    Text("FLAC").tag(String?.some("flac"))
-                }
-
-                Picker("Битрейт", selection: Bindable(app).serverConfig.maxBitRate) {
-                    Text("Оригинал".localized).tag(0)
-                    Text("320 kbps").tag(320)
-                    Text("256 kbps").tag(256)
-                    Text("192 kbps").tag(192)
-                    Text("128 kbps").tag(128)
-                    Text("64 kbps").tag(64)
-                }
-            } header: {
-                Text("Потоковая передача".localized)
-            } footer: {
-                Text("Параметры транскодирования на стороне сервера для потоков и загрузок.".localized)
-            }
-
-            Section {
-                Picker("Тема", selection: Bindable(app).serverConfig.theme) {
-                    Text("Как в системе".localized).tag(AppTheme?.none)
-                    ForEach([AppTheme.dark, AppTheme.light]) { theme in
-                        Text(theme.label.localized).tag(AppTheme?.some(theme))
-                    }
-                }
-                Picker("Разрешение обложек", selection: Bindable(app).serverConfig.coverResolution) {
-                    Text("Высокое (по умолчанию)".localized).tag(CoverResolution?.none)
-                    ForEach(CoverResolution.allCases.filter { $0 != .high }) { resolution in
-                        Text(resolution.label.localized).tag(CoverResolution?.some(resolution))
-                    }
-                }
-            } header: {
-                Text("Внешний вид".localized)
-            }
-            Section("Аккаунт") {
-                LabeledContent("Сервер") { Text(app.serverConfig.url).foregroundStyle(.secondary) }
-                Button("Выйти из аккаунта", role: .destructive) {
-                    showLogout = true
-                }
-                .confirmationDialog("Выйти из аккаунта?",
-                                    isPresented: $showLogout,
-                                    titleVisibility: .visible) {
-                    Button("Выйти", role: .destructive) { app.disconnect() }
-                    Button("Отмена", role: .cancel) {}
-                } message: {
-                    // swiftlint:disable:next line_length
-                    Text("Очередь, кэш и сохранённый пароль будут очищены. Вы сможете подключиться к другому серверу.".localized)
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-        .onChange(of: app.serverConfig) { _, _ in
-            app.saveSettings()
-            app.refreshDiscordRichPresence()
-        }
+        .frame(width: 640, height: 500)
     }
 }
 
@@ -210,6 +144,7 @@ private struct CacheSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .padding()
         .onChange(of: app.serverConfig) { _, _ in
             if !app.serverConfig.cacheEnabled { app.cancelAutomaticPlaybackCache() }
             Task { await app.applyCacheLimits() }

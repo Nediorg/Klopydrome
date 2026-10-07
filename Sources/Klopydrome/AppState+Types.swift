@@ -34,6 +34,39 @@ enum AppTheme: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Visual scale of synchronized lyrics lines.
+enum LyricsFontSize: String, Codable, CaseIterable, Identifiable {
+    case standard, large, compact
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .standard: return "Обычный"
+        case .large: return "Крупный"
+        case .compact: return "Компактный"
+        }
+    }
+    var font: Font {
+        switch self {
+        case .standard: return .system(.title3, design: .default).weight(.semibold)
+        case .large: return .system(.title2, design: .default).weight(.semibold)
+        case .compact: return .system(.body, design: .default).weight(.semibold)
+        }
+    }
+}
+
+/// Motion and ripple physics style for lyrics advancement.
+enum LyricsAnimationMotion: String, Codable, CaseIterable, Identifiable {
+    case smooth, subtle, none
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .smooth: return "Плавная"
+        case .subtle: return "Мягкая"
+        case .none: return "Без анимации"
+        }
+    }
+}
+
 /// Audio rendering backend. MPV (libmpv, via MPVKit) decodes every format the
 /// server can send and seeks HTTP streams sample-accurately by range-requesting
 /// the exact byte offset, so lyric highlights stay locked to the audio.
@@ -44,7 +77,7 @@ enum PlaybackEngine: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .mpv: return "MPV (рекомендуется)"
+        case .mpv: return "MPV"
         case .avFoundation: return "AVFoundation"
         }
     }
@@ -58,6 +91,7 @@ struct NavigationState {
         case songs = "Songs"
         case artists = "Artists"
         case albums = "Albums"
+        case genres = "Genres"
         case favorites = "Favorites"
         case search = "Search"
 
@@ -69,8 +103,23 @@ struct NavigationState {
             case .songs: return "music.note"
             case .artists: return "music.mic"
             case .albums: return "square.stack"
+            case .genres: return "guitars"
             case .favorites: return "star"
             case .search: return "magnifyingglass"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .home: return "Главная".localized
+            case .playlists: return "Плейлисты".localized
+            case .recentlyAdded: return "Недавно добавленные".localized
+            case .songs: return "Песни".localized
+            case .artists: return "Артисты".localized
+            case .albums: return "Альбомы".localized
+            case .genres: return "Жанры".localized
+            case .favorites: return "Избранное".localized
+            case .search: return "Поиск".localized
             }
         }
 
@@ -78,12 +127,35 @@ struct NavigationState {
         var isSidebarRow: Bool { self != .search }
     }
 
+    /// Key used to persist the user's enabled library sections.
+    static let visibleLibrarySectionsKey = "VisibleLibrarySections"
+
+    /// Default set of sections shown under the "Медиатека" header.
+    static let defaultVisibleLibrarySections: [Section] = [
+        .recentlyAdded,
+        .artists,
+        .albums,
+        .songs,
+        .favorites
+    ]
+
+    /// All configurable sections available under the "Медиатека" header.
+    static let customizableLibrarySections: [Section] = [
+        .recentlyAdded,
+        .artists,
+        .albums,
+        .songs,
+        .genres,
+        .favorites
+    ]
+
     enum Destination: Hashable {
         case album(SubsonicAlbum)
         case playlist(PlaylistSummary)
         case smartPlaylist(SmartPlaylist)
         case artist(Artist)
         case song(SubsonicSong)
+        case genre(String)
     }
 
     var selected: Section = .home
@@ -98,4 +170,27 @@ struct NavigationState {
     /// instead of the "All Playlists" grid.
     var selectedPlaylist: PlaylistSummary?
     var searchQuery: String = ""
+
+    /// Active set of library sections shown in the sidebar.
+    var visibleLibrarySections: Set<Section> = {
+        guard let saved = UserDefaults.standard.stringArray(forKey: visibleLibrarySectionsKey) else {
+            return Set(defaultVisibleLibrarySections)
+        }
+        let sections = saved.compactMap { Section(rawValue: $0) }
+        return sections.isEmpty ? Set(defaultVisibleLibrarySections) : Set(sections)
+    }()
+
+    /// Toggles visibility of a library section, keeping at least one active.
+    mutating func toggleLibrarySection(_ section: Section) {
+        if visibleLibrarySections.contains(section) {
+            guard visibleLibrarySections.count > 1 else { return }
+            visibleLibrarySections.remove(section)
+        } else {
+            visibleLibrarySections.insert(section)
+        }
+        UserDefaults.standard.set(
+            visibleLibrarySections.map(\.rawValue),
+            forKey: Self.visibleLibrarySectionsKey
+        )
+    }
 }

@@ -94,7 +94,13 @@ struct PlaylistsView: View {
                     .padding(.vertical, 24)
                 }
                 .scrollClipDisabled()
-                .refreshable { await load() }
+                .refreshable {
+                    if app.isOfflineSession {
+                        _ = await app.reconnect()
+                    } else {
+                        await load()
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -201,15 +207,18 @@ struct PlaylistsView: View {
     /// Fetches the playlist list only when it has never been loaded, so revisits
     /// are instant. Pull-to-refresh still forces a full reload.
     private func loadIfNeeded() async {
-        guard !app.library.playlistsLoaded else { return }
+        guard !app.library.playlistsLoaded else {
+            loading = false
+            return
+        }
         await load()
     }
 
     private func load() async {
-        guard app.client != nil else { return }
         if app.library.playlists.isEmpty { loading = true }
         displayedPlaylistCount = playlistPageSize
         defer { loading = false }
+        guard app.client != nil else { return }
         await app.refreshPlaylists()
     }
 
@@ -234,8 +243,10 @@ struct PlaylistsView: View {
 
 /// Large, square playlist tile: artwork with the title and creator underneath.
 struct PlaylistTilePlaceholder: View {
+    var width: CGFloat?
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(0.06))
                 .aspectRatio(1, contentMode: .fit)
@@ -246,12 +257,14 @@ struct PlaylistTilePlaceholder: View {
                 .fill(Color.primary.opacity(0.05))
                 .frame(width: 88, height: 10)
         }
+        .frame(width: width, alignment: .leading)
         .accessibilityHidden(true)
     }
 }
 
 struct PlaylistTile: View {
     let playlist: PlaylistSummary
+    var width: CGFloat?
 
     private var fallbackPreset: PlaylistCoverPreset {
         let presets = PlaylistCoverPreset.all
@@ -260,31 +273,50 @@ struct PlaylistTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            artwork
+            textBlock
+        }
+        .frame(width: width, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if let width {
+            coverView(size: width)
+                .frame(width: width, height: width)
+        } else {
             GeometryReader { geo in
-                if let coverArt = playlist.coverArt, !coverArt.isEmpty {
-                    CoverArtView(coverArt: coverArt, size: geo.size.width, cornerRadius: 6, shadow: true)
-                } else {
-                    CoverPresetView(preset: fallbackPreset, size: geo.size.width, title: playlist.displayName)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-                }
+                coverView(size: geo.size.width)
             }
             .aspectRatio(1, contentMode: .fit)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(playlist.displayName)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(playlist.owner ?? "Плейлист".localized)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 2)
         }
-        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func coverView(size: CGFloat) -> some View {
+        if let coverArt = playlist.coverArt, !coverArt.isEmpty {
+            CoverArtView(coverArt: coverArt, size: size, cornerRadius: 6, shadow: true)
+        } else {
+            CoverPresetView(preset: fallbackPreset, size: size, title: playlist.displayName)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+        }
+    }
+
+    private var textBlock: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(playlist.displayName)
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Text(playlist.owner ?? "Плейлист".localized)
+                .font(.callout)
+                .foregroundStyle(AMColor.secondaryText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 2)
     }
 }
 
@@ -293,7 +325,7 @@ struct SmartPlaylistTile: View {
     let playlist: SmartPlaylist
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Image(systemName: "gearshape")
                 .font(.system(size: 72, weight: .light))
                 .foregroundStyle(.secondary)
@@ -306,12 +338,12 @@ struct SmartPlaylistTile: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(playlist.name)
-                    .font(.subheadline.weight(.medium))
+                    .font(.callout)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(playlist.ruleSummary)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.callout)
+                    .foregroundStyle(AMColor.secondaryText)
                     .lineLimit(1)
             }
             .padding(.horizontal, 2)

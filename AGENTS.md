@@ -54,10 +54,35 @@
 - **NavigationSplitView detail navigation must use in-memory history**: Never nest a `NavigationStack` inside the `NavigationSplitView` detail column on macOS. Pushing destinations in `NavigationStack` performs a destructive AppKit pane swap that unmounts `NSViewRepresentable` views (such as `ToolbarVolumeSlider`) and breaks top `.safeAreaInset` pin behavior. All detail sub-pages (albums, artists, playlists, songs) must route through `app.nav.history: [Destination]` and `app.navigateBack()`, keeping a single persistent root view.
 - **Detail views must fill all space**: Every detail view inside `DetailColumn` (including empty and `ContentUnavailableView` states) must specify `.frame(maxWidth: .infinity, maxHeight: .infinity)` before `.safeAreaInset` is applied, preventing SwiftUI from vertically centering the safe-area container when content is small.
 
-## UI conventions
-- **Context actions have ONE source of truth.** Playlist actions come from `PlaylistContextMenuItems` (rename / play / follow / make public / duplicate / delete) — sidebar rows, playlists-grid tiles, and the detail-window «…» button all build from it; the public/private toggle goes through `app.togglePlaylistVisibility(_:)`. Song actions come from `SongActionItems` — every list row's right-click and hover «…», the Songs-table selection menu, and the now-playing menu all build from it (play / play next / queue later / add to playlist / favorite / download / rate). Both components and their helpers live in `Sources/Klopydrome/PlaylistMenu.swift` and `Sources/Klopydrome/SongMenu.swift`. Never hand-roll a parallel list of actions on a surface — that is how the four different song menus and three different playlist menus appeared.
+## UI conventions & Design System
+- **Mandatory reuse of core UI assets — never invent custom cards or lists from scratch:**
+  - **Tabular track & album lists:**
+    - `SongTable`: full tabular song list with sorting and columns (title, artist, album, duration, date). Standard for full-page track listings.
+    - `CompactSongsSection` / `CompactSongsGrid`: 3-row Apple Music-style compact song blocks/shelves. Standard for Home and Search.
+    - `AlbumGridView` / `AlbumCard`: standard square album artwork tiles with hover play/actions. Standard for album collections and shelves.
+  - **Content pills (`TopResultSongCard`, `TopResultArtistCard` in `SearchResultsView`):**
+    - Compact rounded-rectangle cards (8pt continuous radius, 40pt artwork thumbnail, title, badge subtitle, hover action menu/star).
+    - MUST be used whenever a compact pill/card representation of an artist, album, or song is needed (e.g. top search results, entity shelves, compact pickers).
+- **Match existing adjacent elements and scenarios strictly:**
+  - Every new screen, view, or settings section **must mirror the design pattern and scenario of its existing adjacent equivalents** rather than introducing ad-hoc layouts.
+  - Example: External service / connection status sections (e.g. "Офлайн-режим" vs "Discord Rich Presence"):
+    - Standard macOS grouped `Form` section (`Section { ... } header: { ... }`).
+    - Primary toggle controls the main state.
+    - Dependent sub-toggles and fields disable cleanly (`.disabled`) when the parent state makes them irrelevant.
+    - Connection state is strictly `LabeledContent("Статус") { Text(...).foregroundStyle(statusColor) }` with standard semantic colors (`.green`, `.secondary`, `.red`), identical to `DiscordStatusRow`. Never invent custom `HStack` layouts with trailing `Spacer()`, inline wifi icons, or disparate typography.
+- **No verbose text clutter & no pointless counters / info blocks:**
+  - Never clutter UI views and settings with walls of explanatory text, redundant descriptions, or multi-line footers.
+  - Never inject redundant statistics, counters (e.g. number of tracks/downloads), or debugging details into persistent status banners, sidebars, or headers where they do not drive immediate user action. Detailed numbers belong solely to dedicated views (such as the Downloads popover or Settings storage breakdown).
+  - macOS design is minimalist and purposeful: elements must speak for themselves through clear labels and standard platform idioms. A section footer is acceptable only as a single concise sentence when non-obvious; otherwise omit it.
+- **Accurate platform terminology (nouns over procedural verbs):**
+  - Settings and toggles must use domain nouns and established macOS conventions (e.g. "Офлайн-режим" / "Offline Mode", "Сеть" / "Network"), never colloquial or procedural verbs (such as "Работать офлайн").
+- **Context actions have ONE source of truth:**
+  - Playlist actions come from `PlaylistContextMenuItems` (rename / play / follow / make public / duplicate / delete) — sidebar rows, playlists-grid tiles, and detail-window «…» button all build from it; public/private toggle goes through `app.togglePlaylistVisibility(_:)`.
+  - Song actions come from `SongActionItems` — list row right-click, hover «…», Songs-table selection menu, and now-playing menu all build from it (play / play next / queue later / add to playlist / favorite / download / rate).
+  - Both live in `Sources/Klopydrome/PlaylistMenu.swift` and `Sources/Klopydrome/SongMenu.swift`. Never hand-roll parallel action lists.
+- **Hit targets are larger than the visual object:**
+  - When building pill/menu/button labels, the whole padded background must be clickable — never leave dead space around the text or icon. Plain `Button`/`Menu` hit areas are exactly the label content, so padding added OUTSIDE the label expands the background but not the click area. Keep padding inside the label and add `.contentShape(Rectangle())` to it.
 - `Build`/`lint` gate: `./scripts/lint.sh` uses a SwiftLint baseline, so **adding lines to a file near a size limit flags the WHOLE file.** When a lint error appears after a small edit, prefer moving the new code into an extension in another file (e.g. `AppState` methods as `extension AppState`) over raising the threshold — it keeps the baseline intact.
-- **Hit targets are larger than the visual object.** When building pill/menu/button labels, the whole padded background must be clickable — never leave dead space around the text or icon. Plain `Button`/`Menu` hit areas are exactly the label content, so padding added OUTSIDE the label expands the background but not the click area. Fix: keep the padding inside the label and add `.contentShape(Rectangle())` to it (this bit us in the artist-page sort pill: only the text and the arrow were clickable, the rounded background around them was dead).
 
 ## Localization
 - Every user-visible string MUST be localized. If you add new strings, add the English localization in `Resources/en.lproj/Localizable.strings` (and update `ru.lproj` if you touch Russian). When analyzing code, flag any hard-coded UI string without a `L10n`/`LocalizedStringKey`/`String(localized:)` lookup and translate it.

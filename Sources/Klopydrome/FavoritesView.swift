@@ -140,12 +140,12 @@ struct FavoritesView: View {
             .accessibilityLabel(albumsExpanded ? "Свернуть".localized : "Раскрыть".localized)
 
             if albumsExpanded {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 16) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 16)], spacing: 16) {
                     ForEach(albums) { album in
                         Button {
                             app.openAlbumInLibrary(album)
                         } label: {
-                            AlbumCard(album: album, width: 150)
+                            AlbumCard(album: album, width: 165)
                                 .equatable()
                         }
                         .buttonStyle(.plain)
@@ -183,8 +183,7 @@ struct FavoritesView: View {
                         Button {
                             app.openPlaylist(playlist)
                         } label: {
-                            PlaylistTile(playlist: playlist)
-                                .frame(width: 150)
+                            PlaylistTile(playlist: playlist, width: 165)
                         }
                         .buttonStyle(.plain)
                         .contextMenu {

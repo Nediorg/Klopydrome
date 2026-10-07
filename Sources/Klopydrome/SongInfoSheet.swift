@@ -281,5 +281,8 @@ struct SongInfoSheet: View {
 extension AppState {
     func inspectSong(_ song: SubsonicSong) {
         inspectingSong = song
+        if MiniPlayerPanelController.shared.isPanelActive {
+            MiniPlayerPanelController.shared.closeForLibraryNavigation()
+        }
     }
 }

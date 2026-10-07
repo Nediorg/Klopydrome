@@ -320,6 +320,8 @@ struct CompactSongRow: View {
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
                     .fixedSize()
                     .transition(.opacity)
                 } else {

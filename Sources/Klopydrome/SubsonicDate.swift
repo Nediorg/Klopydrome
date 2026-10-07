@@ -25,12 +25,16 @@ enum SubsonicDate {
         return formatter
     }()
 
+    /// Parses a Subsonic ISO8601 timestamp into a Date.
+    static func parse(_ iso: String?) -> Date? {
+        guard let iso else { return nil }
+        return Self.iso.date(from: iso) ?? Self.isoFallback.date(from: iso)
+    }
+
     /// Parses a Subsonic ISO8601 timestamp and returns it as a localized long
     /// date string, or nil if it can't be decoded.
     static func longDate(_ iso: String?) -> String? {
-        guard let iso else { return nil }
-        let date = Self.iso.date(from: iso) ?? Self.isoFallback.date(from: iso)
-        guard let date else { return nil }
+        guard let date = parse(iso) else { return nil }
         return Self.display.string(from: date)
     }
 }

@@ -25,8 +25,20 @@ extension AppState {
             installCompletedPlaylist(cached, for: playlist)
             return
         }
-        if isOfflineSession, let cached = offlinePlaylistDetail(for: playlist.id) {
-            installCompletedPlaylist(cached, for: playlist)
+        if isOfflineSession {
+            Task {
+                if let cached = await self.offlinePlaylistDetail(for: playlist.id) {
+                    await MainActor.run {
+                        self.installCompletedPlaylist(cached, for: playlist)
+                    }
+                } else {
+                    await MainActor.run {
+                        var state = PlaylistLoadState(summary: playlist)
+                        state.isLoading = false
+                        self.playlistLoadStates[playlist.id] = state
+                    }
+                }
+            }
             return
         }
         guard let client else {
@@ -53,6 +65,58 @@ extension AppState {
             await task.value
         }
         return playlistLoadState(for: playlist)?.songs ?? []
+    }
+
+    /// Plays a playlist's tracks from the start, sharing the detail request
+    /// with any open playlist screen instead of waiting for its rows to render.
+    func play(_ playlist: PlaylistSummary) async {
+        var songs = await playlistSongs(for: playlist)
+        if isOfflineSession {
+            songs = songs.filter { isCached($0) }
+        }
+        guard !songs.isEmpty else { return }
+        play(songs, at: 0)
+    }
+
+    /// Shuffles a playlist's tracks through the shared detail request.
+    func playShuffled(_ playlist: PlaylistSummary) async {
+        var songs = await playlistSongs(for: playlist)
+        if isOfflineSession {
+            songs = songs.filter { isCached($0) }
+        }
+        guard !songs.isEmpty else { return }
+        playShuffled(songs)
+    }
+
+    /// Queues a playlist's tracks to play immediately after the current song.
+    func playNext(_ playlist: PlaylistSummary) async {
+        var songs = await playlistSongs(for: playlist)
+        if isOfflineSession {
+            songs = songs.filter { isCached($0) }
+        }
+        guard !songs.isEmpty else { return }
+        guard !player.queue.isEmpty else {
+            play(songs, at: 0)
+            return
+        }
+        var queue = player.queue
+        let insertAt = (player.currentIndex + 1) % queue.count
+        queue.insert(contentsOf: songs, at: insertAt)
+        player.queue = queue
+    }
+
+    /// Queues a playlist's tracks at the end of the queue ("В конец очереди").
+    func playLater(_ playlist: PlaylistSummary) async {
+        var songs = await playlistSongs(for: playlist)
+        if isOfflineSession {
+            songs = songs.filter { isCached($0) }
+        }
+        guard !songs.isEmpty else { return }
+        guard !player.queue.isEmpty else {
+            play(songs, at: 0)
+            return
+        }
+        player.queue.append(contentsOf: songs)
     }
 
     func cancelPlaylistLoads() {

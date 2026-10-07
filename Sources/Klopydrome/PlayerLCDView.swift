@@ -86,17 +86,7 @@ struct PlayerLCDView: View {
                         .onHover { hoverTrailing = $0 }
                     }
                 }
-                .overlay(alignment: .bottomLeading) {
-                    if let error = app.player.lastError {
-                        Text(error)
-                            .font(.caption2)
-                            .foregroundStyle(AMColor.accent)
-                            .lineLimit(1)
-                            .padding(.leading, 44)
-                            .padding(.bottom, 20)
-                            .transition(.opacity)
-                    }
-                }
+
                 .overlay {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)

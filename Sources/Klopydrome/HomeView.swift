@@ -45,26 +45,30 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 32) {
-                if loading && albumsByShelf.isEmpty && loadingShelves.isEmpty {
-                    ProgressView("Загружаем библиотеку…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding()
-                } else {
-                    ForEach(Shelf.allCases) { shelf in
-                        albumShelf(shelf)
+        if app.isOfflineSession {
+            OfflineHomeView()
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 32) {
+                    if loading && albumsByShelf.isEmpty && loadingShelves.isEmpty {
+                        ProgressView("Загружаем библиотеку…")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding()
+                    } else {
+                        ForEach(Shelf.allCases) { shelf in
+                            albumShelf(shelf)
+                        }
                     }
                 }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .padding(.bottom, 24)
+            .scrollClipDisabled()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .refreshable { await load() }
+            .task(id: app.client != nil) { await loadIfNeeded() }
         }
-        .scrollClipDisabled()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .refreshable { await load() }
-        .task(id: app.client != nil) { await loadIfNeeded() }
     }
 
     private func shelfHeader(_ shelf: Shelf) -> some View {
@@ -115,7 +119,7 @@ struct HomeView: View {
             shelfHeader(shelf)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 18) {
+                LazyHStack(alignment: .top, spacing: 18) {
                     shelfContent(shelf)
                 }
                 .padding(.vertical, 8)

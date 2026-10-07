@@ -9,6 +9,13 @@ struct AppCommandMenus: Commands {
         CommandGroup(replacing: .appInfo) {
             Button(L10n.text("О приложении Klopydrome")) { showAboutPanel() }
         }
+        CommandGroup(replacing: .newItem) {
+            Button("Обновить медиатеку".localized) {
+                Task { await app.triggerServerScan() }
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+            .disabled(!app.isConnected || app.isOfflineSession || app.isServerScanning)
+        }
         playbackMenu
         controlsMenu
         viewMenu

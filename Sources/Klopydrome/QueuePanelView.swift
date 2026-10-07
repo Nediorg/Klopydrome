@@ -11,15 +11,18 @@ struct PlayerPanelView: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
-        Group {
+        ZStack {
             if app.showLyrics {
                 LyricsView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(24)
+                    .transition(.identity)
             } else {
                 QueuePanelView()
+                    .transition(.identity)
             }
         }
+        .animation(nil, value: app.showLyrics)
         .frame(width: LayoutMetrics.inspectorIdealWidth)
         .frame(maxHeight: .infinity)
         .background(.ultraThinMaterial)

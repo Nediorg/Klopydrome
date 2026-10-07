@@ -17,6 +17,7 @@ extension AppState {
         lastForegroundRefresh = now
         CoverArtStore.shared.invalidateFailedKeys()
         NotificationCenter.default.post(name: .foregroundRefreshRequested, object: nil)
+        guard !serverConfig.effectiveForceOfflineMode else { return }
         guard !isConnected, !isConnecting, !isBackgroundReconnecting,
               !serverConfig.url.isEmpty, passwordForLoginPrefill() != nil else { return }
         isBackgroundReconnecting = true

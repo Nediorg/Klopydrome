@@ -179,8 +179,7 @@ extension SearchResultsView {
                         Button {
                             app.openPlaylist(playlist)
                         } label: {
-                            PlaylistTile(playlist: playlist)
-                                .frame(width: 150)
+                            PlaylistTile(playlist: playlist, width: 165)
                         }
                         .buttonStyle(.plain)
                         .contextMenu {

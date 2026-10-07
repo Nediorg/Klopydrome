@@ -54,7 +54,7 @@ struct PlaylistContextMenuItems: View {
         }
 
         Divider()
-        Button("Загрузить плейлист") {
+        Button("Загрузить плейлист".localized) {
             app.cachePlaylist(playlist)
         }
         Divider()
