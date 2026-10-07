@@ -112,13 +112,12 @@ enum TrackDownload {
     /// Shared network→file transfer for offline-cache downloads. Runs entirely
     /// off the main actor (called from a nonisolated context): reads the HTTP
     /// body in native `Data` chunks (no per-byte `AsyncBytes` iteration),
-    /// writes each chunk straight into `destination`, reports progress at most
-    /// every 100 ms, and aborts with `CancellationError` as soon as
-    /// `isCancelled` turns true.
+    /// reports progress at most every 250 ms, and aborts with `CancellationError`
+    /// as soon as `isCancelled` turns true.
     static func streamToFile(
         url: URL,
         destination: URL,
-        isCancelled: @escaping @Sendable () async -> Bool,
+        isCancelled: @escaping @Sendable () -> Bool,
         onProgress: @escaping @Sendable (Double) -> Void
     ) async throws {
         guard FileManager.default.createFile(atPath: destination.path, contents: nil) else {
@@ -135,27 +134,27 @@ enum TrackDownload {
             case .head(let contentLength):
                 expected = contentLength
             case .body(let data):
-                if await isCancelled() { throw CancellationError() }
+                if isCancelled() { throw CancellationError() }
                 try handle.write(contentsOf: data)
                 received += Int64(data.count)
                 if expected > 0 {
                     let progress = min(1, Double(received) / Double(expected))
                     let now = Date()
-                    if progress == 1 || now.timeIntervalSince(lastProgressUpdate) >= 0.1 {
+                    if progress == 1 || now.timeIntervalSince(lastProgressUpdate) >= 0.25 {
                         onProgress(progress)
                         lastProgressUpdate = now
                     }
                 }
             }
         }
-        if await isCancelled() { throw CancellationError() }
+        if isCancelled() { throw CancellationError() }
     }
 
     static func savePanel(for song: SubsonicSong) -> NSSavePanel {
         let panel = NSSavePanel()
-        panel.title = "Скачать трек"
-        panel.message = "Выберите место сохранения аудиофайла."
-        panel.prompt = "Скачать"
+        panel.title = "Скачать трек".localized
+        panel.message = "Выберите место сохранения аудиофайла.".localized
+        panel.prompt = "Скачать".localized
         panel.nameFieldStringValue = filename(for: song)
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
@@ -208,12 +207,12 @@ enum TrackDownload {
     /// it would leave the container's own size ambiguous.
     static func originalFormatAccessory(transcodeAvailable: Bool)
         -> (container: NSView, checkbox: NSButton) {
-        let checkbox = NSButton(checkboxWithTitle: "Сохранить в оригинальном формате",
+        let checkbox = NSButton(checkboxWithTitle: "Сохранить в оригинальном формате".localized,
                                 target: nil, action: nil)
         checkbox.state = .on
         if !transcodeAvailable {
             checkbox.isEnabled = false
-            checkbox.toolTip = "Настройте кодек или битрейт транскодинга в настройках приложения."
+            checkbox.toolTip = "Настройте кодек или битрейт транскодинга в настройках приложения.".localized
         }
 
         let size = checkbox.fittingSize

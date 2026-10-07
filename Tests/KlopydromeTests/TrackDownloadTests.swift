@@ -30,8 +30,8 @@ final class TrackDownloadTests: XCTestCase {
 
         let panel = TrackDownload.savePanel(for: song)
 
-        XCTAssertEqual(panel.title, "Скачать трек")
-        XCTAssertEqual(panel.prompt, "Скачать")
+        XCTAssertEqual(panel.title, "Скачать трек".localized)
+        XCTAssertEqual(panel.prompt, "Скачать".localized)
         XCTAssertEqual(panel.nameFieldStringValue, "Artist – Track.flac")
         XCTAssertTrue(panel.canCreateDirectories)
         XCTAssertFalse(panel.isExtensionHidden)
