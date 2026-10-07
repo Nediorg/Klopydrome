@@ -22,7 +22,6 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
     }
 
     public func fetchDownloadedTracks() async throws -> [SubsonicSong] {
-        try? reconcileLegacyDownloadedTracks()
         let descriptor = FetchDescriptor<OfflineTrack>(
             predicate: #Predicate { $0.isDownloaded },
             sortBy: [SortDescriptor(\.cachedAt, order: .reverse)]
@@ -250,20 +249,6 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
 // MARK: - Private Helpers
 
 extension SwiftDataOfflineRepository {
-    public func reconcileLegacyDownloadedTracks() throws {
-        let key = "SwiftDataOfflineRepository_reconcileDownloadedTracks_v1"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        let descriptor = FetchDescriptor<OfflineTrack>()
-        let allTracks = try modelContext.fetch(descriptor)
-        for track in allTracks {
-            track.isDownloaded = true
-        }
-        if !allTracks.isEmpty {
-            try modelContext.save()
-        }
-        UserDefaults.standard.set(true, forKey: key)
-    }
-
     @discardableResult
     private func findOrCreateTrack(
         from song: SubsonicSong,
