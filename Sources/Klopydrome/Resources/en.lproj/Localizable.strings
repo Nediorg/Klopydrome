@@ -776,4 +776,137 @@
 "Приглашённый артист" = "Featured Artist";
 "Закрыть" = "Close";
 
+/* Appearance & Lyrics settings */
+"Оформление" = "Appearance";
+"Текст песен" = "Lyrics";
+"Размер шрифта" = "Font Size";
+"Обычный (по умолчанию)" = "Standard (Default)";
+"Обычный" = "Standard";
+"Крупный" = "Large";
+"Компактный" = "Compact";
+"Стиль анимации" = "Animation Style";
+"Плавная (рекомендуется)" = "Smooth (Recommended)";
+"Плавная" = "Smooth";
+"Мягкая" = "Subtle";
+"Без анимации" = "No Animation";
+"Размывать неактивные строки" = "Blur Inactive Lines";
+"Обратный отсчёт перед вокалом" = "Countdown Before Vocals";
+"Синхронизация" = "Synchronization";
+"Смещение времени" = "Time Offset";
+"Сбросить смещение" = "Reset Offset";
+"Смещение применяется ко всем песням для компенсации задержки звука." = "Applied to all songs to compensate for audio latency.";
+"Токен" = "Token";
+"Пароль" = "Password";
+"К текущей строке" = "To Current Line";
+"Общие" = "General";
+"Внешний вид" = "Appearance";
+"Воспроизведение" = "Playback";
+"Кэш" = "Cache";
+"Расширенные" = "Advanced";
 
+/* Загрузка треков */
+"Скачать" = "Download";
+"Скачать трек" = "Download Track";
+"Выберите место сохранения аудиофайла." = "Choose a destination for the audio file.";
+"Сохранить в оригинальном формате" = "Save in original format";
+"Настройте кодек или битрейт транскодинга в настройках приложения." = "Configure the transcoding codec or bitrate in Settings.";
+
+/* Меню навигации */
+"Перейти к исполнителю" = "Go to Artist";
+"Перейти к альбому" = "Go to Album";
+"Перейти к плейлисту" = "Go to Playlist";
+
+/* Плейлисты */
+"Загрузить плейлист" = "Download Playlist";
+
+/* Настройки и отладка */
+"%+d мс" = "%+d ms";
+"Отладка" = "Debug";
+"Режим разработчика" = "Developer Mode";
+
+/* Текст песен и воспроизведение */
+"Для этой песни текст не найден на сервере." = "No lyrics found on the server for this song.";
+"Играть" = "Play";
+"Нет соединения с сервером." = "No connection to server.";
+
+/* Составные строки */
+"Отмечайте песни, альбомы и исполнителей звёздочкой, чтобы они появились здесь." = "Star songs, albums and artists to see them here.";
+"Текущее состояние соединения с Discord. Если активности нет, проверьте, что Discord запущен и Application ID верный." = "Current Discord connection status. If there is no activity, check that Discord is running and the Application ID is correct.";
+
+/* Subsonic / Keychain / AppState */
+"Invalid server URL." = "Invalid server URL.";
+"The connection is not secure. Add https:// to the server address, or explicitly allow plain HTTP." = "The connection is not secure. Add https:// to the server address, or explicitly allow plain HTTP.";
+"HTTP error %lld." = "HTTP error %lld.";
+"Authentication failed. Check your username and password." = "Authentication failed. Check your username and password.";
+"Subsonic error %1$lld: %2$@" = "Subsonic error %1$lld: %2$@";
+"Could not parse the server response: %@" = "Could not parse the server response: %@";
+"The server returned no data." = "The server returned no data.";
+"Could not store the password (Keychain error %lld)." = "Could not store the password (Keychain error %lld).";
+"Welcome" = "Welcome";
+"To continue, sign in to your account" = "To continue, sign in to your account";
+"Nothing playing" = "Nothing playing";
+
+/* Офлайн-режим и сеть */
+"Сеть" = "Network";
+"Офлайн-режим" = "Offline Mode";
+"Офлайн" = "Offline";
+"Офлайн-медиатека" = "Offline Library";
+"Подключение…" = "Connecting…";
+"Подключено к серверу" = "Connected to Server";
+"Подключиться" = "Reconnect";
+"Подключиться к серверу" = "Connect to Server";
+"Подключиться сейчас" = "Reconnect Now";
+"Статус подключения" = "Connection Status";
+"Работать офлайн" = "Offline Mode";
+"Автоматически переподключаться" = "Auto-reconnect";
+"Включён принудительный офлайн-режим." = "Forced offline mode is enabled.";
+"Сервер недоступен. Доступны сохранённые треки." = "Server unavailable. Saved tracks are available.";
+"Сервер недоступен. Доступны сохранённые альбомы и песни на этом компьютере." = "Server unavailable. Saved albums and songs on this computer are available.";
+"В офлайн-режиме используются только сохранённые песни и альбомы без сетевых запросов к серверу." = "In offline mode, only saved songs and albums are used without network requests to the server.";
+"Локальная музыка" = "Local Music";
+"format.offline.tracksCount" = "%d tracks";
+"Скачанные песни" = "Downloaded Songs";
+"Скачанные альбомы" = "Downloaded Albums";
+"Все альбомы" = "All Albums";
+"Недавно скачанные" = "Recently Downloaded";
+"Недавно скачанные треки" = "Recently Downloaded Tracks";
+"Нет сохранённой музыки" = "No Saved Music";
+"Песни и альбомы появятся здесь после того, как вы скачаете их в онлайн-режиме." = "Songs and albums will appear here after you download them while online.";
+"Не загружено" = "Not downloaded";
+
+/* Медиатека и жанры */
+"Править" = "Edit";
+"Нет жанров" = "No Genres";
+"Загрузка жанров…" = "Loading genres…";
+"В вашей медиатеке пока нет размеченных жанров." = "There are no tagged genres in your library yet.";
+"Неизвестный жанр" = "Unknown Genre";
+"Загрузка песен жанра…" = "Loading genre songs…";
+"Не удалось загрузить треки" = "Failed to load tracks";
+"В этом жанре пока нет доступных песен." = "There are no songs available in this genre yet.";
+
+/* Серверное сканирование и ссылки */
+"Сканирование медиатеки…" = "Scanning media library…";
+"Обновить медиатеку" = "Scan Media Library";
+"Не удалось загрузить ссылки" = "Failed to load links";
+"Нет активных ссылок" = "No Active Links";
+"Созданные вами публичные ссылки появятся здесь." = "Public links you create will appear here.";
+"Отозвать ссылку?" = "Revoke Link?";
+"Отозвать" = "Revoke";
+"Ссылка перестанет работать для всех пользователей." = "The link will stop working for all users.";
+"Публичная ссылка" = "Public Link";
+"Действует до" = "Expires";
+"Все ссылки…" = "All Links…";
+"Ссылки" = "Links";
+"plural.visit.one" = "view";
+"plural.visit.few" = "views";
+"plural.visit.many" = "views";
+"plural.visit.other" = "views";
+
+"Создана" = "Created";
+"Просмотры" = "Views";
+"Действия над жанром" = "Genre Actions";
+"Ошибка воспроизведения" = "Playback Error";
+"В процессе" = "In Progress";
+"Свернуть треки" = "Collapse Tracks";
+"Показать треки" = "Show Tracks";
+"Отменить трек" = "Cancel Track";
