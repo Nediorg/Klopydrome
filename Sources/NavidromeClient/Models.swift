@@ -38,6 +38,8 @@ public struct SubsonicEnvelope: Decodable {
     public let artistInfo: ArtistInfoPayload?
     public let artistInfo2: ArtistInfoPayload?
     public let topSongs: SongListPayload?
+    public let scanStatus: ScanStatus?
+    public let shares: SharesPayload?
 
     public final class SubsonicErrorPayload: Decodable {
         public let code: Int
@@ -161,6 +163,51 @@ public struct ArtistInfoPayload: Codable, Hashable {
     }
 }
 
+public struct ScanStatus: Codable, Hashable, Sendable {
+    public let scanning: Bool
+    public let count: Int?
+    public let folderCount: Int?
+    public let lastScan: String?
+    public init(scanning: Bool, count: Int? = nil, folderCount: Int? = nil, lastScan: String? = nil) {
+        self.scanning = scanning
+        self.count = count
+        self.folderCount = folderCount
+        self.lastScan = lastScan
+    }
+}
+
+public struct SharesPayload: Codable, Sendable {
+    public let share: [SubsonicShare]?
+    public init(share: [SubsonicShare]? = nil) {
+        self.share = share
+    }
+}
+
+public struct SubsonicShare: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let url: String
+    public let description: String?
+    public let username: String?
+    public let created: String?
+    public let expires: String?
+    public let lastVisited: String?
+    public let visitCount: Int?
+    public let entry: [SubsonicSong]?
+    public init(id: String, url: String, description: String? = nil, username: String? = nil,
+                created: String? = nil, expires: String? = nil, lastVisited: String? = nil,
+                visitCount: Int? = nil, entry: [SubsonicSong]? = nil) {
+        self.id = id
+        self.url = url
+        self.description = description
+        self.username = username
+        self.created = created
+        self.expires = expires
+        self.lastVisited = lastVisited
+        self.visitCount = visitCount
+        self.entry = entry
+    }
+}
+
 // MARK: - Entities
 
 public struct ArtistIndex: Codable, Hashable {
@@ -174,15 +221,17 @@ public struct Artist: Codable, Hashable, Identifiable, Sendable {
     public let name: String
     public let albumCount: Int?
     public let artistImageUrl: String?
+    public let coverArt: String?
     public let starred: String?
     public let averageRating: Double?
     public let userRating: Int?
     public init(id: String, name: String, albumCount: Int? = nil, artistImageUrl: String? = nil,
-                starred: String? = nil, averageRating: Double? = nil, userRating: Int? = nil) {
+                coverArt: String? = nil, starred: String? = nil, averageRating: Double? = nil, userRating: Int? = nil) {
         self.id = id
         self.name = name
         self.albumCount = albumCount
         self.artistImageUrl = artistImageUrl
+        self.coverArt = coverArt
         self.starred = starred
         self.averageRating = averageRating
         self.userRating = userRating

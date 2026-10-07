@@ -102,6 +102,8 @@ struct ShareSheet: View {
     @State private var errorMessage: String?
     @State private var copied = false
 
+    @State private var showingSharesManager = false
+
     private enum Phase { case form, result }
 
     var body: some View {
@@ -115,6 +117,19 @@ struct ShareSheet: View {
         }
         .frame(width: 440)
         .padding(20)
+        .sheet(isPresented: $showingSharesManager) {
+            NavigationStack {
+                SharesManagerView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Закрыть".localized) {
+                                showingSharesManager = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 500, minHeight: 400)
+        }
     }
 
     private var header: some View {
@@ -164,6 +179,9 @@ struct ShareSheet: View {
 
             HStack {
                 Button("Отмена") { dismiss() }
+                Button("Все ссылки…".localized) {
+                    showingSharesManager = true
+                }
                 Spacer()
                 Button(action: createLink,
                        label: {
@@ -291,7 +309,7 @@ private enum ExpiryChoice: Identifiable, CaseIterable {
         case .oneMonth: return Date().addingTimeInterval(day * 30)
         case .oneYear: return Date().addingTimeInterval(day * 365)
         // Navidrome has no true "never" — a nil expiry falls back to the server's
-        // default (1 year). A far-future date is the honest way to mean "Бессрочно".
+        // default (1 year).
         case .indefinite: return Date().addingTimeInterval(day * 365 * 100)
         case .custom: return nil
         }

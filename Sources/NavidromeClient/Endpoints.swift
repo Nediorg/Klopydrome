@@ -31,6 +31,18 @@ public extension SubsonicClient {
         return envelope.artistInfo2 ?? envelope.artistInfo
     }
 
+    func getTopSongs(artist: String? = nil, artistId: String? = nil, count: Int = 50) async throws -> [SubsonicSong] {
+        var params: [URLQueryItem] = [URLQueryItem(name: "count", value: String(count))]
+        if let artistId, !artistId.isEmpty {
+            params.append(URLQueryItem(name: "id", value: artistId))
+        }
+        if let artist, !artist.isEmpty {
+            params.append(URLQueryItem(name: "artist", value: artist))
+        }
+        let envelope = try await requestEnvelope(endpoint: "getTopSongs", params: params)
+        return envelope.topSongs?.song ?? []
+    }
+
     func getAlbum(id: String) async throws -> AlbumDetail {
         let params = [URLQueryItem(name: "id", value: id)]
         guard let album = try await requestEnvelope(endpoint: "getAlbum", params: params).album else {
@@ -393,6 +405,37 @@ public extension SubsonicClient {
         // Note: the getAlbumInfo2 response nests its payload under the
         // `albumInfo` element (OpenSubsonic), not `albumInfo2`.
         return try await requestEnvelope(endpoint: "getAlbumInfo2", params: params).albumInfo
+    }
+
+    // MARK: Media library scanning
+
+    func getScanStatus() async throws -> ScanStatus {
+        let envelope = try await requestEnvelope(endpoint: "getScanStatus")
+        guard let status = envelope.scanStatus else {
+            throw SubsonicError.server(code: 0, message: "Missing scanStatus")
+        }
+        return status
+    }
+
+    @discardableResult
+    func startScan() async throws -> ScanStatus {
+        let envelope = try await requestEnvelope(endpoint: "startScan")
+        guard let status = envelope.scanStatus else {
+            throw SubsonicError.server(code: 0, message: "Missing scanStatus")
+        }
+        return status
+    }
+
+    // MARK: Sharing
+
+    func getShares() async throws -> [SubsonicShare] {
+        let envelope = try await requestEnvelope(endpoint: "getShares")
+        return envelope.shares?.share ?? []
+    }
+
+    func deleteShare(id: String) async throws {
+        let params = [URLQueryItem(name: "id", value: id)]
+        _ = try await requestEnvelope(endpoint: "deleteShare", params: params)
     }
 }
 

@@ -192,4 +192,35 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(SubsonicSong(id: "s1", album: "Album Title").displaySubtitle, "Album Title")
         XCTAssertEqual(SubsonicSong(id: "s1").displaySubtitle, "")
     }
+
+    func testScanStatusDecoding() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,
+          "scanStatus":{"scanning":true,"count":142,"folderCount":3,"lastScan":"2026-10-01T12:00:00Z"}}}
+        """
+        let status = try decode(json).scanStatus
+        XCTAssertEqual(status?.scanning, true)
+        XCTAssertEqual(status?.count, 142)
+        XCTAssertEqual(status?.folderCount, 3)
+        XCTAssertEqual(status?.lastScan, "2026-10-01T12:00:00Z")
+    }
+
+    func testSharesDecoding() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,
+          "shares":{"share":[
+            {"id":"sh1","url":"https://music.example.com/share/sh1","description":"My Share",
+             "username":"alice","visitCount":5,"entry":[
+                {"id":"s1","title":"Song Title","artist":"Artist Name","album":"Album Title"}
+             ]}
+          ]}}}
+        """
+        let shares = try decode(json).shares?.share ?? []
+        XCTAssertEqual(shares.count, 1)
+        XCTAssertEqual(shares[0].id, "sh1")
+        XCTAssertEqual(shares[0].description, "My Share")
+        XCTAssertEqual(shares[0].visitCount, 5)
+        XCTAssertEqual(shares[0].entry?.count, 1)
+        XCTAssertEqual(shares[0].entry?.first?.title, "Song Title")
+    }
 }
