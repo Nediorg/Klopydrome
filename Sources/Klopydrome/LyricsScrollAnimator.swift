@@ -30,6 +30,7 @@ struct LyricsLineFrameKey: PreferenceKey {
 /// cancels the other.
 struct LyricsScrollAnimator: NSViewRepresentable {
     @Binding var coordinator: LyricsScrollAnimator.Coordinator?
+    var onUserScrollChange: ((Bool) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -41,6 +42,8 @@ struct LyricsScrollAnimator: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.hostedView = nsView
+        context.coordinator.onUserScrollChange = onUserScrollChange
+        context.coordinator.setupScrollObserversIfNeeded()
         if coordinator !== context.coordinator {
             Task { @MainActor in coordinator = context.coordinator }
         }
@@ -50,6 +53,8 @@ struct LyricsScrollAnimator: NSViewRepresentable {
         /// The zero-size view hosted inside the scroll content; its superview
         /// chain reaches the SwiftUI scroll view's backing `NSScrollView`.
         weak var hostedView: NSView?
+        var onUserScrollChange: ((Bool) -> Void)?
+        var lineFrames: [Int: CGRect] = [:]
 
         private var displayLink: CADisplayLink?
         private var fallbackTimer: Timer?
@@ -57,8 +62,39 @@ struct LyricsScrollAnimator: NSViewRepresentable {
         private var targetOrigin = CGPoint.zero
         private var startTime: CFTimeInterval = 0
         private var duration: TimeInterval = 0.4
+        private var isObservingScroll = false
 
         var scrollView: NSScrollView? { hostedView?.enclosingScrollView }
+
+        func setupScrollObserversIfNeeded() {
+            guard !isObservingScroll, let scrollV = scrollView else { return }
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleLiveScrollStart(_:)),
+                name: NSScrollView.willStartLiveScrollNotification,
+                object: scrollV
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleLiveScrollEnd(_:)),
+                name: NSScrollView.didEndLiveScrollNotification,
+                object: scrollV
+            )
+            isObservingScroll = true
+        }
+
+        @objc private func handleLiveScrollStart(_ notification: Notification) {
+            onUserScrollChange?(true)
+        }
+
+        @objc private func handleLiveScrollEnd(_ notification: Notification) {
+            onUserScrollChange?(false)
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+            stopDrivers()
+        }
 
         /// Glide the viewport so content offset `offsetY` (in flipped content
         /// coordinates) is at the top of the clip, over `duration`.
@@ -74,10 +110,6 @@ struct LyricsScrollAnimator: NSViewRepresentable {
 
             startOrigin = current
             targetOrigin = target
-            // Captured on the first driven frame, not here: the main thread is
-            // often busy with layout when animate() is called, and counting
-            // that stall against the duration would compress the visible glide
-            // (the follow would jump partway, then finish early).
             startTime = 0
             self.duration = duration
 
@@ -88,18 +120,15 @@ struct LyricsScrollAnimator: NSViewRepresentable {
             RunLoop.main.add(fallback, forMode: .common)
             fallbackTimer = fallback
             if let hostedView {
-                displayLink = hostedView.displayLink(target: self, selector: #selector(glideStep(_:)))
+                let link = hostedView.displayLink(target: self, selector: #selector(glideStep(_:)))
+                link.add(to: .main, forMode: .common)
+                displayLink = link
             }
         }
 
         @objc private func glideStep(_ link: CADisplayLink) {
-            // The display link answered first: it owns the glide, drop the
-            // fallback timer.
             fallbackTimer?.invalidate()
             fallbackTimer = nil
-            // Wall clock, not link.timestamp: startTime may have been captured
-            // by the fallback timer (or vice versa), and the two clocks must
-            // never mix inside one glide — the link only paces the ticks.
             driveFrame(at: CACurrentMediaTime())
         }
 
@@ -111,7 +140,7 @@ struct LyricsScrollAnimator: NSViewRepresentable {
             if startTime == 0 { startTime = now }
             let elapsed = now - startTime
             let progress = min(max(elapsed / duration, 0), 1)
-            let eased = Self.easeInOutCubic(progress)
+            let eased = Self.easeOutCubic(progress)
             let origin = CGPoint(
                 x: startOrigin.x + (targetOrigin.x - startOrigin.x) * eased,
                 y: startOrigin.y + (targetOrigin.y - startOrigin.y) * eased
@@ -129,8 +158,8 @@ struct LyricsScrollAnimator: NSViewRepresentable {
             fallbackTimer = nil
         }
 
-        private static func easeInOutCubic(_ progress: Double) -> Double {
-            progress < 0.5 ? 4 * progress * progress * progress : 1 - pow(-2 * progress + 2, 3) / 2
+        private static func easeOutCubic(_ progress: Double) -> Double {
+            1.0 - pow(1.0 - progress, 3)
         }
     }
 }

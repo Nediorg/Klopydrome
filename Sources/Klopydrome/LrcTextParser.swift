@@ -36,10 +36,11 @@ enum LrcTextParser {
                 timed.append(SyncedLine(start: start - effectiveOffset, value: trimmed))
             }
         }
+        timed.sort { ($0.start ?? 0) < ($1.start ?? 0) }
         return timed
     }
 
-    /// Extracts every leading `[mm:ss.fraction]` timestamp (in ms) from a line.
+    /// Extracts every leading `[mm:ss.fraction]` or `[hh:mm:ss.fraction]` timestamp (in ms) from a line.
     private static func parseTimestamps(from line: Substring) -> [Double] {
         var starts: [Double] = []
         var rest = line[...]
@@ -54,21 +55,30 @@ enum LrcTextParser {
         return starts
     }
 
-    /// Parsed `mm:ss[.f]` time tag in milliseconds.
+    /// Parsed time tag in milliseconds.
     private struct LrcTime {
         let milliseconds: Double
     }
 
-    /// `mm:ss[.f]` -> milliseconds. Fraction may be 1–3 digits: `.8` → 800 ms,
-    /// `.80` → 800 ms, `.800` → 800 ms. Returns nil when the tag is malformed.
+    /// `[hh:]mm:ss[.f]` -> milliseconds. Returns nil when the tag is malformed.
     private static func parseTime(_ tag: Substring) -> LrcTime? {
-        let parts = tag.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-        guard parts.count == 2, let minutes = Double(parts[0]) else {
+        let parts = tag.split(separator: ":", omittingEmptySubsequences: false)
+        let hours: Double
+        let minutes: Double
+        let secondsText: Substring
+        if parts.count == 3 {
+            guard let hrs = Double(parts[0]), let mins = Double(parts[1]) else { return nil }
+            hours = hrs
+            minutes = mins
+            secondsText = parts[2]
+        } else if parts.count == 2 {
+            hours = 0
+            guard let mins = Double(parts[0]) else { return nil }
+            minutes = mins
+            secondsText = parts[1]
+        } else {
             return nil
         }
-        // Whole seconds come before the fractional separator; `Double("18.80")`
-        // already includes the fraction, so split it off first.
-        let secondsText = parts[1]
         let fraction: Double
         let wholeSeconds: Double
         if let dot = secondsText.firstIndex(where: { $0 == "." || $0 == ":" }) {
@@ -84,7 +94,8 @@ enum LrcTextParser {
             fraction = 0
             wholeSeconds = Double(secondsText) ?? 0
         }
-        return LrcTime(milliseconds: minutes * 60_000 + wholeSeconds * 1_000 + fraction)
+        let totalMs = hours * 3_600_000 + minutes * 60_000 + wholeSeconds * 1_000 + fraction
+        return LrcTime(milliseconds: totalMs)
     }
 
     private static func textAfterMarkers(in line: Substring) -> Substring {

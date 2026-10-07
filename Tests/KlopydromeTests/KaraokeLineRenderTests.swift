@@ -49,6 +49,21 @@ final class KaraokeLineRenderTests: XCTestCase {
         XCTAssertEqual(KaraokeLine.wordSettledOpacity(at: 10.3, wordStart: 10, sungAt: 11), 0.85)
     }
 
+    func testLyricsRenderClockFreezesOnBuffering() async throws {
+        let clock = LyricsRenderClock()
+        clock.synchronize(time: 10.0, isPlaying: true, rate: 1.0)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let timeWhilePlaying = clock.currentTime
+        XCTAssertGreaterThan(timeWhilePlaying, 10.0)
+        XCTAssertTrue(clock.shouldAnimate)
+
+        clock.synchronize(time: 10.0, isPlaying: false, rate: 1.0)
+        let frozenTime = clock.currentTime
+        XCTAssertFalse(clock.shouldAnimate)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(clock.currentTime, frozenTime, "Clock must freeze when buffering")
+    }
+
     /// The layout cap must guarantee the worst-case scaled line fits the
     /// padded column exactly.
     func testLineWrapWidthGuaranteesScaledFit() {

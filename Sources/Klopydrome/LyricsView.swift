@@ -7,24 +7,18 @@ import NavidromeClient
 /// tapping a line seeks to its timestamp.
 struct LyricsView: View {
     private struct RenderState {
-        let playbackTime: Double
         let activeIndex: Int?
+        let scrollDirection: Int
     }
 
     @Environment(AppState.self) var app
     /// When the user scrolls the lyrics manually, auto-follow disables and a
     /// Sync button appears; tapping it re-enables auto-follow for this song.
     @State private var autoScrollEnabled = true
-    /// The lyric line currently centered in the viewport. The `scrollPosition`
-    /// binding reports whatever line the user scrolls to; follow writes it only
-    /// as a side effect of the clip-bounds glide (guarded by `lastFollowDate`).
+    @State private var isUserScrolling = false
+    private var isBrowsing: Bool { !autoScrollEnabled || isUserScrolling }
+    /// The lyric line currently centered in the viewport.
     @State private var scrollTargetID: Int?
-    /// `scrollPosition(id:)` is a TWO-WAY binding: during the follow glide the
-    /// ScrollView reports intermediate lines passing the anchor back into
-    /// `scrollTargetID`. Watching the binding directly would misread our own
-    /// animation as the user browsing away. `lastFollowDate` marks the last
-    /// programmatic follow so those intermediate writes are ignored until the
-    /// glide settles.
     @State private var lastFollowDate = Date.distantPast
     /// Line frames measured in the scroll content's own coordinate space
     /// (`LyricsLineFrameKey`): the follow centers `lineFrames[index].midY`.
@@ -37,18 +31,18 @@ struct LyricsView: View {
     /// not the coarse 4 Hz player ticks — so highlight and follow agree with
     /// the word coloring between samples.
     @State private var clockActiveIndex: Int?
+    @State private var scrollDirection: Int = 1
     /// Post-seek guard: after a tap-seek the driver still sees pre-seek
     /// samples for a beat; without this it yanks the viewport back to the
     /// old line (reads as "jumped to the nearest"). Index writes disagreeing
     /// with the seek target are skipped until landing or 1 s timeout.
     @State private var seekGuardIndex: Int?
     @State private var seekGuardUntil = Date.distantPast
-    @State var isSyncAdjusterHovered = false
-    @State var isSyncAdjusterPinned = false
-    private let lyricSpacing: CGFloat = 14
+    private let lyricSpacing: CGFloat = 4
     private let lyricHorizontalPadding: CGFloat = 40
     /// Step of the sync-correction buttons, in seconds.
     let syncStep: Double = 0.25
+
     /// How long a follow glide's `scrollTargetID` writes are ignored after a
     /// programmatic follow. Must exceed the follow glide (see
     /// `followDuration`) with margin — and be well below the line cadence
@@ -102,29 +96,22 @@ struct LyricsView: View {
             guard let client = app.client, let song = app.player.displaySong else { return }
             await app.lyrics.load(song: song, client: client)
         }
-        .onChange(of: app.player.currentTime) { _, _ in refreshClockAndIndex() }
-        .onChange(of: app.player.isPlaying) { _, _ in refreshClockAndIndex() }
-        .onChange(of: app.player.isBuffering) { _, _ in refreshClockAndIndex() }
-        .onChange(of: app.player.isLoading) { _, _ in refreshClockAndIndex() }
-        .onChange(of: app.lyrics.timeRate) { _, _ in refreshClockAndIndex() }
-        .onChange(of: app.lyrics.timeOffsetSeconds) { _, _ in refreshClockAndIndex() }
+        .background {
+            LyricsClockSynchronizer(onSync: refreshClockAndIndex)
+        }
         // New song → re-enable auto-scroll so the next track starts following.
         .onChange(of: app.lyrics.loadedForSongID) { _, _ in
             autoScrollEnabled = true
-            isSyncAdjusterPinned = false
             refreshClockAndIndex()
         }
     }
 
-    /// Playback time shifted by the user's sync correction and the early
-    /// activation lead: the offset fixes a fixed lag, the RATE fixes drift that
-    /// grows over the song (the provider's timestamps running at a different
-    /// speed than the audio), the lead makes the highlight ignite a hair before
-    /// the recorded timestamp (see `lineLead`). Both the active line and the
-    /// per-word coloring agree on where in the song we are.
+    /// Playback time shifted by the user's sync correction, global calibration,
+    /// and the early activation lead.
     private var effectivePlaybackTime: Double {
         (app.player.currentTime * app.lyrics.timeRate)
             + app.lyrics.timeOffsetSeconds
+            + app.serverConfig.effectiveLyricsDefaultOffset
             + leadSeconds
     }
 
@@ -143,8 +130,8 @@ struct LyricsView: View {
     /// able to reach the visual center.
     private var syncedLyrics: some View {
         let renderState = RenderState(
-            playbackTime: effectivePlaybackTime,
-            activeIndex: clockActiveIndex
+            activeIndex: clockActiveIndex,
+            scrollDirection: scrollDirection
         )
         return GeometryReader { geo in
             let lineWrapWidth = Self.lineWrapWidth(
@@ -181,35 +168,54 @@ struct LyricsView: View {
                 .padding(.horizontal, lyricHorizontalPadding)
                 .scrollTargetLayout()
                 .coordinateSpace(name: Self.lyricsScrollSpace)
-                .onPreferenceChange(LyricsLineFrameKey.self) { lineFrames = $0 }
+                .onPreferenceChange(LyricsLineFrameKey.self) { newFrames in
+                    scrollCoordinator?.lineFrames = newFrames
+                    if lineFrames != newFrames { lineFrames = newFrames }
+                }
                 .background(alignment: .top) {
-                    LyricsScrollAnimator(coordinator: $scrollCoordinator)
-                        .frame(width: 0, height: 0)
+                    LyricsScrollAnimator(coordinator: $scrollCoordinator) { isScrolling in
+                        isUserScrolling = isScrolling
+                        if isScrolling && autoScrollEnabled {
+                            autoScrollEnabled = false
+                        }
+                    }
+                    .frame(width: 0, height: 0)
                 }
             }
             .scrollPosition(id: $scrollTargetID, anchor: .center)
             .scrollIndicators(.hidden)
             .background { clockIndexDriver }
-            .overlay(alignment: .bottomLeading) {
+            .overlay(alignment: .bottom) {
                 if !autoScrollEnabled {
-                    LyricsCornerControlButton(
-                        systemName: "arrow.down.to.line",
-                        fill: AMColor.accent,
-                        showsBorder: false,
-                        accessibilityLabel: "Вернуться к текущей строке"
-                    ) {
-                        resumeFollowing()
+                    Button(action: resumeFollowing) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down.to.line")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("К текущей строке".localized)
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                        }
+                        .shadow(color: .black.opacity(0.20), radius: 8, y: 3)
                     }
-                    .padding(12)
+                    .buttonStyle(.plain)
+                    .contentShape(Capsule())
+                    .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.snappy(duration: 0.25), value: autoScrollEnabled)
+                    .animation(.spring(response: 0.32, dampingFraction: 0.88), value: autoScrollEnabled)
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
-                syncAdjusterControl
-                    .padding(12)
-            }
-            .onChange(of: clockActiveIndex, initial: true) { _, newIndex in
+
+            .onChange(of: clockActiveIndex, initial: true) { oldIndex, newIndex in
+                if let old = oldIndex, let new = newIndex, new != old {
+                    scrollDirection = new >= old ? 1 : -1
+                }
                 guard autoScrollEnabled, let index = newIndex else { return }
                 follow(to: index)
             }
@@ -226,7 +232,11 @@ struct LyricsView: View {
             autoScrollEnabled = false
         }
     }
+}
 
+// MARK: - Subviews & Scrolling
+
+extension LyricsView {
     @ViewBuilder
     private func staggeredLyricLine(
         line: SyncedLine,
@@ -236,34 +246,52 @@ struct LyricsView: View {
         wrapWidth: CGFloat
     ) -> some View {
         let text = line.value ?? ""
+        let motion = app.serverConfig.effectiveLyricsAnimationMotion
+        let blurEnabled = app.serverConfig.effectiveLyricsBlurEnabled
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let dist = index - (renderState.activeIndex ?? index)
+            let playing = app.player.isPlaying && !app.player.isBuffering && !app.player.isLoading
             LyricsPauseMarker(
-                progress: pauseProgress(at: index, playbackTime: renderState.playbackTime),
+                progress: 0,
                 renderClock: lyricRenderClock,
-                pauseRange: pauseRange(at: index)
+                pauseRange: pauseRange(at: index),
+                index: index,
+                activeLineIndex: renderState.activeIndex,
+                scrollDirection: renderState.scrollDirection,
+                lineDistance: dist,
+                isBrowsing: isBrowsing,
+                isPlaying: playing,
+                motion: motion,
+                blurEnabled: blurEnabled,
+                countdownEnabled: true
             ) {
                 seekToLine(index)
             }
+            .equatable()
             .id(index)
         } else {
-            // Idle rows get their static line start as `currentTime` so the
-            // `Equatable` row skips coarse player ticks; only the active row
-            // observes live time.
             let live = renderState.activeIndex == index
+            let fontSize = app.serverConfig.effectiveLyricsFontSize
             KaraokeLine(
                 text: text,
                 lineStart: line.start.map { $0 / 1000 },
-                currentTime: live ? renderState.playbackTime : (line.start.map { $0 / 1000 } ?? 0),
+                currentTime: line.start.map { $0 / 1000 } ?? 0,
                 renderClock: lyricRenderClock,
                 state: lyricState(index: index, activeIndex: renderState.activeIndex),
                 index: index,
                 activeLineIndex: renderState.activeIndex,
+                scrollDirection: renderState.scrollDirection,
                 words: words,
                 maxLayoutWidth: wrapWidth,
-                fillLive: fillLive(index: index, line: line, playbackTime: renderState.playbackTime)
+                fillLive: live,
+                isBrowsing: isBrowsing,
+                fontSize: fontSize,
+                motion: motion,
+                blurEnabled: blurEnabled
             ) {
                 seekToLine(index)
             }
+            .equatable()
             .id(index)
         }
     }
@@ -288,9 +316,10 @@ struct LyricsView: View {
         guard !app.player.isBuffering, !app.player.isLoading else { return }
         guard let animator = scrollCoordinator,
               let scrollView = animator.scrollView,
-              let frame = lineFrames[index] else { return }
+              let frame = animator.lineFrames[index] ?? lineFrames[index] else { return }
         let viewport = scrollView.contentView.bounds.height
-        let offset = max(0, frame.midY - viewport / 2)
+        let anchorY = viewport * 0.50
+        let offset = max(0, frame.midY - anchorY)
         animator.animate(to: offset, duration: Self.followDuration)
     }
 
@@ -301,39 +330,26 @@ struct LyricsView: View {
         follow(to: index)
     }
 
-    /// Center the first active line once the panel settles: the lyrics appear
-    /// inside a transitioning panel, so the GeometryReader gets its real height
-    /// a tick after `onAppear`, and the line frames are measured a tick after
-    /// that. A short delay lets both arrive, then the viewport glides to the
-    /// line that is actually playing.
+    /// Center the first active line once the panel settles.
     private func centerInitialLine() {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
             guard autoScrollEnabled, !app.player.isBuffering, !app.player.isLoading,
-                  lyricRenderClock.currentTime >= 0.5,
                   let index = clockActiveIndex else { return }
             follow(to: index)
         }
     }
 
-    /// Handoff driver: resolves the active line from the interpolated render
-    /// clock between coarse player samples. Writes state only on change, so
-    /// idle ticks cost one binary search and no row rebuilds. Time itself is
-    /// NOT published (parent rate proved to be the jank knob); live fill
-    /// reads the row's own clock, pause markers theirs. Paused with playback —
-    /// pause/resume transitions refresh via `refreshClockAndIndex`.
+    /// Handoff driver: resolves the active line from the interpolated render clock.
     private var clockIndexDriver: some View {
         let paused = !app.player.isPlaying || app.player.isBuffering || app.player.isLoading
-            || lyricRenderClock.currentTime < 0.5
-        return TimelineView(.animation(minimumInterval: 0.1, paused: paused)) { _ in
+        return TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: paused)) { _ in
             let time = lyricRenderClock.currentTime
-            if time < 0.5 || app.player.isBuffering || app.player.isLoading {
-                Color.clear
-                    .onChange(of: 0, initial: true) { _, _ in
-                        if clockActiveIndex != nil { clockActiveIndex = nil }
-                    }
-            } else {
-                let index = app.lyrics.activeLineIndex(at: time)
+            if !app.player.isBuffering && !app.player.isLoading {
+                let guardActive = seekGuardIndex != nil && Date.now < seekGuardUntil
+                let index: Int? = guardActive
+                    ? seekGuardIndex
+                    : { seekGuardIndex = nil; return app.lyrics.activeLineIndex(at: time) }()
                 Color.clear
                     .onChange(of: index, initial: true) { _, newIndex in
                         if newIndex != clockActiveIndex { clockActiveIndex = newIndex }
@@ -344,17 +360,16 @@ struct LyricsView: View {
         .accessibilityHidden(true)
     }
 
-    /// Seek to a tapped lyric line's timestamp and follow it. Uses endScrub(at:),
-    /// which performs a PRECISE seek and reflects the new position on
-    /// `currentTime` immediately — a tolerant seek would land off-target and
-    /// the lyrics would snap back when the time observer catches up. The target
-    /// inverts the sync mapping (`effective = audio * rate + offset + lead`) so
-    /// the audio lands where the corrected highlight claims the line begins.
+    /// Seek to a tapped lyric line's timestamp and follow it.
     private func seekToLine(_ index: Int) {
-        guard index >= 0, index < app.lyrics.syncedLines.count else { return }
-        guard let startMs = app.lyrics.syncedLines[index].start else { return }
+        guard index >= 0, index < app.lyrics.syncedLines.count,
+              let startMs = app.lyrics.syncedLines[index].start else { return }
+        if let current = clockActiveIndex, index != current {
+            scrollDirection = index >= current ? 1 : -1
+        }
         let recorded = startMs / 1000
-        let target = (recorded - app.lyrics.timeOffsetSeconds - leadSeconds) / app.lyrics.timeRate
+        let effectiveOffset = app.lyrics.timeOffsetSeconds + app.serverConfig.effectiveLyricsDefaultOffset
+        let target = (recorded - effectiveOffset - leadSeconds) / app.lyrics.timeRate
         app.player.endScrub(at: max(0, target))
         synchronizeRenderClock()
         seekGuardIndex = index
@@ -364,30 +379,23 @@ struct LyricsView: View {
         follow(to: index)
     }
 
-    /// Half the viewport as transparent top/bottom zones, so the first and last
-    /// lyric lines can still reach the visual center instead of stopping at the
-    /// scroll bounds.
     private static func edgeInset(for viewportHeight: CGFloat) -> CGFloat {
-        max(0, viewportHeight / 2)
+        max(0, viewportHeight * 0.50)
     }
 
-    /// Width the unscaled lyric text may wrap at: the padded column divided by
-    /// the worst-case line scale, so a fully scaled active line still ends
-    /// inside the padding instead of overflowing the window on wide panels.
+    /// Width the unscaled lyric text may wrap at.
     static func lineWrapWidth(viewportWidth: CGFloat, horizontalPadding: CGFloat) -> CGFloat {
         max(0, (viewportWidth - horizontalPadding * 2) / KaraokeLine.maxLineScale)
     }
 
     /// 0-, 3-state styling for a lyric line.
-    private func lyricState(index: Int, activeIndex: Int?) -> LyricLineState {
+    func lyricState(index: Int, activeIndex: Int?) -> LyricLineState {
         guard let active = activeIndex else { return .future }
         if index < active { return .past }
         if index == active { return .now }
         return .future
     }
-}
 
-private extension LyricsView {
     /// Lead for the CURRENT lyrics: word-level (rich) cues get 150ms, plain
     /// line-level synced lyrics 115ms. Word timing may come from server
     /// `cueLine` blocks OR inline `<m:ss.xx>`
@@ -414,13 +422,11 @@ private extension LyricsView {
     }
 
     /// Re-anchor the interpolation clock to the latest authoritative sample
-    /// and refresh the handoff index immediately (pause/resume/seek/rate and
-    /// song-change transitions must not wait for the next driver tick).
+    /// and refresh the handoff index immediately.
     private func refreshClockAndIndex() {
         synchronizeRenderClock()
         let time = lyricRenderClock.currentTime
-        guard time >= 0.5, !app.player.isBuffering, !app.player.isLoading else {
-            if clockActiveIndex != nil { clockActiveIndex = nil }
+        guard !app.player.isBuffering, !app.player.isLoading else {
             return
         }
         let index = app.lyrics.activeLineIndex(at: time)
@@ -428,29 +434,6 @@ private extension LyricsView {
            Date.now < seekGuardUntil, index != guardIndex { return }
         seekGuardIndex = nil
         if index != clockActiveIndex { clockActiveIndex = index }
-    }
-
-    /// Fill gate for the active row, derived from tick time (no per-row
-    /// timers): live only once the line-change spring has settled. Delay
-    /// scales with the line's airtime (30%, clamped 0.15–0.7s) so fast
-    /// ad-libs still karaoke. Deterministic in pause/seek/song-change.
-    func fillLive(index: Int, line: SyncedLine, playbackTime: Double) -> Bool {
-        guard clockActiveIndex == index, let start = line.start.map({ $0 / 1000 }) else { return false }
-        let end = nextLyricStart(after: index) ?? (start + 3)
-        let delay = min(0.7, max(0.15, (end - start) * 0.3))
-        return playbackTime - start > delay
-    }
-
-    /// The pause begins at its timestamp. When enhanced word timing carries an
-    /// explicit final cue end, prefer it as the audible end of the preceding
-    /// lyric, provided it still lies inside the timestamped pause.
-    private func pauseProgress(at index: Int, playbackTime: Double) -> Double {
-        guard let pauseRange = pauseRange(at: index) else { return 0 }
-        return LyricsPauseMarker.progress(
-            at: playbackTime,
-            from: pauseRange.lowerBound,
-            until: pauseRange.upperBound
-        )
     }
 
     private func pauseRange(at index: Int) -> ClosedRange<Double>? {
@@ -471,24 +454,36 @@ private extension LyricsView {
     }
 
     private func nextLyricStart(after index: Int) -> Double? {
-        for candidate in app.lyrics.syncedLines.indices.dropFirst(index + 1) {
-            let line = app.lyrics.syncedLines[candidate]
-            guard !isPause(line), let start = line.start else { continue }
-            return start / 1000
-        }
-        return nil
+        app.lyrics.syncedLines.indices.dropFirst(index + 1)
+            .first { !isPause(app.lyrics.syncedLines[$0]) && app.lyrics.syncedLines[$0].start != nil }
+            .flatMap { app.lyrics.syncedLines[$0].start.map { $0 / 1000 } }
     }
 
     private func previousLyricIndex(before index: Int) -> Int? {
-        for candidate in app.lyrics.syncedLines.indices.dropFirst(index).reversed() {
-            guard !isPause(app.lyrics.syncedLines[candidate]) else { continue }
-            return candidate
-        }
-        return nil
+        (0..<index).reversed().first { !isPause(app.lyrics.syncedLines[$0]) }
     }
 
     private func isPause(_ line: SyncedLine) -> Bool {
         (line.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+}
 
+/// Dedicated subview isolating high-frequency player clock observation so that
+/// `LyricsView.body` does not re-evaluate on every playback tick (4 Hz / 60 Hz).
+private struct LyricsClockSynchronizer: View {
+    @Environment(AppState.self) private var app
+    let onSync: () -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onChange(of: app.player.currentTime) { _, _ in onSync() }
+            .onChange(of: app.player.isPlaying) { _, _ in onSync() }
+            .onChange(of: app.player.isBuffering) { _, _ in onSync() }
+            .onChange(of: app.player.isLoading) { _, _ in onSync() }
+            .onChange(of: app.lyrics.timeRate) { _, _ in onSync() }
+            .onChange(of: app.lyrics.timeOffsetSeconds) { _, _ in onSync() }
+            .onChange(of: app.serverConfig.lyricsDefaultOffset) { _, _ in onSync() }
+    }
 }

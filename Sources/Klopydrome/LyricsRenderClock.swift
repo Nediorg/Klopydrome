@@ -20,7 +20,11 @@ final class LyricsRenderClock {
     var shouldAnimate: Bool { isPlaying }
 
     func synchronize(time: Double, isPlaying: Bool, rate: Double) {
-        sampledTime = time
+        if self.isPlaying && !isPlaying {
+            sampledTime = currentTime
+        } else {
+            sampledTime = time
+        }
         sampledAt = Date()
         self.isPlaying = isPlaying
         self.rate = rate
