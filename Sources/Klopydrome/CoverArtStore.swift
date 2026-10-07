@@ -41,7 +41,8 @@ final class CoverArtStore: @unchecked Sendable {
     /// `width * height * 4` bytes, so a large grid can't pin hundreds of MB:
     /// beyond this the cache evicts least-recently-used entries (re-reads
     /// hit the disk cache, so the thrash cost is a cheap decode).
-    private static let memoryCacheCostLimit = 384 << 20
+    private static let memoryCacheCostLimit = 64 << 20
+    private static let memoryCacheCountLimit = 250
 
     /// Largest decoded side for artwork requested without a pixel cap
     /// (`.original` covers, artist URLs). The disk cache keeps full quality;
@@ -85,7 +86,7 @@ final class CoverArtStore: @unchecked Sendable {
 
     private init() {
         memory.totalCostLimit = Self.memoryCacheCostLimit
-        memory.countLimit = 1500
+        memory.countLimit = Self.memoryCacheCountLimit
     }
 
     func configure(client: SubsonicClient?, cache: CacheManager?, coverResolution: CoverResolution = .high) {
@@ -110,6 +111,13 @@ final class CoverArtStore: @unchecked Sendable {
         }
         if let toCancel {
             for holder in toCancel { holder.task.cancel() }
+        }
+    }
+
+    func clearMemoryCache() {
+        lock.withLock {
+            memory.removeAllObjects()
+            failedKeys.removeAll()
         }
     }
 
