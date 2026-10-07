@@ -50,14 +50,8 @@ struct HomeView: View {
         } else {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 32) {
-                    if loading && albumsByShelf.isEmpty && loadingShelves.isEmpty {
-                        ProgressView("Загружаем библиотеку…")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding()
-                    } else {
-                        ForEach(Shelf.allCases) { shelf in
-                            albumShelf(shelf)
-                        }
+                    ForEach(Shelf.allCases) { shelf in
+                        albumShelf(shelf)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -98,7 +92,7 @@ struct HomeView: View {
     @ViewBuilder
     private func shelfContent(_ shelf: Shelf) -> some View {
         let albums = albumsByShelf[shelf] ?? []
-        if loadingShelves.contains(shelf) {
+        if loadingShelves.contains(shelf) || (loading && albums.isEmpty) {
             ForEach(0..<6, id: \.self) { _ in AlbumCardPlaceholder() }
         } else if let error = errorsByShelf[shelf] {
             retryRow(shelf, error: error)
@@ -199,6 +193,9 @@ struct HomeView: View {
                 if !albums.isEmpty { anySuccess = true }
             }
             app.library.homeShelvesLoaded = anySuccess || !app.library.homeShelvesLoaded
+            if anySuccess {
+                await app.persistHomeShelvesToDisk()
+            }
         }
     }
 
@@ -209,6 +206,7 @@ struct HomeView: View {
         do {
             app.library.homeShelves[shelf.listType] = try await client.getAlbumList2(type: shelf.listType, size: 24)
             app.library.homeShelfErrors[shelf.listType] = nil
+            await app.persistHomeShelvesToDisk()
         } catch {
             if error is CancellationError { return }
             let nsError = error as NSError

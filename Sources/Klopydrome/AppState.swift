@@ -335,6 +335,9 @@ final class AppState {
             if queuePersistenceEnabled {
                 await restoreQueueFromServer()
             }
+            Task(priority: .utility) { [weak self] in
+                await self?.warmupLibrary()
+            }
             Task { await self.checkServerScanStatus() }
         } catch {
             connectionError = error.localizedDescription
@@ -745,6 +748,7 @@ final class AppState {
         library.playlists = fresh
         library.playlistsLoaded = true
         await persistOfflinePlaylists(fresh)
+        await persistPlaylistsToDisk()
     }
 
     /// Returns a full playlist response only while it agrees with the current

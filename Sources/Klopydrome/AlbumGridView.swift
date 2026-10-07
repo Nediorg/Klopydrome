@@ -336,6 +336,9 @@ struct AlbumGridView: View {
             app.library[keyPath: config.albums] = fresh
             app.library[keyPath: config.loaded] = true
             app.library[keyPath: config.allLoaded] = fresh.isEmpty || fresh.count < initialPageSize
+            if config.listType == .newest {
+                await app.persistRecentAlbumsToDisk()
+            }
         } catch {
             if albums.isEmpty { loadError = error.localizedDescription }
         }
