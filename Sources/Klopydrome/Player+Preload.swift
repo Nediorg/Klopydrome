@@ -15,15 +15,27 @@ extension Player {
     }
 
     /// Wires the isolated, muted MPV context used exclusively for next-track
-    /// preparation. It must never report transport events into the main player.
-    func setUpMPVPreloader() {
-        automix.preloadedMPVEngine.volume = 0
-        automix.preloadedMPVEngine.replayGainMode = automix.replayGainMode
-        automix.preloadedMPVEngine.replayGainPreampDB = automix.replayGainPreampDB
-        automix.preloadedMPVEngine.silenceTrimMode = automix.silenceTrimMode
-        automix.preloadedMPVEngine.onFailure = { [weak self] _ in
+    /// preparation. Instantiated lazily only when preloading begins, and torn
+    /// down immediately when promoted or reset.
+    @discardableResult
+    func preparePreloadedMPVEngine() -> MPVPlaybackEngine {
+        if let existing = automix.preloadedMPVEngine {
+            return existing
+        }
+        let engine = MPVPlaybackEngine()
+        engine.volume = 0
+        engine.replayGainMode = automix.replayGainMode
+        engine.replayGainPreampDB = automix.replayGainPreampDB
+        engine.silenceTrimMode = automix.silenceTrimMode
+        engine.onFailure = { [weak self] _ in
             Task { @MainActor in self?.resetPreloadedNext() }
         }
+        automix.preloadedMPVEngine = engine
+        return engine
+    }
+
+    func setUpMPVPreloader() {
+        _ = preparePreloadedMPVEngine()
     }
 
     /// Evaluates whether the queue successor should be opened in the prepared
@@ -50,7 +62,8 @@ extension Player {
         automix.transitionAnalysisTask?.cancel()
         automix.transitionAnalysisTask = nil
         automix.transitionPlan = nil
-        automix.preloadedMPVEngine.stop()
+        automix.preloadedMPVEngine?.stop()
+        automix.preloadedMPVEngine = nil
         automix.preloadedNextSong = nil
         automix.preloadedNextSongID = nil
         automix.preloadedSourceURL = nil
@@ -76,7 +89,8 @@ extension Player {
     func promotePreloadedMPVTrack(for song: SubsonicSong, autoPlay: Bool, recordHistory: Bool = true) -> Bool {
         guard engineKind == .mpv,
               automix.preloadedNextSongID == song.id,
-              automix.preloadedMPVEngine.isLoaded else {
+              let preloaded = automix.preloadedMPVEngine,
+              preloaded.isLoaded else {
             return false
         }
         cancelAutomixCrossfade()
@@ -88,7 +102,7 @@ extension Player {
         avPlayer.pause()
         avPlayer.replaceCurrentItem(with: nil)
         mpvEngine.stop()
-        mpvEngine = automix.preloadedMPVEngine
+        mpvEngine = preloaded
         mpvEngine.volume = outputGain
         mpvLoadGeneration += 1
         mpvStreamOffset = 0
@@ -99,12 +113,11 @@ extension Player {
         automix.currentSourceURL = automix.preloadedSourceURL
         armMPVFailureFallback(for: automix.currentSourceURL)
         automix.preloadedSourceURL = nil
-        automix.preloadedMPVEngine = MPVPlaybackEngine()
+        automix.preloadedMPVEngine = nil
         automix.preloadedNextSong = nil
         automix.preloadedNextSongID = nil
         automix.isPreloadingNext = false
         setUpMPVEngine()
-        setUpMPVPreloader()
         isPlaying = autoPlay
         isLoading = false
         isBuffering = false
@@ -137,10 +150,11 @@ extension Player {
         automix.preloadedSourceURL = url
         automix.isPreloadingNext = true
         let id = song.id
+        let engine = preparePreloadedMPVEngine()
         automix.preloadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.automix.preloadedMPVEngine.load(url: url)
+                _ = try await engine.load(url: url)
                 guard !Task.isCancelled, self.automix.preloadedNextSongID == id else { return }
                 self.automix.isPreloadingNext = false
                 if self.automix.enabled {

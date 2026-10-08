@@ -139,7 +139,7 @@ extension Player {
     func pause() {
         if engineKind == .mpv {
             mpvEngine.pause()
-            if automix.activeCrossfade != nil { automix.preloadedMPVEngine.pause() }
+            if automix.activeCrossfade != nil { automix.preloadedMPVEngine?.pause() }
         } else {
             avPlayer.pause()
         }
@@ -161,7 +161,7 @@ extension Player {
             } else if !isLoading {
                 onTrackRequest?(song)
             }
-            if automix.activeCrossfade != nil { automix.preloadedMPVEngine.play() }
+            if automix.activeCrossfade != nil { automix.preloadedMPVEngine?.play() }
             isPlaying = true
             updateNowPlayingInfo()
             return

@@ -225,7 +225,6 @@ final class Player {
         // The MPV engine drives its own clock; the AVPlayer time observer
         // must not overwrite `currentTime`/`duration` while it's running.
         setUpMPVEngine()
-        setUpMPVPreloader()
 
         setupRemoteCommands()
         setupSystemMediaLifecycle()

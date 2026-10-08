@@ -41,7 +41,8 @@ extension Player {
         }
         guard let successor = nextSongForPreloading,
               automix.preloadedNextSongID == successor.id,
-              automix.preloadedMPVEngine.isLoaded else {
+              let preloaded = automix.preloadedMPVEngine,
+              preloaded.isLoaded else {
             return
         }
         let plan = automix.transitionPlan ?? AutomixCrossfade.fallbackPlan(
@@ -50,8 +51,8 @@ extension Player {
         )
         guard seconds >= plan.fadeOutStart else { return }
 
-        automix.preloadedMPVEngine.volume = 0
-        automix.preloadedMPVEngine.play()
+        preloaded.volume = 0
+        preloaded.play()
         let active = ActiveAutomixCrossfade(
             successorID: successor.id,
             startTime: plan.fadeOutStart,
@@ -74,8 +75,8 @@ extension Player {
         automix.activeCrossfade = nil
         isCrossfading = false
         mpvEngine.volume = outputGain
-        automix.preloadedMPVEngine.pause()
-        automix.preloadedMPVEngine.volume = 0
+        automix.preloadedMPVEngine?.pause()
+        automix.preloadedMPVEngine?.volume = 0
         updateNowPlayingInfo()
     }
 
@@ -84,14 +85,15 @@ extension Player {
         at seconds: Double
     ) {
         guard automix.preloadedNextSongID == active.successorID,
-              automix.preloadedMPVEngine.isLoaded else {
+              let preloaded = automix.preloadedMPVEngine,
+              preloaded.isLoaded else {
             cancelAutomixCrossfade()
             return
         }
         let progress = (seconds - active.startTime) / active.duration
         let gains = AutomixCrossfade.gains(progress: progress)
         mpvEngine.volume = outputGain * gains.outgoing
-        automix.preloadedMPVEngine.volume = outputGain * gains.incoming
+        preloaded.volume = outputGain * gains.incoming
     }
 
     func handleMPVTrackEnded() {

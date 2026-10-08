@@ -42,15 +42,15 @@ extension Player {
         automix.replayGainPreampDB = safePreamp
         mpvEngine.replayGainMode = mode
         mpvEngine.replayGainPreampDB = safePreamp
-        automix.preloadedMPVEngine.replayGainMode = mode
-        automix.preloadedMPVEngine.replayGainPreampDB = safePreamp
+        automix.preloadedMPVEngine?.replayGainMode = mode
+        automix.preloadedMPVEngine?.replayGainPreampDB = safePreamp
     }
 
     /// Applies trailing-silence trimming to both MPV contexts.
     func configureSilenceTrim(mode: SilenceTrimMode) {
         automix.silenceTrimMode = mode
         mpvEngine.silenceTrimMode = mode
-        automix.preloadedMPVEngine.silenceTrimMode = mode
+        automix.preloadedMPVEngine?.silenceTrimMode = mode
     }
 
     #if DEBUG

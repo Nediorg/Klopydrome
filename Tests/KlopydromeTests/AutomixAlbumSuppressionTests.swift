@@ -115,7 +115,7 @@ final class AutomixAlbumSuppressionTests: XCTestCase {
         player.automix.applyToAlbums = false
         player.automix.preloadedNextSong = song2
         player.automix.preloadedNextSongID = song2.id
-        player.automix.preloadedMPVEngine.setIsLoadedForTesting(true)
+        player.preparePreloadedMPVEngine().setIsLoadedForTesting(true)
 
         player.evaluateAutomixCrossfade(at: 178)
 
@@ -136,7 +136,7 @@ final class AutomixAlbumSuppressionTests: XCTestCase {
         player.automix.applyToAlbums = true
         player.automix.preloadedNextSong = song2
         player.automix.preloadedNextSongID = song2.id
-        player.automix.preloadedMPVEngine.setIsLoadedForTesting(true)
+        player.preparePreloadedMPVEngine().setIsLoadedForTesting(true)
 
         player.evaluateAutomixCrossfade(at: 178)
 
@@ -157,7 +157,7 @@ final class AutomixAlbumSuppressionTests: XCTestCase {
         player.automix.applyToAlbums = false
         player.automix.preloadedNextSong = song2
         player.automix.preloadedNextSongID = song2.id
-        player.automix.preloadedMPVEngine.setIsLoadedForTesting(true)
+        player.preparePreloadedMPVEngine().setIsLoadedForTesting(true)
 
         player.evaluateAutomixCrossfade(at: 178)
 
@@ -178,7 +178,7 @@ final class AutomixAlbumSuppressionTests: XCTestCase {
         player.automix.applyToAlbums = false
         player.automix.preloadedNextSong = song2
         player.automix.preloadedNextSongID = song2.id
-        player.automix.preloadedMPVEngine.setIsLoadedForTesting(true)
+        player.preparePreloadedMPVEngine().setIsLoadedForTesting(true)
         player.automix.activeCrossfade = ActiveAutomixCrossfade(
             successorID: song2.id,
             startTime: 175,

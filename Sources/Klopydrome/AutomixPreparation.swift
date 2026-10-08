@@ -5,7 +5,7 @@ import NavidromeClient
 /// queue and transport remain focused on the active playback path.
 @MainActor
 final class AutomixPreparation {
-    var preloadedMPVEngine = MPVPlaybackEngine()
+    var preloadedMPVEngine: MPVPlaybackEngine?
     var preloadedNextSong: SubsonicSong?
     var preloadedNextSongID: String?
     var isPreloadingNext = false

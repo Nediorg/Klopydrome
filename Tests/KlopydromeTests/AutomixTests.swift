@@ -195,25 +195,27 @@ final class AutomixTests: XCTestCase {
 
     func testConfigureReplayGainClampsPreampAndReachesEngines() {
         let player = Player()
+        _ = player.preparePreloadedMPVEngine()
         player.configureReplayGain(mode: .album, preampDB: 20)
         XCTAssertEqual(player.replayGainMode, .album)
         XCTAssertEqual(player.replayGainPreampDB, 12)
         XCTAssertEqual(player.mpvEngine.replayGainMode, .album)
-        XCTAssertEqual(player.automix.preloadedMPVEngine.replayGainMode, .album)
+        XCTAssertEqual(player.automix.preloadedMPVEngine?.replayGainMode, .album)
 
         player.configureReplayGain(mode: .off, preampDB: -30)
         XCTAssertEqual(player.replayGainMode, .off)
         XCTAssertEqual(player.replayGainPreampDB, -12)
         XCTAssertEqual(player.mpvEngine.replayGainMode, .off)
-        XCTAssertEqual(player.automix.preloadedMPVEngine.replayGainMode, .off)
+        XCTAssertEqual(player.automix.preloadedMPVEngine?.replayGainMode, .off)
     }
 
     func testConfigureSilenceTrimReachesEngines() {
         let player = Player()
+        _ = player.preparePreloadedMPVEngine()
         player.configureSilenceTrim(mode: .strong)
         XCTAssertEqual(player.silenceTrimMode, .strong)
         XCTAssertEqual(player.mpvEngine.silenceTrimMode, .strong)
-        XCTAssertEqual(player.automix.preloadedMPVEngine.silenceTrimMode, .strong)
+        XCTAssertEqual(player.automix.preloadedMPVEngine?.silenceTrimMode, .strong)
     }
 
     func testDisablingAutomixKeepsPreparedSuccessorForGaplessAdvance() {
