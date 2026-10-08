@@ -49,19 +49,34 @@ struct CoverArtView: View {
     }
 
     private var displayImage: NSImage? {
-        if let image, renderedCoverArt == coverArt {
+        if let cached = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2)) {
+            return cached
+        }
+        // Retain previous image while loading a new valid cover art:
+        if coverArt?.isEmpty == false, let image {
             return image
         }
-        return CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2))
+        return nil
+    }
+
+    private var currentCoverID: String {
+        if let current = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2)),
+           let art = coverArt, !art.isEmpty {
+            return art
+        }
+        if let renderedCoverArt, !renderedCoverArt.isEmpty {
+            return renderedCoverArt
+        }
+        return coverArt ?? "cover-placeholder"
     }
 
     var body: some View {
-        Group {
+        ZStack {
             if let displayImage {
                 Image(nsImage: displayImage)
                     .resizable()
                     .scaledToFill()
-                    .id(coverArt)
+                    .id(currentCoverID)
                     .transition(.opacity)
             } else if placeholderBackground != .clear {
                 ZStack {
@@ -72,8 +87,10 @@ struct CoverArtView: View {
                         .foregroundStyle(.tertiary)
                         .accessibilityHidden(true)
                 }
+                .transition(.opacity)
             } else {
                 Color.clear
+                    .transition(.opacity)
             }
         }
         .frame(width: size, height: size)
@@ -87,6 +104,7 @@ struct CoverArtView: View {
         .coverShadow(enabled: shadow, radius: shadowRadius, yOffset: shadowY)
         .accessibilityLabel(coverArt ?? String(localized: "Обложка"))
         .accessibilityAddTraits(.isImage)
+        .animation(.easeInOut(duration: 0.22), value: renderedCoverArt)
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
             // Resume shimmer immediately; the re-fired task below fills the image.
             loadFailed = false
@@ -111,26 +129,66 @@ struct CoverArtView: View {
             }
             // Fast cache hit avoiding placeholder flash and shimmer animation:
             if let cached = CoverArtStore.shared.cachedImage(coverArt: art, size: Int(size * 2)) {
-                image = cached
-                renderedCoverArt = art
+                withAnimation(.easeInOut(duration: 0.20)) {
+                    image = cached
+                    renderedCoverArt = art
+                }
                 loadFailed = false
                 return
             }
-            // If the art changed and is not in memory cache, drop old image for placeholder.
-            if renderedCoverArt != art {
-                image = nil
-                renderedCoverArt = nil
-            }
+
             loadFailed = false
-            let loaded = await CoverArtStore.shared.image(coverArt: art, size: Int(size * 2))
-            guard !Task.isCancelled else { return }
-            if let image = loaded.image {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    self.image = image
-                    renderedCoverArt = art
+
+            // Grace period: if we already have an image visible, give the new
+            // cover 350ms to resolve (from disk cache or fast connection) before
+            // dropping to the placeholder. If it resolves in time, we transition
+            // directly between the covers without flashing a placeholder.
+            let hadPreviousImage = (image != nil)
+
+            enum LoadingResult: Sendable {
+                case image(CoverArtStore.ImageBox)
+                case graceExpired
+            }
+
+            await withTaskGroup(of: LoadingResult.self) { group in
+                group.addTask {
+                    let outcome = await CoverArtStore.shared.image(coverArt: art, size: Int(size * 2))
+                    return .image(CoverArtStore.ImageBox(image: outcome.image))
                 }
-            } else {
-                loadFailed = true
+
+                if hadPreviousImage {
+                    group.addTask {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        return .graceExpired
+                    }
+                }
+
+                for await result in group {
+                    guard !Task.isCancelled else { break }
+                    switch result {
+                    case .graceExpired:
+                        withAnimation(.easeInOut(duration: 0.20)) {
+                            image = nil
+                            renderedCoverArt = nil
+                        }
+                    case .image(let box):
+                        group.cancelAll()
+                        if let newImage = box.image {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                image = newImage
+                                renderedCoverArt = art
+                            }
+                            loadFailed = false
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                image = nil
+                                renderedCoverArt = nil
+                            }
+                            loadFailed = true
+                        }
+                        return
+                    }
+                }
             }
         }
     }

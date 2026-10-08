@@ -151,6 +151,12 @@ extension Player {
         automix.isPreloadingNext = true
         let id = song.id
         let engine = preparePreloadedMPVEngine()
+        if let coverArt = song.coverArt, !coverArt.isEmpty {
+            Task {
+                _ = await CoverArtStore.shared.image(coverArt: coverArt, size: 240)
+                _ = await CoverArtStore.shared.image(coverArt: coverArt, size: 720)
+            }
+        }
         automix.preloadTask = Task { [weak self] in
             guard let self else { return }
             do {
