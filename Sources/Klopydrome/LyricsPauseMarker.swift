@@ -190,8 +190,8 @@ struct LyricsPauseMarker: View {
                 let info = dotState(for: dotIdx, current: current, isActive: isActive)
                 Circle()
                     .frame(width: Self.dotDiameter, height: Self.dotDiameter)
-                    .foregroundStyle(Color.white.opacity(info.opacity))
-                    .shadow(color: Color.white.opacity(info.glow * 0.4), radius: 2)
+                    .foregroundStyle(AMColor.primaryText.opacity(info.opacity))
+                    .shadow(color: AMColor.primaryText.opacity(info.glow * 0.4), radius: 2)
                     .scaleEffect(info.scale)
             }
         }

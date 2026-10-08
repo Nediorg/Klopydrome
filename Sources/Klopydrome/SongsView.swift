@@ -169,27 +169,29 @@ struct SongsView: View {
         if onlyFav { starredIDs = Set(base.filter { app.isStarred($0) }.map(\.id)) }
 
         reprocessTask?.cancel()
-        reprocessTask = Task {
-            let result = await Task.detached(priority: .utility) {
-                Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
-                             query: query, sortOrder: order)
-            }.value
-            guard !Task.isCancelled, reprocessGeneration == generation else {
+        reprocessTask = Task.detached(priority: .utility) {
+            guard !Task.isCancelled else { return }
+            let result = Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
+                                      query: query, sortOrder: order)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !Task.isCancelled, reprocessGeneration == generation else {
+                    reprocessing = false
+                    if reprocessDirty {
+                        reprocessDirty = false
+                        reprocess()
+                    }
+                    return
+                }
+                processedSongs = result.processed
+                if !result.searchable.isEmpty {
+                    searchable.merge(result.searchable) { _, new in new }
+                }
                 reprocessing = false
                 if reprocessDirty {
                     reprocessDirty = false
                     reprocess()
                 }
-                return
-            }
-            processedSongs = result.processed
-            if !result.searchable.isEmpty {
-                searchable.merge(result.searchable) { _, new in new }
-            }
-            reprocessing = false
-            if reprocessDirty {
-                reprocessDirty = false
-                reprocess()
             }
         }
     }
@@ -207,12 +209,14 @@ struct SongsView: View {
         if favoritesOnly, let starred = starredIDs {
             list = list.filter { starred.contains($0.id) }
         }
+        guard !Task.isCancelled else { return ([], [:]) }
         var searchable: [String: String] = [:]
         if !query.isEmpty {
             list = list.filter { song in
                 searchableText(song, cache: &searchable).contains(query)
             }
         }
+        guard !Task.isCancelled else { return ([], [:]) }
         if !sortOrder.isEmpty {
             list.sort(using: sortOrder)
         }

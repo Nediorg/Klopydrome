@@ -184,19 +184,29 @@ final class SmartPlaylistEngine {
         // no extra favorites fetch is needed here.
         let genre = query.flatMap(SmartQueryMath.genreHint) ?? playlist.trimmedGenre
         let pool = try await repo.fetchPool(genre: genre)
-        let matched = pool.filter { playlist.matches($0) }
-        let sorted = SmartQueryMath.sort(matched, sort: query?.sort, order: query?.order,
-                                         shuffle: playlist.shuffleOrder)
-        return SmartQueryMath.window(sorted, offset: query?.offset, limit: query?.limit ?? playlist.limit)
+        try Task.checkCancellation()
+        return try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let matched = pool.filter { playlist.matches($0) }
+            try Task.checkCancellation()
+            let sorted = SmartQueryMath.sort(matched, sort: query?.sort, order: query?.order,
+                                             shuffle: playlist.shuffleOrder)
+            return SmartQueryMath.window(sorted, offset: query?.offset, limit: query?.limit ?? playlist.limit)
+        }.value
     }
 
     /// Preview a bare query tree (not persisted) against the pool.
     func preview(_ query: SmartQuery) async throws -> [SubsonicSong] {
         let genre = SmartQueryMath.genreHint(query)
         let pool = try await repo.fetchPool(genre: genre)
-        let matched = pool.filter { query.matches($0) }
-        let sorted = SmartQueryMath.sort(matched, sort: query.sort, order: query.order, shuffle: false)
-        return SmartQueryMath.window(sorted, offset: query.offset, limit: query.limit)
+        try Task.checkCancellation()
+        return try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let matched = pool.filter { query.matches($0) }
+            try Task.checkCancellation()
+            let sorted = SmartQueryMath.sort(matched, sort: query.sort, order: query.order, shuffle: false)
+            return SmartQueryMath.window(sorted, offset: query.offset, limit: query.limit)
+        }.value
     }
 }
 

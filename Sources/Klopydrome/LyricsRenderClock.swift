@@ -11,13 +11,19 @@ final class LyricsRenderClock {
     private var sampledAt = Date()
     private var isPlaying = false
     private var rate: Double = 1
+    /// Extrapolation ceiling: if player samples stall (e.g. network buffering),
+    /// the clock freezes after 0.35s instead of running away into the future.
+    private let maxExtrapolation: TimeInterval = 0.35
 
     var currentTime: Double {
         guard isPlaying else { return sampledTime }
-        return sampledTime + (Date().timeIntervalSince(sampledAt) * rate)
+        let elapsed = min(maxExtrapolation, Date().timeIntervalSince(sampledAt))
+        return sampledTime + (elapsed * rate)
     }
 
-    var shouldAnimate: Bool { isPlaying }
+    var shouldAnimate: Bool {
+        isPlaying && Date().timeIntervalSince(sampledAt) < maxExtrapolation
+    }
 
     func synchronize(time: Double, isPlaying: Bool, rate: Double) {
         if self.isPlaying && !isPlaying {

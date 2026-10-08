@@ -48,8 +48,6 @@ struct SmartPlaylistDetailView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
                             .padding(.bottom, 28)
-                        actionRow
-                            .padding(.bottom, 28)
                         songList
                     }
                     .padding(.horizontal, 28)
@@ -93,6 +91,13 @@ struct SmartPlaylistDetailView: View {
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
+                Button {
+                    editing = true
+                } label: {
+                    Label("Редактировать правила".localized, systemImage: "slider.horizontal.3")
+                        .font(.callout)
+                }
+                .buttonStyle(.link)
                 Spacer(minLength: 0)
                 actionRow
             }

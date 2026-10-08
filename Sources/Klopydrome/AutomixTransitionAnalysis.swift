@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os
 
 /// A transition selected from the measured edges of two tracks.
 struct AutomixTransitionPlan: Equatable, Sendable {
@@ -111,14 +112,35 @@ enum AutomixTransitionPlanner {
 }
 
 enum AutomixAudioAnalyzer {
+    private struct CacheState: Sendable {
+        var items: [URL: AutomixEdgeProfile] = [:]
+        var order: [URL] = []
+    }
+    private static let state = OSAllocatedUnfairLock<CacheState>(initialState: CacheState())
+    private static let maxCachedProfiles = 25
+
     static func edgeProfile(for url: URL) async -> AutomixEdgeProfile? {
         guard url.isFileURL else { return nil }
-        return await Task.detached(priority: .utility) {
-            makeEdgeProfile(for: url)
-        }.value
+        if let cached = state.withLock({ $0.items[url] }) {
+            return cached
+        }
+        guard !Task.isCancelled else { return nil }
+        guard let profile = makeEdgeProfile(for: url) else { return nil }
+
+        state.withLock { currentState in
+            currentState.items[url] = profile
+            currentState.order.removeAll { $0 == url }
+            currentState.order.append(url)
+            while currentState.order.count > maxCachedProfiles {
+                let evicted = currentState.order.removeFirst()
+                currentState.items.removeValue(forKey: evicted)
+            }
+        }
+        return profile
     }
 
     private static func makeEdgeProfile(for url: URL) -> AutomixEdgeProfile? {
+        guard !Task.isCancelled else { return nil }
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let format = file.processingFormat
         let sampleRate = format.sampleRate
@@ -127,6 +149,7 @@ enum AutomixAudioAnalyzer {
         let requestedFrames = AVAudioFramePosition(sampleRate * AutomixTransitionPlanner.analysisWindow)
         let edgeFrames = min(file.length, requestedFrames)
         let start = rmsEnvelope(file: file, format: format, start: 0, frames: edgeFrames)
+        guard !Task.isCancelled else { return nil }
         let tailStart = max(0, file.length - edgeFrames)
         let tail = rmsEnvelope(file: file, format: format, start: tailStart, frames: edgeFrames)
         guard !start.isEmpty || !tail.isEmpty else { return nil }
@@ -157,13 +180,17 @@ enum AutomixAudioAnalyzer {
         let channelCount = Int(format.channelCount)
 
         while remaining > 0 {
+            if Task.isCancelled { break }
             let chunk = AVAudioFrameCount(min(AVAudioFramePosition(window), remaining))
-            do {
-                try file.read(into: buffer, frameCount: chunk)
-            } catch {
-                break
+            let readSuccess = autoreleasepool {
+                do {
+                    try file.read(into: buffer, frameCount: chunk)
+                    return true
+                } catch {
+                    return false
+                }
             }
-            guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { break }
+            guard readSuccess, let channels = buffer.floatChannelData, buffer.frameLength > 0 else { break }
             let sampleCount = Int(buffer.frameLength)
             var energy: Float = 0
             for index in 0..<sampleCount {

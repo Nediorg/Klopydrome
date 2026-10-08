@@ -82,7 +82,12 @@ struct SongTable: View {
 
     /// Render window size; first `displayedCount` rows of `songs` are shown.
     @State private var displayedCount: Int = 0
-    private var displayedSongs: [SubsonicSong] { Array(songs.prefix(displayedCount)) }
+    @State private var displayedSongsCache: [SubsonicSong] = []
+    private var displayedSongs: [SubsonicSong] { displayedSongsCache }
+
+    private func updateDisplayedSongs() {
+        displayedSongsCache = Array(songs.prefix(displayedCount))
+    }
 
     /// Tracks the selected rows so left-click selects and multi-select works.
     @State private var selection = Set<SubsonicSong.ID>()
@@ -98,9 +103,9 @@ struct SongTable: View {
                     // force-unwrap nil (crashes on sort, which re-lays-out rows).
                     SongColumnCell(column: column, song: song, app: app)
                         // Prefetch next page when the tail row appears. Only
-                        // the title column installs the task — otherwise each
-                        // row would create one task per column (×8–10).
-                        .task {
+                        // the title column installs the appearance hook — otherwise each
+                        // row would create one hook per column (×8–10).
+                        .onAppear {
                             guard column == .title else { return }
                             guard displayedCount > 0, displayedCount < songs.count else { return }
                             let tailIndex = displayedCount - 1
@@ -116,9 +121,14 @@ struct SongTable: View {
             // Start with a full page instead of an empty table until the
             // first scroll grows the window.
             displayedCount = min(pageSize, songs.count)
+            updateDisplayedSongs()
+        }
+        .onChange(of: displayedCount) {
+            updateDisplayedSongs()
         }
         .onChange(of: songs.count) {
             displayedCount = min(displayedCount, songs.count)
+            updateDisplayedSongs()
         }
         .onChange(of: sortOrder) {
             // Reset to a single page on re-sort: `Table` re-sorts the handed-in
@@ -127,6 +137,7 @@ struct SongTable: View {
             // the exact freeze we're avoiding. `SongsView` re-sorts the full
             // library off-main and lands a fresh page.
             displayedCount = min(pageSize, songs.count)
+            updateDisplayedSongs()
         }
         // Light-gray selection accent (matches the sidebar) instead of the red
         // accent, so a selected row reads as a neutral highlight, not a colored one.

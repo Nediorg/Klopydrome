@@ -238,9 +238,20 @@ final class Player {
         if let observer = endObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = systemMediaActivationObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         statusObserver?.invalidate()
         itemStatusObserver?.invalidate()
         timeControlStatusObserver?.invalidate()
+
+        let center = MPRemoteCommandCenter.shared()
+        center.playCommand.removeTarget(nil)
+        center.pauseCommand.removeTarget(nil)
+        center.togglePlayPauseCommand.removeTarget(nil)
+        center.nextTrackCommand.removeTarget(nil)
+        center.previousTrackCommand.removeTarget(nil)
+        center.changePlaybackPositionCommand.removeTarget(nil)
     }
 
     // MARK: Queue

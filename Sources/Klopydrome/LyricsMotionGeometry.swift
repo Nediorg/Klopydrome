@@ -73,7 +73,7 @@ enum LyricsMotionGeometry {
             return .spring(response: 0.52, dampingFraction: 0.75, blendDuration: 0.10)
                 .delay(delay * 0.6)
         case .smooth:
-            return .spring(response: 0.70, dampingFraction: 0.58, blendDuration: 0.14)
+            return .spring(response: 0.70, dampingFraction: 0.78, blendDuration: 0.14)
                 .delay(delay)
         }
     }

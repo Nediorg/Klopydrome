@@ -129,24 +129,7 @@ struct PlayerHeaderBar: View {
 
     private var rightControls: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                VolumeEdgeButton(
-                    systemImage: "speaker.fill",
-                    label: L10n.text("action.volume.mute"),
-                    symbolOffset: 7
-                ) {
-                    app.player.volume = 0
-                }
-                ToolbarVolumeSlider(value: Bindable(app).player.volume)
-                    .frame(width: 75, height: 52)
-                    .help("Громкость")
-                VolumeEdgeButton(
-                    systemImage: "speaker.wave.3.fill",
-                    label: L10n.text("action.volume.maximum")
-                ) {
-                    app.player.volume = 1
-                }
-            }
+            ToolbarVolumeControl(player: app.player)
 
             HStack(spacing: 4) {
                 Button {
@@ -197,5 +180,30 @@ struct PlayerHeaderBar: View {
         .padding(.trailing, 2)
         .help("Назад")
         .accessibilityLabel("Назад")
+    }
+}
+
+private struct ToolbarVolumeControl: View {
+    @Bindable var player: Player
+
+    var body: some View {
+        HStack(spacing: 4) {
+            VolumeEdgeButton(
+                systemImage: "speaker.fill",
+                label: L10n.text("action.volume.mute"),
+                symbolOffset: 7
+            ) {
+                player.volume = 0
+            }
+            ToolbarVolumeSlider(value: $player.volume)
+                .frame(width: 75, height: 52)
+                .help("Громкость")
+            VolumeEdgeButton(
+                systemImage: "speaker.wave.3.fill",
+                label: L10n.text("action.volume.maximum")
+            ) {
+                player.volume = 1
+            }
+        }
     }
 }

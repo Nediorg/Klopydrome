@@ -162,7 +162,7 @@ public extension SubsonicClient {
     /// first, then one `PlaylistChunk.songs` per slice.
     func getPlaylistChunked(id: String, chunkSize: Int = 200) -> AsyncThrowingStream<PlaylistChunk, Error> {
         AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 do {
                     let data = try await requestData(
                         endpoint: "getPlaylist",
@@ -196,45 +196,25 @@ public extension SubsonicClient {
                         validUntil: playlist.validUntil)
                     continuation.yield(.header(header))
 
-                    // Re-decode the raw JSON's entry array in chunks. Parse once,
-                    // slice the top-level value, decode each slice separately so the
-                    // first slice paints before the rest is decoded.
-                    try await Self.streamPlaylistEntries(from: data, chunkSize: chunkSize) { songs in
-                        continuation.yield(.songs(songs))
+                    // Stream already-decoded entries in bounded chunks to paint progressively
+                    let allEntries = playlist.entry ?? []
+                    var offset = 0
+                    while offset < allEntries.count {
+                        try Task.checkCancellation()
+                        let end = min(offset + chunkSize, allEntries.count)
+                        let slice = Array(allEntries[offset..<end])
+                        continuation.yield(.songs(slice))
+                        offset = end
+                        await Task.yield()
                     }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
-        }
-    }
-
-    /// Parses a `getPlaylist` response body once, then re-decodes its `entry`
-    /// array in bounded slices, forwarding each decoded slice to `emit`.
-    private static func streamPlaylistEntries(
-        from data: Data,
-        chunkSize: Int,
-        emit: ([SubsonicSong]) throws -> Void
-    ) async throws {
-        // JSONSerialization for the light structural pass is much cheaper than
-        // decoding thousands of deeply-nested song objects just to rediscover
-        // the entry array.
-        let root = try JSONSerialization.jsonObject(with: data, options: [])
-        guard let dict = root as? [String: Any],
-              let response = dict["subsonic-response"] as? [String: Any],
-              let playlist = response["playlist"] as? [String: Any],
-              let entries = playlist["entry"] as? [[String: Any]] else { return }
-
-        var offset = 0
-        while offset < entries.count {
-            try Task.checkCancellation()
-            let slice = Array(entries[offset..<min(offset + chunkSize, entries.count)])
-            let sliceData = try JSONSerialization.data(withJSONObject: slice, options: [])
-            let songs = try JSONDecoder().decode([SubsonicSong].self, from: sliceData)
-            try emit(songs)
-            offset += slice.count
-            await Task.yield()
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
         }
     }
 

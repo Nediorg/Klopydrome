@@ -101,9 +101,7 @@ extension Player {
             }
         }
         mpvEngine.onTimeUpdate = { [weak self] seconds in
-            Task { @MainActor in
-                self?.handleMPVTimeUpdate(seconds)
-            }
+            self?.handleMPVTimeUpdate(seconds)
         }
     }
 
@@ -125,7 +123,10 @@ extension Player {
                 currentTime = display
             }
         }
-        duration = mpvEngine.duration > 0 ? mpvEngine.duration + mpvStreamOffset : 0
+        let newDuration = mpvEngine.duration > 0 ? mpvEngine.duration + mpvStreamOffset : 0
+        if duration != newDuration {
+            duration = newDuration
+        }
         reportNowPlayingSecond(display)
         evaluateNextTrackPreload(at: display)
         evaluateAutomixCrossfade(at: display)

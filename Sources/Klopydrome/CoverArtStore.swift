@@ -105,6 +105,7 @@ final class CoverArtStore: @unchecked Sendable {
             // result can later clobber the fresh registry or memory cache.
             memory.removeAllObjects()
             failedKeys.removeAll()
+            cachedSizes.removeAll()
             let holders = Array(inflight.values)
             inflight.removeAll()
             return holders
@@ -118,6 +119,7 @@ final class CoverArtStore: @unchecked Sendable {
         lock.withLock {
             memory.removeAllObjects()
             failedKeys.removeAll()
+            cachedSizes.removeAll()
         }
     }
 

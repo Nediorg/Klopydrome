@@ -50,8 +50,10 @@ public actor CacheManager {
     /// for an artist), keyed by artist id. Subsonic song ids are stable only
     /// for the lifetime of a connection, and `CacheManager` is recreated on
     /// each `connect()` (so this clears on reconnect automatically); it is
-    /// also dropped by `clear()`.
+    /// also dropped by `clear()`. Capped to 25 artists to prevent unbounded RAM growth.
     private var discographyByArtist: [String: [SubsonicSong]] = [:]
+    private var discographyArtistOrder: [String] = []
+    private let maxDiscographyArtists = 25
 
     public init(rootURL: URL? = nil, limits: CacheLimits = .default) {
         let base = rootURL
@@ -194,6 +196,7 @@ public actor CacheManager {
             await clear(kind: kind)
         }
         discographyByArtist = [:]
+        discographyArtistOrder = []
     }
 
     public func clear(kind: CacheKind) async {
@@ -214,9 +217,17 @@ public actor CacheManager {
     }
 
     /// Stores a completed discography crawl so revisiting the artist page
-    /// skips the multi-request crawl entirely.
+    /// skips the multi-request crawl entirely. Enforces an LRU ceiling.
     public func cacheDiscography(_ songs: [SubsonicSong], for artistId: String) async {
         discographyByArtist[artistId] = songs
+        if let idx = discographyArtistOrder.firstIndex(of: artistId) {
+            discographyArtistOrder.remove(at: idx)
+        }
+        discographyArtistOrder.append(artistId)
+        while discographyArtistOrder.count > maxDiscographyArtists {
+            let evicted = discographyArtistOrder.removeFirst()
+            discographyByArtist.removeValue(forKey: evicted)
+        }
     }
 
     // MARK: Size management
@@ -250,12 +261,13 @@ public actor CacheManager {
         let fm = FileManager.default
         guard let urls = try? fm.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey]
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey, .fileSizeKey]
         ) else { return 0 }
         let entries = urls.compactMap { url -> Int? in
-            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                  values.isRegularFile == true else { return nil }
-            return (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+            guard let values = try? url.resourceValues(forKeys: [
+                .contentModificationDateKey, .isRegularFileKey, .fileSizeKey
+            ]), values.isRegularFile == true else { return nil }
+            return values.fileSize
         }
         return entries.reduce(0, +)
     }
@@ -290,8 +302,8 @@ public actor CacheManager {
 
     private func scanBytes(_ kind: CacheKind) -> Int {
         var total = 0
-        for url in files(in: kind).map(\.url) {
-            total += fileSize(url)
+        for entry in files(in: kind) {
+            total += entry.size
         }
         return total
     }
@@ -317,18 +329,32 @@ public actor CacheManager {
         }
     }
 
-    private func files(in kind: CacheKind) -> [(url: URL, date: Date)] {
+    private struct CacheFileEntry {
+        let url: URL
+        let date: Date
+        let size: Int
+    }
+
+    private struct GlobalEvictEntry {
+        let kind: CacheKind
+        let url: URL
+        let date: Date
+        let size: Int
+    }
+
+    private func files(in kind: CacheKind) -> [CacheFileEntry] {
         let dir = directory(for: kind)
         guard let urls = try? fileManager.contentsOfDirectory(
             at: dir,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey]
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey, .fileSizeKey]
         ) else { return [] }
         return urls.compactMap { url in
-            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                  values.isRegularFile == true, let date = values.contentModificationDate else {
+            guard let values = try? url.resourceValues(forKeys: [
+                .contentModificationDateKey, .isRegularFileKey, .fileSizeKey
+            ]), values.isRegularFile == true, let date = values.contentModificationDate else {
                 return nil
             }
-            return (url, date)
+            return CacheFileEntry(url: url, date: date, size: values.fileSize ?? 0)
         }.sorted { $0.date < $1.date }
     }
 
@@ -336,33 +362,31 @@ public actor CacheManager {
     /// counter to the on-disk reality, so external removals self-heal.
     private func evict(_ kind: CacheKind, toTarget target: Int) async {
         let entries = files(in: kind)
-        var total = entries.reduce(0) { $0 + fileSize($1.url) }
+        var total = entries.reduce(0) { $0 + $1.size }
         guard total > target else { return }
         for entry in entries {
             if total <= target { break }
-            let size = fileSize(entry.url)
             if (try? fileManager.removeItem(at: entry.url)) != nil {
-                total -= size
+                total -= entry.size
             }
         }
         kindTotals[kind] = max(0, total)
     }
 
     private func evict(totalTarget target: Int) async {
-        let all: [(kind: CacheKind, url: URL, date: Date)] = CacheKind.allCases.reduce(into: []) { acc, kind in
-            for (url, date) in files(in: kind) {
-                acc.append((kind, url, date))
+        let all: [GlobalEvictEntry] = CacheKind.allCases.reduce(into: []) { acc, kind in
+            for entry in files(in: kind) {
+                acc.append(GlobalEvictEntry(kind: kind, url: entry.url, date: entry.date, size: entry.size))
             }
         }.sorted { $0.date < $1.date }
-        var total = all.reduce(0) { $0 + fileSize($1.url) }
+        var total = all.reduce(0) { $0 + $1.size }
         guard total > target else { return }
         var removedByKind: [CacheKind: Int] = [:]
         for entry in all {
             if total <= target { break }
-            let size = fileSize(entry.url)
             if (try? fileManager.removeItem(at: entry.url)) != nil {
-                total -= size
-                removedByKind[entry.kind, default: 0] += size
+                total -= entry.size
+                removedByKind[entry.kind, default: 0] += entry.size
             }
         }
         for (kind, removed) in removedByKind {

@@ -589,6 +589,9 @@ final class AppState {
 
     func cachedURL(for song: SubsonicSong) -> URL? {
         guard let cache else { return nil }
+        if cachedStreamKeysSeeded && !isCached(song) {
+            return nil
+        }
         let url = cache.fileURL(for: .streams, key: CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song)))
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
@@ -659,7 +662,6 @@ final class AppState {
             try await cache.moveFile(from: temp, to: .streams, key: key)
             downloadProgress.removeValue(forKey: song.id)
             cancelledDownloads.remove(song.id)
-            Task { await seedCachedStreamKeys() }
             cachedStreamKeys.insert(cache.fileURL(for: .streams, key: key).lastPathComponent)
             await persistOfflineSong(song)
             prependDownloaded(song)

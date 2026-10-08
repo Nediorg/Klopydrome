@@ -272,13 +272,15 @@ struct AlbumGridView: View {
         if onlyFav { starredIDs = Set(base.filter { app.isStarred($0) }.map(\.id)) }
 
         reprocessTask?.cancel()
-        reprocessTask = Task {
-            let result = await Task.detached(priority: .userInitiated) {
-                Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
-                             query: query, sort: sortKind)
-            }.value
-            guard !Task.isCancelled, reprocessGeneration == generation else { return }
-            processedAlbums = result
+        reprocessTask = Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled else { return }
+            let result = Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
+                                      query: query, sort: sortKind)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !Task.isCancelled, reprocessGeneration == generation else { return }
+                processedAlbums = result
+            }
         }
     }
 
@@ -289,11 +291,13 @@ struct AlbumGridView: View {
         if favoritesOnly, let starred = starredIDs {
             list = list.filter { starred.contains($0.id) }
         }
+        guard !Task.isCancelled else { return [] }
         if !query.isEmpty {
             list = list.filter {
                 ($0.displayName + " " + ($0.artist ?? "")).lowercased().contains(query)
             }
         }
+        guard !Task.isCancelled else { return [] }
         if sort.asAlbumListType == nil {
             let descending: Bool = {
                 switch sort {

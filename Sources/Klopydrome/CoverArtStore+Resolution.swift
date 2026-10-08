@@ -2,16 +2,17 @@ import Foundation
 import NavidromeClient
 import AppKit
 import CoreGraphics
+import ImageIO
 import os
 
 extension CoverArtStore {
     func resolveCover(coverArt: String, size: Int?) async -> FetchOutcome {
         let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: size ?? 0)
         if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
-           let image = NSImage(data: data) {
+           let image = decodeImage(from: data, requestedSize: size) {
             // swiftlint:disable:next line_length
             coverLogger.debug("disk hit coverArt=\(coverArt, privacy: .private) size=\(size.map(String.init) ?? "orig", privacy: .private)")
-            return .image(bounded(image, requestedSize: size))
+            return .image(image)
         }
         // Disk fallback: if exact size is missing on disk, inspect larger cached sizes
         // (e.g. 720, 1200, 0/orig) and downsample in memory without network or disk duplication.
@@ -47,14 +48,13 @@ extension CoverArtStore {
             let largerKey = CacheManager.coverKey(coverArt: coverArt, size: largerSize)
             if await cache.hasFile(for: .covers, key: largerKey),
                let data = await cache.readData(for: .covers, key: largerKey),
-               let image = NSImage(data: data) {
+               let image = decodeImage(from: data, requestedSize: size) {
                 // swiftlint:disable:next line_length
                 coverLogger.debug("disk reuse larger coverArt=\(coverArt, privacy: .private) found=\(largerSize) for=\(size)")
-                let downsampled = bounded(image, requestedSize: size)
                 lock.withLock {
                     _ = cachedSizes[coverArt, default: []].insert(size)
                 }
-                return downsampled
+                return image
             }
         }
         return nil
@@ -99,7 +99,7 @@ extension CoverArtStore {
                     // recover, so don't latch it for the full TTL.
                     return code == 404 ? .dead : .transient
                 }
-                guard let image = NSImage(data: data) else {
+                guard let image = self.decodeImage(from: data, requestedSize: requestedSize) else {
                     coverLogger.debug(
                         "fetch bad data url=\(url.absoluteString, privacy: .private) bytes=\(data.count)"
                     )
@@ -110,11 +110,10 @@ extension CoverArtStore {
                 if let cacheKey, let cache = self.cache {
                     _ = try? await cache.write(data: data, to: .covers, key: cacheKey)
                 }
-                let out = self.bounded(image, requestedSize: requestedSize)
                 coverLogger.debug(
                     "fetch ok url=\(url.absoluteString, privacy: .private) bytes=\(data.count)"
                 )
-                return .image(out)
+                return .image(image)
             } catch {
                 // swiftlint:disable:next line_length
                 coverLogger.error("fetch error url=\(url.absoluteString, privacy: .private) \(error.localizedDescription, privacy: .private)")
@@ -138,6 +137,27 @@ extension CoverArtStore {
         default:
             return .dead
         }
+    }
+
+    /// Decodes image data directly at target dimensions using ImageIO downsampling,
+    /// preventing multi-megapixel full bitmaps from ever inflating in RAM.
+    func decodeImage(from data: Data, requestedSize: Int?) -> NSImage? {
+        let targetSide = requestedSize.map(CGFloat.init) ?? Self.maxDecodedSide
+        let maxPixelSize = Int(targetSide)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return NSImage(data: data).map { bounded($0, requestedSize: requestedSize) }
+        }
+        if let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
+            return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        }
+        guard let fallback = NSImage(data: data) else { return nil }
+        return bounded(fallback, requestedSize: requestedSize)
     }
 
     /// Downsamples artwork that exceeded its requested display size (or the

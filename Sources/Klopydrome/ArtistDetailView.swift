@@ -25,19 +25,19 @@ struct ArtistDetailView: View {
     @State var appearsOn: [SubsonicAlbum] = []
     /// Expands the album shelf into a full grid when true; the header chevron toggles it.
     @State private var albumsExpanded = false
-/// Sort direction for the album shelf/grid (descending = newest first by default).
+    /// Sort direction for the album shelf/grid (descending = newest first by default).
     @State private var albumsDescending = true
 
-    var albums: [SubsonicAlbum] {
-        let source = detail?.album ?? []
-        return sortedAlbums(source, by: albumSort, descending: albumsDescending)
-    }
+    @State private var cachedAlbums: [SubsonicAlbum] = []
+    @State private var cachedLatestRelease: SubsonicAlbum?
 
-    /// The most recent album, picked from the raw list — never from the
-    /// sorted one, so the tile is stable while the sort key/direction
-    /// changes. Ties on the max year break by name for a deterministic pick.
-    private var latestReleaseCandidate: SubsonicAlbum? {
-        (detail?.album ?? []).max { lhs, rhs in
+    var albums: [SubsonicAlbum] { cachedAlbums }
+    private var latestReleaseCandidate: SubsonicAlbum? { cachedLatestRelease }
+
+    private func updateCachedAlbums() {
+        let source = detail?.album ?? []
+        cachedAlbums = sortedAlbums(source, by: albumSort, descending: albumsDescending)
+        cachedLatestRelease = source.max { lhs, rhs in
             let lhsYear = lhs.year ?? 0
             let rhsYear = rhs.year ?? 0
             if lhsYear != rhsYear { return lhsYear < rhsYear }
@@ -113,6 +113,9 @@ struct ArtistDetailView: View {
             }
         }
         .task(id: "\(artist.id)|\(app.isOfflineSession)") { await load() }
+        .onChange(of: detail) { updateCachedAlbums() }
+        .onChange(of: albumSort) { updateCachedAlbums() }
+        .onChange(of: albumsDescending) { updateCachedAlbums() }
     }
 
     private func appearsOnSection() -> some View {

@@ -165,7 +165,7 @@ extension AppState {
     func offlineAlbumDetail(for albumID: String) async -> AlbumDetail? {
         if let offlineRepository,
            let detail = try? await offlineRepository.fetchAlbumDetail(id: albumID) {
-            let hasAnyDownloaded = detail.song?.contains(where: { cachedURL(for: $0) != nil }) ?? false
+            let hasAnyDownloaded = detail.song?.contains(where: { isCached($0) }) ?? false
             if hasAnyDownloaded {
                 return detail
             }
@@ -192,7 +192,7 @@ extension AppState {
               let detail = try? await offlineRepository.fetchPlaylistDetail(id: playlistID) else {
             return nil
         }
-        let hasAnyDownloaded = detail.entry?.contains(where: { cachedURL(for: $0) != nil }) ?? false
+        let hasAnyDownloaded = detail.entry?.contains(where: { isCached($0) }) ?? false
         guard hasAnyDownloaded else { return nil }
         return detail
     }

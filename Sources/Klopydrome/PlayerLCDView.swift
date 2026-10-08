@@ -52,10 +52,10 @@ struct PlayerLCDView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 42)
                 .background {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(AMColor.surfaceLight)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 .overlay(alignment: .bottomLeading) {
                     if app.player.displaySong != nil {
                         MinimalScrubber(
@@ -88,7 +88,7 @@ struct PlayerLCDView: View {
                 }
 
                 .overlay {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)
                         .allowsHitTesting(false)
                 }
@@ -184,7 +184,7 @@ struct PlayerLCDView: View {
                 text: app.player.displaySong?.displaySubtitle ?? "",
                 font: .system(size: 12),
                 color: .secondary,
-                minLeading: nowHovered ? 68 : 50,
+                minLeading: 50,
                 minTrailing: nowHovered ? 38 : 24
             )
         }

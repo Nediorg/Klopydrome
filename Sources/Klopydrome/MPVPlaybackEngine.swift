@@ -82,6 +82,9 @@ final class MPVPlaybackEngine {
     /// old context's core thread kept running and fired its wakeup callback
     /// into a freed `EventPump` (use-after-free, crash in `dispatch_async`).
     deinit {
+        if let url = streamRecordURL {
+            try? FileManager.default.removeItem(at: url)
+        }
         guard let mpv else { return }
         // Stop new wakeups first, then drain the pump: after this, no code
         // path can touch the context while it is being torn down.

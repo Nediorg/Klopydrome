@@ -19,8 +19,11 @@ enum HTTPChunkStreamer {
 
     static func chunks(from url: URL) -> AsyncThrowingStream<Chunk, Error> {
         AsyncThrowingStream { continuation in
+            let config = URLSessionConfiguration.ephemeral
+            config.urlCache = nil
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
             let delegate = Delegate(continuation: continuation)
-            let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+            let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
             let task = session.dataTask(with: url)
             delegate.task = task
             task.resume()

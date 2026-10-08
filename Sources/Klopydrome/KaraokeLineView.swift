@@ -43,9 +43,8 @@ private struct KaraokeLineSpring<Content: View>: View {
             .scaleEffect(scale, anchor: .leading)
             .offset(y: offsetY)
             .opacity(opacity)
-            .animation(animation, value: animationValue)
             .blur(radius: blur)
-            .animation(LyricsMotionGeometry.blurAnimation, value: blur)
+            .animation(animation, value: animationValue)
             .animation(.easeInOut(duration: 0.20), value: isBrowsing)
             .animation(hoverAnimation, value: hoverValue)
     }
@@ -222,12 +221,19 @@ struct KaraokeLine: View {
 
     @ViewBuilder
     private var styledContent: some View {
-        if wordSync && state == .now && fillLive, let renderClock {
-            TimelineView(.animation(minimumInterval: 1 / 60, paused: !renderClock.shouldAnimate)) { _ in
-                wordText(at: renderClock.currentTime)
+        if wordSync {
+            TimelineView(
+                .animation(
+                    minimumInterval: 1 / 60,
+                    paused: !(state == .now && fillLive && (renderClock?.shouldAnimate ?? false))
+                )
+            ) { _ in
+                wordText(
+                    at: (state == .now && fillLive && renderClock != nil)
+                        ? renderClock!.currentTime
+                        : currentTime
+                )
             }
-        } else if wordSync && state == .now {
-            wordText(at: currentTime)
         } else {
             plainTextContent
         }
@@ -236,14 +242,10 @@ struct KaraokeLine: View {
     private var plainTextContent: some View {
         Text(reserveStr)
             .foregroundStyle(plainTextColor)
-            .frame(maxWidth: textColumnWidth ?? .infinity, alignment: .leading)
     }
 
     private var plainTextColor: Color {
-        if isHovering {
-            return AMColor.primaryText
-        }
-        return state == .now ? Color.white : Color.white.opacity(0.85)
+        AMColor.primaryText
     }
 
     private func wordText(at time: Double) -> Text {
@@ -263,7 +265,7 @@ struct KaraokeLine: View {
         currentTime: Double
     ) -> Color {
         let sungAt = word.end ?? nextStart ?? .greatestFiniteMagnitude
-        return Color.white.opacity(Self.wordSettledOpacity(
+        return AMColor.primaryText.opacity(Self.wordSettledOpacity(
             at: currentTime,
             wordStart: word.start,
             sungAt: sungAt
