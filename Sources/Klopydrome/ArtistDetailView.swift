@@ -8,6 +8,7 @@ struct ArtistDetailView: View {
     @State var detail: ArtistDetail?
     @State private var loading = true
     @State var topSongs: [SubsonicSong]?
+    @State private var loadingTopSongs = true
     /// Every song of the artist, fetched once by `load()` and reused by
     /// "Gather & Play" instead of issuing a duplicate request burst.
     @State var allSongs: [SubsonicSong] = []
@@ -77,7 +78,12 @@ struct ArtistDetailView: View {
                         )
 
                         VStack(alignment: .leading, spacing: 28) {
-                            ArtistHeroRow(artist: artist, latest: latestReleaseCandidate, top: topSongs)
+                            ArtistHeroRow(
+                                artist: artist,
+                                latest: latestReleaseCandidate,
+                                top: topSongs,
+                                isLoadingTop: loadingTopSongs
+                            )
                             if !albums.isEmpty {
                                 albumsShelf
                             }
@@ -183,10 +189,14 @@ struct ArtistDetailView: View {
 
         if app.isOfflineSession || app.client == nil {
             loadOfflineArtist()
+            loadingTopSongs = false
             return
         }
 
-        guard let client = app.client else { return }
+        guard let client = app.client else {
+            loadingTopSongs = false
+            return
+        }
 
         let (resolvedID, fetchedDetail) = await resolveArtistID(client: client)
         detail = fetchedDetail
@@ -201,6 +211,7 @@ struct ArtistDetailView: View {
     }
 
     private func loadTracks(client: SubsonicClient, resolvedID: String, name: String) async {
+        defer { loadingTopSongs = false }
         if !name.isEmpty,
            let nativeTop = try? await client.getTopSongs(artist: name, artistId: resolvedID, count: 27),
            !nativeTop.isEmpty {
@@ -226,6 +237,10 @@ struct ArtistDetailView: View {
             if !guestAlbums.isEmpty && appearsOn.isEmpty {
                 appearsOn = guestAlbums
             }
+        }
+
+        if topSongs == nil {
+            topSongs = []
         }
     }
 
