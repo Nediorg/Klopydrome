@@ -10,6 +10,15 @@ extension Player {
               let preloadedSourceURL = automix.preloadedSourceURL else {
             return
         }
+        if !automix.applyToAlbums,
+           let current = currentSong,
+           let preloaded = automix.preloadedNextSong,
+           Player.isIntraAlbumTransition(outgoing: current, incoming: preloaded, isShuffled: shuffle) {
+            automix.transitionAnalysisTask?.cancel()
+            automix.transitionAnalysisTask = nil
+            automix.transitionPlan = nil
+            return
+        }
         let outgoingURL = currentSong.flatMap { automix.onCachedTrackURLRequest?($0) }
             ?? currentSourceURL
         let incomingURL = automix.preloadedNextSong.flatMap { automix.onCachedTrackURLRequest?($0) }

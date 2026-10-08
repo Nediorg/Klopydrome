@@ -28,6 +28,13 @@ struct PlaybackSettingsView: View {
         )
     }
 
+    private var crossfadeApplyToAlbums: Binding<Bool> {
+        Binding(
+            get: { app.serverConfig.effectiveAutomixApplyToAlbums },
+            set: { app.serverConfig.automixApplyToAlbums = $0 }
+        )
+    }
+
     private var replayGainMode: Binding<ReplayGainMode> {
         Binding(
             get: { app.serverConfig.effectiveReplayGainMode },
@@ -130,6 +137,8 @@ struct PlaybackSettingsView: View {
 
             Section {
                 Toggle("Включить плавный переход".localized, isOn: crossfadeEnabled)
+                Toggle("Включать в альбомах".localized, isOn: crossfadeApplyToAlbums)
+                    .disabled(!crossfadeEnabled.wrappedValue)
                 HStack {
                     Text("Длительность".localized)
                     Slider(value: crossfadeDuration, in: 1...12)
@@ -206,7 +215,8 @@ struct PlaybackSettingsView: View {
         .onChange(of: app.serverConfig) { _, config in
             app.player.configureAutomix(
                 enabled: config.effectiveAutomixEnabled,
-                fadeDuration: config.effectiveAutomixFadeDuration
+                fadeDuration: config.effectiveAutomixFadeDuration,
+                applyToAlbums: config.effectiveAutomixApplyToAlbums
             )
             app.player.configureReplayGain(
                 mode: config.effectiveReplayGainMode,

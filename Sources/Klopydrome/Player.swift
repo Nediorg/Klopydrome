@@ -94,7 +94,7 @@ final class Player {
     /// HTTP seeks — libmpv reads the seektable and range-requests the exact
     /// byte offset); AVPlayer when the user opts out in Settings.
     enum EngineKind { case avPlayer, mpv }
-    private(set) var engineKind: EngineKind = .avPlayer
+    var engineKind: EngineKind = .avPlayer
     var mpvEngine = MPVPlaybackEngine()
     @ObservationIgnored var mpvFailureFallback = MPVFailureFallback()
     let automix = AutomixPreparation()

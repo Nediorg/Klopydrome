@@ -23,6 +23,7 @@ struct ServerConfig: Codable, Equatable {
     /// Automix preferences; nil preserves defaults for configurations saved before this feature.
     var automixEnabled: Bool?
     var automixFadeDuration: Double?
+    var automixApplyToAlbums: Bool?
     var automixReplayGainEnabled: Bool?
     /// ReplayGain correction; nil migrates from the legacy
     /// `automixReplayGainEnabled` flag. Independent of crossfade.
@@ -65,6 +66,7 @@ extension ServerConfig {
     var effectiveAutomixFadeDuration: Double {
         min(12, max(1, automixFadeDuration ?? AutomixTransitionPlanner.defaultFade))
     }
+    var effectiveAutomixApplyToAlbums: Bool { automixApplyToAlbums ?? false }
     var effectiveReplayGainMode: ReplayGainMode {
         replayGainMode ?? (automixReplayGainEnabled.map { $0 ? .track : .off } ?? .off)
     }
@@ -94,6 +96,7 @@ extension ServerConfig {
                      format: nil, streamCacheLimitBytes: nil, totalCacheLimitBytes: nil,
                      theme: nil, coverResolution: nil, playbackEngine: nil,
                      automixEnabled: nil, automixFadeDuration: nil,
+                     automixApplyToAlbums: nil,
                      automixReplayGainEnabled: nil, replayGainMode: nil,
                      replayGainPreampDB: nil, silenceTrimMode: nil,
                      nextTrackPreloadingEnabled: nil,

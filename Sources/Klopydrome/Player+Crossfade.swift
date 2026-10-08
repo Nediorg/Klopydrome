@@ -26,6 +26,15 @@ extension Player {
               trackDuration > 0 else {
             return
         }
+        if !automix.applyToAlbums,
+           let current = currentSong,
+           let successor = nextSongForPreloading,
+           Player.isIntraAlbumTransition(outgoing: current, incoming: successor, isShuffled: shuffle) {
+            if automix.activeCrossfade != nil {
+                cancelAutomixCrossfade()
+            }
+            return
+        }
         if let active = automix.activeCrossfade {
             advanceAutomixCrossfade(active, at: seconds)
             return
@@ -114,5 +123,95 @@ extension Player {
         isCrossfading = false
         startCurrent()
         onTrackCrossfaded?(outgoing)
+    }
+
+    // MARK: - Album Detection
+
+    /// Determines whether two tracks belong to the same album.
+    /// Prefers matching unified ID (`albumId` or `parent`), falling back to matching
+    /// album title and compatible artist metadata.
+    static func isSameAlbum(_ first: SubsonicSong, _ second: SubsonicSong) -> Bool {
+        let firstID = (first.albumId?.isEmpty == false ? first.albumId : nil) ?? first.parent
+        let secondID = (second.albumId?.isEmpty == false ? second.albumId : nil) ?? second.parent
+        if let firstID, !firstID.isEmpty, let secondID, !secondID.isEmpty, firstID == secondID {
+            return true
+        }
+
+        let firstAlbum = first.album?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondAlbum = second.album?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let firstAlbum, !firstAlbum.isEmpty,
+              let secondAlbum, !secondAlbum.isEmpty,
+              firstAlbum.caseInsensitiveCompare(secondAlbum) == .orderedSame else {
+            return false
+        }
+
+        return isCompatibleAlbumArtist(first, second)
+    }
+
+    private static func isCompatibleAlbumArtist(_ first: SubsonicSong, _ second: SubsonicSong) -> Bool {
+        let firstAlbumArtistId = first.albumArtistId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondAlbumArtistId = second.albumArtistId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let firstAlbumArtistId, !firstAlbumArtistId.isEmpty,
+           let secondAlbumArtistId, !secondAlbumArtistId.isEmpty,
+           firstAlbumArtistId == secondAlbumArtistId {
+            return true
+        }
+
+        let firstArtistId = first.artistId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondArtistId = second.artistId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let firstArtistId, !firstArtistId.isEmpty,
+           let secondArtistId, !secondArtistId.isEmpty,
+           firstArtistId == secondArtistId {
+            return true
+        }
+
+        if first.isVariousArtists || second.isVariousArtists {
+            return true
+        }
+
+        let firstAlbumArtist = first.albumArtist?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondAlbumArtist = second.albumArtist?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let firstAlbumArtist, !firstAlbumArtist.isEmpty,
+           let secondAlbumArtist, !secondAlbumArtist.isEmpty,
+           firstAlbumArtist.caseInsensitiveCompare(secondAlbumArtist) == .orderedSame {
+            return true
+        }
+
+        let firstArtist = (firstAlbumArtist ?? first.artist)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondArtist = (secondAlbumArtist ?? second.artist)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let firstArtist, !firstArtist.isEmpty,
+              let secondArtist, !secondArtist.isEmpty else {
+            return true
+        }
+
+        if firstArtist.caseInsensitiveCompare(secondArtist) == .orderedSame {
+            return true
+        }
+
+        let lowerFirst = firstArtist.lowercased()
+        let lowerSecond = secondArtist.lowercased()
+        return lowerFirst.contains(lowerSecond) || lowerSecond.contains(lowerFirst)
+    }
+
+    /// Checks if two tracks form an in-sequence transition within an album
+    /// (same disc track N -> N+1).
+    static func isConsecutiveAlbumTrack(outgoing: SubsonicSong, incoming: SubsonicSong) -> Bool {
+        guard let outTrack = outgoing.track, let inTrack = incoming.track,
+              outTrack > 0, inTrack > 0 else {
+            return false
+        }
+        let outDisc = outgoing.discNumber ?? 1
+        let inDisc = incoming.discNumber ?? 1
+        return inDisc == outDisc && inTrack == outTrack + 1
+    }
+
+    /// Determines whether the transition between outgoing and incoming tracks
+    /// is an intra-album transition where crossfade should be suppressed.
+    static func isIntraAlbumTransition(
+        outgoing: SubsonicSong,
+        incoming: SubsonicSong,
+        isShuffled: Bool = false
+    ) -> Bool {
+        isSameAlbum(outgoing, incoming)
     }
 }

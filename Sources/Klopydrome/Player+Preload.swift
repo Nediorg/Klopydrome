@@ -79,6 +79,7 @@ extension Player {
               automix.preloadedMPVEngine.isLoaded else {
             return false
         }
+        cancelAutomixCrossfade()
         automix.preloadTask?.cancel()
         automix.preloadTask = nil
         automix.transitionAnalysisTask?.cancel()

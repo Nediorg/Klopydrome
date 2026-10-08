@@ -196,7 +196,8 @@ final class AppState {
         restorePlaybackExitPreferences()
         player.configureAutomix(
             enabled: serverConfig.effectiveAutomixEnabled,
-            fadeDuration: serverConfig.effectiveAutomixFadeDuration
+            fadeDuration: serverConfig.effectiveAutomixFadeDuration,
+            applyToAlbums: serverConfig.effectiveAutomixApplyToAlbums
         )
         player.configureReplayGain(
             mode: serverConfig.effectiveReplayGainMode,
@@ -226,7 +227,8 @@ final class AppState {
         serverConfig = config
         player.configureAutomix(
             enabled: config.effectiveAutomixEnabled,
-            fadeDuration: config.effectiveAutomixFadeDuration
+            fadeDuration: config.effectiveAutomixFadeDuration,
+            applyToAlbums: config.effectiveAutomixApplyToAlbums
         )
         player.configureReplayGain(
             mode: config.effectiveReplayGainMode,

@@ -19,6 +19,7 @@ final class AutomixPreparation {
     var transitionAnalysisTask: Task<Void, Never>?
     var enabled = true
     var fadeDuration: Double = AutomixTransitionPlanner.defaultFade
+    var applyToAlbums = false
     var replayGainMode = ReplayGainMode.off
     var replayGainPreampDB: Float = AutomixLoudness.crossfadeHeadroomDB
     var silenceTrimMode = SilenceTrimMode.off

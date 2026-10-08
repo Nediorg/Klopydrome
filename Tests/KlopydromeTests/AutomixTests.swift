@@ -250,6 +250,7 @@ final class AutomixTests: XCTestCase {
         var config = ServerConfig.empty
         config.automixEnabled = false
         config.automixFadeDuration = 8
+        config.automixApplyToAlbums = true
         config.replayGainMode = .album
         config.replayGainPreampDB = -3.5
         config.silenceTrimMode = .strong
@@ -260,6 +261,7 @@ final class AutomixTests: XCTestCase {
 
         XCTAssertFalse(decoded.effectiveAutomixEnabled)
         XCTAssertEqual(decoded.effectiveAutomixFadeDuration, 8)
+        XCTAssertTrue(decoded.effectiveAutomixApplyToAlbums)
         XCTAssertEqual(decoded.effectiveReplayGainMode, .album)
         XCTAssertEqual(decoded.effectiveReplayGainPreampDB, -3.5)
         XCTAssertEqual(decoded.effectiveSilenceTrimMode, .strong)

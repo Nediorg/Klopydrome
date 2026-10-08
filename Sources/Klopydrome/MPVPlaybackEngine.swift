@@ -278,6 +278,12 @@ final class MPVPlaybackEngine {
         currentTimeValue = 0
     }
 
+    #if DEBUG
+    func setIsLoadedForTesting(_ loaded: Bool) {
+        isLoaded = loaded
+    }
+    #endif
+
     /// Seeks to `seconds` (absolute). mpv performs the seek; the landed position
     /// is reflected by `currentTime` via `time-pos` events. Returns whether the command was accepted.
     @discardableResult
