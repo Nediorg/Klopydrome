@@ -40,8 +40,9 @@ struct SongActionItems: View {
             targets.forEach { app.toggleStar($0) }
         }
         if primaryDownloading {
-            Button("Загрузка…".localized) {}
-                .disabled(true)
+            Button("Отменить загрузку".localized) {
+                targets.forEach { app.cancelSongDownload($0) }
+            }
         } else {
             Button((primaryCached ? "Удалить загрузку" : "Загрузить").localized) {
                 if primaryCached {

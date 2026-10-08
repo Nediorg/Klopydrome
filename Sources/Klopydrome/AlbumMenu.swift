@@ -73,8 +73,15 @@ struct AlbumContextMenuItems: View {
         Button(isStarred ? "Убрать из избранного" : "В избранное") {
             app.toggleStar(album)
         }
-        Button("Загрузить альбом") {
-            app.cacheAlbum(album)
+        if app.isAlbumDownloading(album.id) {
+            Button("Отменить загрузку".localized) {
+                app.cancelAlbumDownload(album.id)
+            }
+        } else {
+            Button("Загрузить альбом".localized) {
+                app.cacheAlbum(album)
+            }
+            .disabled(app.isOfflineSession)
         }
 
         Divider()

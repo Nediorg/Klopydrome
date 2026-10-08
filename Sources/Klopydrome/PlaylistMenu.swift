@@ -54,8 +54,15 @@ struct PlaylistContextMenuItems: View {
         }
 
         Divider()
-        Button("Загрузить плейлист".localized) {
-            app.cachePlaylist(playlist)
+        if app.isPlaylistDownloading(playlist.id) {
+            Button("Отменить загрузку".localized) {
+                app.cancelPlaylistDownload(playlist.id)
+            }
+        } else {
+            Button("Загрузить плейлист".localized) {
+                app.cachePlaylist(playlist)
+            }
+            .disabled(app.isOfflineSession)
         }
         Divider()
         Button("Дублировать") {

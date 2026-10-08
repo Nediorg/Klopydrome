@@ -587,40 +587,70 @@ final class AppState {
         player.isCaching = activeCacheTasks.contains(player.currentSong?.id ?? "")
     }
 
+    func candidateSuffixes(for song: SubsonicSong) -> [String] {
+        var suffixes: [String] = []
+        let download = downloadSuffix(for: song)
+        if !download.isEmpty { suffixes.append(download) }
+        let effective = effectiveSuffix(for: song)
+        if !effective.isEmpty && !suffixes.contains(effective) { suffixes.append(effective) }
+        if let raw = song.suffix?.lowercased(), !raw.isEmpty && !suffixes.contains(raw) {
+            suffixes.append(raw)
+        }
+        for fallback in ["mp3", "flac", "m4a", "opus", "ogg", "aac", "wav"] where !suffixes.contains(fallback) {
+            suffixes.append(fallback)
+        }
+        return suffixes
+    }
+
     func cachedURL(for song: SubsonicSong) -> URL? {
         guard let cache else { return nil }
-        if cachedStreamKeysSeeded && !isCached(song) {
-            return nil
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            let url = cache.fileURL(for: .streams, key: key)
+            if cachedStreamKeysSeeded {
+                if cachedStreamKeys.contains(url.lastPathComponent) {
+                    return url
+                }
+            } else if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
         }
-        let url = cache.fileURL(for: .streams, key: CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song)))
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        return nil
     }
 
     func isCached(_ song: SubsonicSong) -> Bool {
         guard cache != nil else { return false }
-        guard let name = cacheFileName(for: song) else { return false }
         if !cachedStreamKeysSeeded { Task { await seedCachedStreamKeys() } }
-        return cachedStreamKeys.contains(name)
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            if let name = cacheFileName(for: key), cachedStreamKeys.contains(name) {
+                return true
+            }
+        }
+        return false
     }
 
     private func streamKey(for song: SubsonicSong) -> String {
-        CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song))
+        CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
     }
 
-    /// The exact on-disk name (after sanitization) of a song's cached stream.
-    private func cacheFileName(for song: SubsonicSong) -> String? {
+    /// The exact on-disk name (after sanitization) of a key.
+    private func cacheFileName(for key: String) -> String? {
         guard let cache else { return nil }
-        return cache.fileURL(for: .streams, key: streamKey(for: song)).lastPathComponent
+        return cache.fileURL(for: .streams, key: key).lastPathComponent
     }
 
     // MARK: Cache management
 
     func removeFromCache(_ song: SubsonicSong) async {
         guard let cache else { return }
-        let key = CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song))
-        await cache.removeFile(for: .streams, key: key)
-        if let name = cacheFileName(for: song) {
-            cachedStreamKeys.remove(name)
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            let fileName = cache.fileURL(for: .streams, key: key).lastPathComponent
+            if cachedStreamKeys.contains(fileName) || !cachedStreamKeysSeeded {
+                await cache.removeFile(for: .streams, key: key)
+                cachedStreamKeys.remove(fileName)
+            }
         }
         downloadedSongs.removeAll { $0.id == song.id }
         await removeOfflineSong(song)
@@ -638,7 +668,7 @@ final class AppState {
     /// once. The network→file transfer runs off the main actor
     /// (`TrackDownload.streamToFile`); only progress/state updates hop back.
     func downloadToCache(_ song: SubsonicSong) async {
-        guard let cache, let url = streamURL(for: song) else {
+        guard let cache, let url = downloadStreamURL(for: song) else {
             downloadProgress.removeValue(forKey: song.id)
             return
         }
@@ -647,7 +677,7 @@ final class AppState {
         defer {
             downloadCancellationTokens.removeValue(forKey: song.id)
         }
-        let key = CacheManager.streamKey(songId: song.id, suffix: effectiveSuffix(for: song))
+        let key = CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         do {
             downloadProgress[song.id] = 0.0
@@ -818,6 +848,9 @@ final class AppState {
         // works offline too (without a connection the push is simply
         // skipped and the value stays until the next full refetch).
         withMutation(keyPath: \.starOverrides) { starOverrides[item.id] = willStar }
+        if willStar {
+            autoCacheStarredItemIfNeeded(item)
+        }
         guard let client else { return }
         let id = item.id
         let kind = item.starKind

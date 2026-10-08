@@ -47,6 +47,12 @@ struct ServerConfig: Codable, Equatable {
     /// Offline mode preferences
     var autoReconnectEnabled: Bool?
     var forceOfflineMode: Bool?
+    /// Download format preference: true downloads in streaming transcode format/bitrate, false downloads original file.
+    var downloadTranscoded: Bool?
+    /// Offline caching preferences for favorites
+    var cacheStarredSongs: Bool?
+    var cacheStarredAlbums: Bool?
+    var cacheStarredArtists: Bool?
 }
 
 extension ServerConfig {
@@ -74,6 +80,10 @@ extension ServerConfig {
     var effectiveLyricsDefaultOffset: Double { lyricsDefaultOffset ?? 0.0 }
     var effectiveAutoReconnectEnabled: Bool { autoReconnectEnabled ?? true }
     var effectiveForceOfflineMode: Bool { forceOfflineMode ?? false }
+    var effectiveDownloadTranscoded: Bool { downloadTranscoded ?? true }
+    var effectiveCacheStarredSongs: Bool { cacheStarredSongs ?? false }
+    var effectiveCacheStarredAlbums: Bool { cacheStarredAlbums ?? false }
+    var effectiveCacheStarredArtists: Bool { cacheStarredArtists ?? false }
 
     static var empty: ServerConfig {
         ServerConfig(url: "", username: "", authMode: .token,
@@ -89,6 +99,9 @@ extension ServerConfig {
                      lyricsFontSize: nil, lyricsAnimationMotion: nil,
                      lyricsBlurEnabled: nil, lyricsCountdownEnabled: nil,
                      lyricsDefaultOffset: nil,
-                     autoReconnectEnabled: nil, forceOfflineMode: nil)
+                     autoReconnectEnabled: nil, forceOfflineMode: nil,
+                     downloadTranscoded: nil,
+                     cacheStarredSongs: nil, cacheStarredAlbums: nil,
+                     cacheStarredArtists: nil)
     }
 }

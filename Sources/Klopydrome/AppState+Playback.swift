@@ -67,6 +67,28 @@ extension AppState {
         )
     }
 
+    /// The suffix used when downloading a track to the stream cache.
+    /// Honors `downloadTranscoded` preference: if true, uses the streaming transcode format;
+    /// if false, uses the original file format (song.suffix).
+    func downloadSuffix(for song: SubsonicSong) -> String {
+        if serverConfig.effectiveDownloadTranscoded {
+            return effectiveSuffix(for: song)
+        }
+        return (song.suffix ?? "mp3").lowercased()
+    }
+
+    /// The remote URL used when downloading a track to the stream cache.
+    /// If `downloadTranscoded` is true, downloads using the streaming transcode settings.
+    /// If false, requests raw original audio bytes without transcoding.
+    func downloadStreamURL(for song: SubsonicSong) -> URL? {
+        guard let client else { return nil }
+        if serverConfig.effectiveDownloadTranscoded {
+            return streamURL(for: song)
+        }
+        return client.downloadURL(songId: song.id, maxBitRate: 0, format: "raw")
+            ?? client.streamURL(songId: song.id, maxBitRate: 0, estimateContentLength: false)
+    }
+
     /// Starts playback for a song.
     /// - Returns `true` when playback has been started, `false` when nothing
     ///   loaded (no URL could be built).

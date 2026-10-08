@@ -910,3 +910,15 @@
 "Свернуть треки" = "Collapse Tracks";
 "Показать треки" = "Show Tracks";
 "Отменить трек" = "Cancel Track";
+
+/* Загрузки и кэширование */
+"Скачивать транскодированные треки" = "Download transcoded tracks";
+"Загрузка в кэш" = "Cache Downloads";
+"Треки загружаются в выбранном качестве потоковой передачи." = "Tracks are downloaded in the selected streaming quality.";
+"Треки загружаются в оригинальном качестве без транскодирования." = "Tracks are downloaded in original quality without transcoding.";
+"Параметры транскодирования на стороне сервера для потокового воспроизведения." = "Server-side transcoding parameters for streaming playback.";
+"Кэшировать для офлайн-прослушивания" = "Cache for offline listening";
+"Избранные треки" = "Favorite tracks";
+"Избранные альбомы" = "Favorite albums";
+"Избранных артистов" = "Favorite artists";
+"Автоматически сохраняет выбранные элементы медиатеки для воспроизведения без интернета." = "Automatically saves selected library items for playback without internet.";

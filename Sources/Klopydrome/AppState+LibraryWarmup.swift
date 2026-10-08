@@ -90,6 +90,9 @@ extension AppState {
 
         // 3. Silent background recent albums prefetch
         await warmupRecentAlbums()
+
+        // 4. Background sync of starred items for offline cache if enabled
+        await syncStarredForOfflineCacheIfNeeded()
     }
 
     private func warmupRecentAlbums() async {

@@ -56,6 +56,13 @@ struct PlaybackSettingsView: View {
         )
     }
 
+    private var downloadTranscodedBinding: Binding<Bool> {
+        Binding(
+            get: { app.serverConfig.effectiveDownloadTranscoded },
+            set: { app.serverConfig.downloadTranscoded = $0 }
+        )
+    }
+
     var body: some View {
         Form {
             Section {
@@ -92,7 +99,17 @@ struct PlaybackSettingsView: View {
             } header: {
                 Text("Потоковая передача".localized)
             } footer: {
-                Text("Параметры транскодирования на стороне сервера для потоков и загрузок.".localized)
+                Text("Параметры транскодирования на стороне сервера для потокового воспроизведения.".localized)
+            }
+
+            Section {
+                Toggle("Скачивать транскодированные треки".localized, isOn: downloadTranscodedBinding)
+            } header: {
+                Text("Загрузка в кэш".localized)
+            } footer: {
+                Text(downloadTranscodedBinding.wrappedValue
+                    ? "Треки загружаются в выбранном качестве потоковой передачи.".localized
+                    : "Треки загружаются в оригинальном качестве без транскодирования.".localized)
             }
 
             Section {

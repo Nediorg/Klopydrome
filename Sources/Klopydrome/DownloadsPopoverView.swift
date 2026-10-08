@@ -424,7 +424,7 @@ private struct DownloadRow: View {
                     .frame(width: 32)
 
                 Button {
-                    app.cancelDownload(song)
+                    app.cancelSongDownload(song)
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 12))
