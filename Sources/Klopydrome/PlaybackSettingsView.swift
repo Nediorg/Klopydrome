@@ -96,20 +96,12 @@ struct PlaybackSettingsView: View {
                     Text("128 kbps").tag(128)
                     Text("64 kbps").tag(64)
                 }
-            } header: {
-                Text("Потоковая передача".localized)
-            } footer: {
-                Text("Параметры транскодирования на стороне сервера для потокового воспроизведения.".localized)
-            }
 
-            Section {
-                Toggle("Скачивать транскодированные треки".localized, isOn: downloadTranscodedBinding)
+                Toggle("Кэшировать транскодированные треки".localized, isOn: downloadTranscodedBinding)
             } header: {
-                Text("Загрузка в кэш".localized)
+                Text("Стриминг".localized)
             } footer: {
-                Text(downloadTranscodedBinding.wrappedValue
-                    ? "Треки загружаются в выбранном качестве потоковой передачи.".localized
-                    : "Треки загружаются в оригинальном качестве без транскодирования.".localized)
+                Text("Параметры транскодирования на стороне сервера для стриминга.".localized)
             }
 
             Section {

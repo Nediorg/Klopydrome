@@ -509,7 +509,7 @@
 "Последнее прослушивание" = "Last played";
 "Показать ещё" = "Show More";
 "Последний релиз" = "Latest release";
-"Потоковая передача" = "Streaming";
+"Стриминг" = "Streaming";
 "Появляется на" = "Appears on";
 "Правило" = "Rule";
 "Предзагружать следующую песню" = "Preload next song";
@@ -912,11 +912,11 @@
 "Отменить трек" = "Cancel Track";
 
 /* Загрузки и кэширование */
-"Скачивать транскодированные треки" = "Download transcoded tracks";
+"Кэшировать транскодированные треки" = "Cache transcoded tracks";
 "Загрузка в кэш" = "Cache Downloads";
 "Треки загружаются в выбранном качестве потоковой передачи." = "Tracks are downloaded in the selected streaming quality.";
 "Треки загружаются в оригинальном качестве без транскодирования." = "Tracks are downloaded in original quality without transcoding.";
-"Параметры транскодирования на стороне сервера для потокового воспроизведения." = "Server-side transcoding parameters for streaming playback.";
+"Параметры транскодирования на стороне сервера для стриминга." = "Server-side transcoding parameters for streaming.";
 "Кэшировать для офлайн-прослушивания" = "Cache for offline listening";
 "Избранные треки" = "Favorite tracks";
 "Избранные альбомы" = "Favorite albums";
