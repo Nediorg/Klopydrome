@@ -53,6 +53,8 @@ struct ServerConfig: Codable, Equatable {
     var cacheStarredSongs: Bool?
     var cacheStarredAlbums: Bool?
     var cacheStarredArtists: Bool?
+    /// Whether offline action warning alerts are suppressed.
+    var suppressOfflineActionWarning: Bool?
 }
 
 extension ServerConfig {
@@ -84,6 +86,7 @@ extension ServerConfig {
     var effectiveCacheStarredSongs: Bool { cacheStarredSongs ?? false }
     var effectiveCacheStarredAlbums: Bool { cacheStarredAlbums ?? false }
     var effectiveCacheStarredArtists: Bool { cacheStarredArtists ?? false }
+    var effectiveSuppressOfflineActionWarning: Bool { suppressOfflineActionWarning ?? false }
 
     static var empty: ServerConfig {
         ServerConfig(url: "", username: "", authMode: .token,
@@ -102,6 +105,7 @@ extension ServerConfig {
                      autoReconnectEnabled: nil, forceOfflineMode: nil,
                      downloadTranscoded: nil,
                      cacheStarredSongs: nil, cacheStarredAlbums: nil,
-                     cacheStarredArtists: nil)
+                     cacheStarredArtists: nil,
+                     suppressOfflineActionWarning: nil)
     }
 }

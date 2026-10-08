@@ -56,6 +56,7 @@ extension PlaylistDetailView {
     }
 
     func remove(at index: Int, from detail: PlaylistDetail) {
+        guard app.confirmOfflineAction() else { return }
         guard let client = app.client else { return }
         Task {
             try? await client.updatePlaylist(id: detail.id, removeIndexes: [index])
@@ -65,6 +66,7 @@ extension PlaylistDetailView {
     }
 
     func delete(_ detail: PlaylistDetail) {
+        guard app.confirmOfflineAction() else { return }
         guard let client = app.client else { return }
         Task {
             try? await client.deletePlaylist(id: detail.id)

@@ -25,12 +25,14 @@ struct AddToPlaylistMenu: View {
     private func targetSongs(_ playlist: PlaylistSummary) async {
         let targets = await resolvedSongs()
         guard !targets.isEmpty else { return }
+        guard app.confirmOfflineAction() else { return }
         await app.addToPlaylist(targets, playlistID: playlist.id)
     }
 
     private func newPlaylist() async {
         let targets = await resolvedSongs()
         guard !targets.isEmpty else { return }
+        guard app.confirmOfflineAction() else { return }
         // The creation sheet is attached to the main window; from the mini
         // player it must present there after focus returns (see
         // `AppState.presentInMainWindow`).

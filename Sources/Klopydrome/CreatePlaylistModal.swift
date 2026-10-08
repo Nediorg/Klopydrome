@@ -305,6 +305,7 @@ struct CreatePlaylistModal: View {
 
     private func create() {
         guard canCreate else { return }
+        guard app.confirmOfflineAction() else { return }
         creating = true
         Task {
             var playlistId: String?

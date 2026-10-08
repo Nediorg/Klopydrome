@@ -37,7 +37,8 @@ struct SongActionItems: View {
         Divider()
         AddToPlaylistMenu(songs: targets)
         Button((app.isStarred(song) ? "Убрать из избранного" : "В избранное").localized) {
-            targets.forEach { app.toggleStar($0) }
+            guard app.confirmOfflineAction() else { return }
+            targets.forEach { app.toggleStar($0, skipOfflineConfirm: true) }
         }
         if primaryDownloading {
             Button("Отменить загрузку".localized) {
@@ -58,7 +59,14 @@ struct SongActionItems: View {
         Menu("Оценить".localized) {
             ForEach(1...5, id: \.self) { star in
                 Button("\(star) \(Pluralized.star(star))") {
-                    targets.forEach { app.setRating(star == app.effectiveRating(for: $0) ? 0 : star, for: $0) }
+                    guard app.confirmOfflineAction() else { return }
+                    targets.forEach {
+                        app.setRating(
+                            star == app.effectiveRating(for: $0) ? 0 : star,
+                            for: $0,
+                            skipOfflineConfirm: true
+                        )
+                    }
                 }
             }
         }

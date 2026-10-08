@@ -35,6 +35,7 @@ extension AppState {
             }
             connectionError = nil
             isOfflineSession = false
+            await flushOfflineMutations()
             return true
         } catch {
             if !silent {

@@ -16,6 +16,7 @@ final class AppState {
     var cache: CacheManager?
     var offlineRepository: (any OfflineRepository)?
     var currentOfflineHost: String?
+    @ObservationIgnored var offlineMutationStore: OfflineMutationStore?
     @ObservationIgnored var downloadCancellationTokens: [String: OSAllocatedUnfairLock<Bool>] = [:]
     var serverConfig: ServerConfig = .empty
 
@@ -737,6 +738,7 @@ final class AppState {
     // MARK: Playlist actions
 
     func addToPlaylist(_ songs: [SubsonicSong], playlistID: String) async {
+        guard confirmOfflineAction() else { return }
         guard let client else { return }
         try? await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
         recordRecentPlaylist(playlistID)
@@ -744,6 +746,7 @@ final class AppState {
 
     @discardableResult
     func createPlaylist(name: String, songs: [SubsonicSong], comment: String? = nil) async -> PlaylistDetail? {
+        guard confirmOfflineAction() else { return nil }
         guard let client else { return nil }
         let created = try? await client.createPlaylist(name: name, songIds: songs.map(\.id))
         guard let id = created?.id else { return nil }
@@ -806,6 +809,7 @@ final class AppState {
 
     /// Duplicates a playlist (content + comment) under a new name.
     func duplicatePlaylist(_ playlist: PlaylistSummary) async {
+        guard confirmOfflineAction() else { return }
         guard let client else { return }
         let songs = await playlistSongs(for: playlist)
         let newName = L10n.format("format.playlist.copyName", playlist.displayName)
@@ -818,6 +822,7 @@ final class AppState {
 
     /// Deletes a playlist from the library.
     func deletePlaylist(_ playlist: PlaylistSummary) async {
+        guard confirmOfflineAction() else { return }
         guard let client else { return }
         try? await client.deletePlaylist(id: playlist.id)
         if nav.selectedPlaylist?.id == playlist.id {
@@ -837,42 +842,23 @@ final class AppState {
     /// service): every list row/menu reads it through `app.*`, and AppState
     /// mutation is the invalidation path the whole UI already observes.
     @ObservationIgnored
-    private var starOverrides: [String: Bool] = [:]
+    var starOverrides: [String: Bool] = [:]
 
     @ObservationIgnored
-    private var ratingOverrides: [String: Int] = [:]
+    var ratingOverrides: [String: Int] = [:]
 
-    func toggleStar<T: Starable>(_ item: T) {
+    func toggleStar<T: Starable>(_ item: T, skipOfflineConfirm: Bool = false) {
+        if !skipOfflineConfirm, !confirmOfflineAction() { return }
         let willStar = !isStarred(item)
-        // Optimistic write FIRST — before the client guard, so starring
-        // works offline too (without a connection the push is simply
-        // skipped and the value stays until the next full refetch).
         withMutation(keyPath: \.starOverrides) { starOverrides[item.id] = willStar }
         if willStar {
             autoCacheStarredItemIfNeeded(item)
         }
-        guard let client else { return }
-        let id = item.id
-        let kind = item.starKind
-        // Capture client explicitly so the detached task does not keep AppState alive.
-        let capturedClient = client
-        Task(priority: .userInitiated) {
-            do {
-                switch (kind, willStar) {
-                case (.song, true): try await capturedClient.star(songIds: [id])
-                case (.song, false): try await capturedClient.unstar(songIds: [id])
-                case (.album, true): try await capturedClient.star(albumIds: [id])
-                case (.album, false): try await capturedClient.unstar(albumIds: [id])
-                case (.artist, true): try await capturedClient.star(artistIds: [id])
-                case (.artist, false): try await capturedClient.unstar(artistIds: [id])
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                let detail = String(describing: error)
-                Self.ratingLog.error("star push failed \(id, privacy: .public): \(detail, privacy: .public)")
-            }
+        guard let client, !isOfflineSession else {
+            queueOfflineStar(id: item.id, kind: item.starKind, isStarred: willStar)
+            return
         }
+        pushStarToServer(client: client, id: item.id, kind: item.starKind, willStar: willStar)
     }
 
     /// Effective starred state: any local override wins over the snapshot.
@@ -891,22 +877,15 @@ final class AppState {
     /// The override is written BEFORE the client guard, so rating works
     /// offline (the push is skipped without a connection and the value
     /// stays until the next full refetch).
-    func setRating(_ rating: Int, for song: SubsonicSong) {
+    func setRating(_ rating: Int, for song: SubsonicSong, skipOfflineConfirm: Bool = false) {
+        if !skipOfflineConfirm, !confirmOfflineAction() { return }
         let clamped = min(max(rating, 0), 5)
         withMutation(keyPath: \.ratingOverrides) { ratingOverrides[song.id] = clamped }
-        guard let client else { return }
-        let id = song.id
-        let capturedClient = client
-        Task(priority: .userInitiated) {
-            do {
-                try await capturedClient.setRating(clamped, id: id)
-            } catch is CancellationError {
-                return
-            } catch {
-                let detail = String(describing: error)
-                Self.ratingLog.error("rating push failed \(id, privacy: .public): \(detail, privacy: .public)")
-            }
+        guard let client, !isOfflineSession else {
+            queueOfflineRating(songID: song.id, rating: clamped)
+            return
         }
+        pushRatingToServer(client: client, id: song.id, rating: clamped)
     }
 
     private nonisolated static let ratingLog = Logger(subsystem: "app.klopydrome", category: "rating")

@@ -63,6 +63,7 @@ extension AppState {
         }
         self.offlineRepository = repository
         self.currentOfflineHost = host
+        self.offlineMutationStore = OfflineMutationStore(serverHost: host)
         let cacheRoot = CacheManager.root(forServer: host)
         await OfflineMigration.migrateIfNeeded(cacheRoot: cacheRoot, repository: repository)
     }
@@ -82,6 +83,9 @@ extension AppState {
         let tracks = (try? await offlineRepository.fetchDownloadedTracks()) ?? []
         let songs = tracks.filter { isCached($0) }
         replaceDownloadedSongs(songs)
+        if client != nil {
+            await flushOfflineMutations()
+        }
     }
 
     var effectiveUsername: String {
@@ -130,6 +134,7 @@ extension AppState {
         library.artistIndexesLoaded = true
         library.homeShelves = [:]
         library.homeShelvesLoaded = true
+        await restorePendingOfflineMutations()
     }
 
     func persistOfflineSong(_ song: SubsonicSong) async {

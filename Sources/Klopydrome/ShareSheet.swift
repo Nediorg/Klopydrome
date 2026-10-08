@@ -58,6 +58,7 @@ extension AppState {
     /// panel are routed through `presentInMainWindow` (panel closes first, the
     /// main window becomes visible again, then the sheet presents into it).
     func presentShare(_ target: ShareTarget) {
+        guard confirmOfflineAction() else { return }
         presentInMainWindow { self.shareTarget = target }
     }
 

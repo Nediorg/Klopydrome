@@ -68,6 +68,11 @@ struct GeneralSettingsView: View {
             )
             .disabled(isWorkOffline)
 
+            Toggle(
+                "Не спрашивать о серверных действиях".localized,
+                isOn: Bindable(app).serverConfig.suppressOfflineActionWarning.orFalse
+            )
+
             LabeledContent("Статус".localized) {
                 Text(connectionStatusLabel)
                     .foregroundStyle(connectionStatusColor)

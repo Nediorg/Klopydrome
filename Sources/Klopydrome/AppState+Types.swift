@@ -5,7 +5,7 @@ import SwiftUI
 /// Subsonic star endpoint names entities by a *type-specific* id list
 /// (songIds / albumIds / artistIds). This lets client code star any entity
 /// without branching on concrete types everywhere.
-enum StarKind {
+enum StarKind: String, Codable, Sendable {
     case song, album, artist
 }
 

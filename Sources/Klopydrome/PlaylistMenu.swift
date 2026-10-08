@@ -24,9 +24,15 @@ struct PlaylistContextMenuItems: View {
     private var followed: Bool { app.isFollowed(playlist) }
 
     var body: some View {
-        Button("Изменить…") { onRename() }
+        Button("Изменить…") {
+            guard app.confirmOfflineAction() else { return }
+            onRename()
+        }
         if playlist.isSmart {
-            Button("Редактировать правила…") { onEditRules() }
+            Button("Редактировать правила…") {
+                guard app.confirmOfflineAction() else { return }
+                onEditRules()
+            }
         }
 
         if hasSongs {
@@ -50,6 +56,7 @@ struct PlaylistContextMenuItems: View {
             app.toggleFollow(playlist)
         }
         Button(playlist.isPublic == true ? "Сделать закрытым" : "Сделать открытым") {
+            guard app.confirmOfflineAction() else { return }
             Task { await app.togglePlaylistVisibility(playlist) }
         }
 
@@ -66,13 +73,17 @@ struct PlaylistContextMenuItems: View {
         }
         Divider()
         Button("Дублировать") {
+            guard app.confirmOfflineAction() else { return }
             Task { await app.duplicatePlaylist(playlist) }
         }
         Button("Поделиться…") {
             app.presentShare(ShareTarget(entityID: playlist.id, title: playlist.displayName, kind: .playlist))
         }
         Divider()
-        Button("Удалить из медиатеки", role: .destructive) { onDelete() }
+        Button("Удалить из медиатеки", role: .destructive) {
+            guard app.confirmOfflineAction() else { return }
+            onDelete()
+        }
     }
 }
 

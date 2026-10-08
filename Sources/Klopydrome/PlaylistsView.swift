@@ -49,6 +49,7 @@ struct PlaylistsView: View {
                     Text("Создайте плейлист, чтобы увидеть его здесь.".localized)
                 } actions: {
                     Button("Создать плейлист".localized) {
+                        guard app.confirmOfflineAction() else { return }
                         app.creatingPlaylistSongs = []
                         app.isCreatingPlaylist = true
                     }

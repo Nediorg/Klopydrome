@@ -922,3 +922,10 @@
 "Избранные альбомы" = "Favorite albums";
 "Избранных артистов" = "Favorite artists";
 "Автоматически сохраняет выбранные элементы медиатеки для воспроизведения без интернета." = "Automatically saves selected library items for playback without internet.";
+
+/* Offline Actions */
+"Не спрашивать о серверных действиях" = "Do not ask about server actions";
+"Действие в офлайн-режиме" = "Offline Action";
+"Клиент находится в офлайн-режиме. После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?" = "The client is in offline mode. After reconnecting, some changes may not be applied. Continue anyway?";
+"Не спрашивать снова" = "Do not ask again";
+"Продолжить" = "Continue";
