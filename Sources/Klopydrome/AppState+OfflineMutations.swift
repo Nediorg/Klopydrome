@@ -13,7 +13,7 @@ extension AppState {
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Действие в офлайн-режиме".localized
+        alert.messageText = "Сервер офлайн".localized
         // swiftlint:disable:next line_length
         alert.informativeText = "Клиент находится в офлайн-режиме. После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?".localized
         alert.addButton(withTitle: "Продолжить".localized)
@@ -118,12 +118,18 @@ extension AppState {
     func flushOfflineMutations() async {
         guard let client, let store = ensureOfflineMutationStore() else { return }
         let mutations = await store.currentMutations()
+        guard !mutations.stars.isEmpty || !mutations.ratings.isEmpty else { return }
+
+        isFlushingOfflineMutations = true
+        defer { isFlushingOfflineMutations = false }
+
         if !mutations.stars.isEmpty {
             await flushQueuedStars(client: client, store: store, stars: mutations.stars)
         }
         if !mutations.ratings.isEmpty {
             await flushQueuedRatings(client: client, store: store, ratings: mutations.ratings)
         }
+        try? await Task.sleep(for: .milliseconds(300))
     }
 
     private func flushQueuedStars(

@@ -110,4 +110,48 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
             await store.clear()
         }
     }
+
+    func testSidebarStatusCardStateResolution() {
+        let app = AppState()
+        XCTAssertNil(SidebarStatusCard.resolveStatus(for: app))
+
+        app.isOfflineSession = true
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .offline(canReconnect: true)
+        )
+
+        app.serverConfig.forceOfflineMode = true
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .offline(canReconnect: false)
+        )
+        app.serverConfig.forceOfflineMode = false
+
+        app.isReconnecting = true
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .connecting
+        )
+
+        app.isReconnecting = false
+        app.isConnecting = true
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .connecting
+        )
+        app.isConnecting = false
+
+        app.isServerScanning = true
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .scanningLibrary
+        )
+
+        app.isFlushingOfflineMutations = true
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .applyingChanges
+        )
+    }
 }

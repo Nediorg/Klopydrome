@@ -59,6 +59,7 @@ final class AppState {
     var isPreparingOfflineSession = false
     var isReconnecting = false
     var isServerScanning = false
+    var isFlushingOfflineMutations = false
     @ObservationIgnored var scanStatusPollingTask: Task<Void, Never>?
     var sharesManagerPresented = false
     /// True while a foreground-activation auto-reconnect is in flight (not a

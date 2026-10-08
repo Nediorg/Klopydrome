@@ -929,3 +929,5 @@
 "Клиент находится в офлайн-режиме. После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?" = "The client is in offline mode. After reconnecting, some changes may not be applied. Continue anyway?";
 "Не спрашивать снова" = "Do not ask again";
 "Продолжить" = "Continue";
+"Применение изменений" = "Applying Changes";
+"Подключение" = "Connecting";

@@ -144,25 +144,7 @@ struct SidebarView: View {
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if app.isServerScanning {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Сканирование медиатеки…".localized)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .background(.ultraThinMaterial, ignoresSafeAreaEdges: .bottom)
-                }
-
-                if app.isOfflineSession {
-                    SidebarOfflineCard()
-                }
-            }
+            SidebarStatusCard()
         }
         .background(.thinMaterial, ignoresSafeAreaEdges: .all)
         .navigationSplitViewColumnWidth(
