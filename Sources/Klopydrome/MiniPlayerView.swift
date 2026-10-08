@@ -31,11 +31,20 @@ struct MiniPlayerView: View {
     }
 
     var body: some View {
-        Group {
+        GeometryReader { proxy in
+            let artworkSide = artworkSide(in: proxy.size)
+
             if let song = app.player.displaySong {
-                playerContent(for: song)
+                artworkStage(song: song, side: artworkSide)
+                    .frame(width: artworkSide, height: artworkSide)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
-                Color.clear
+                miniPlayerPlaceholder(side: artworkSide)
+                    .overlay {
+                        MiniPlayerWindowDragRegion()
+                    }
+                    .frame(width: artworkSide, height: artworkSide)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .ignoresSafeArea()
@@ -72,29 +81,23 @@ struct MiniPlayerView: View {
         }
     }
 
-    private func playerContent(for song: SubsonicSong) -> some View {
-        GeometryReader { proxy in
-            let artworkSide = artworkSide(in: proxy.size)
-
-            artworkStage(song: song, side: artworkSide)
-                .frame(width: artworkSide, height: artworkSide)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-    }
-
     private func artworkSide(in size: CGSize) -> CGFloat {
         max(0, size.width)
     }
 
     private func artworkStage(song: SubsonicSong, side: CGFloat) -> some View {
         ZStack {
-            CoverArtView(
-                coverArt: song.coverArt,
-                size: side,
-                cornerRadius: 0,
-                shadow: false,
-                placeholderBackground: AMColor.background
-            )
+            miniPlayerPlaceholder(side: side)
+
+            if let coverArt = song.coverArt, !coverArt.isEmpty {
+                CoverArtView(
+                    coverArt: coverArt,
+                    size: side,
+                    cornerRadius: 0,
+                    shadow: false,
+                    placeholderBackground: .clear
+                )
+            }
 
             MiniPlayerWindowDragRegion()
                 .frame(width: side, height: side)
@@ -105,10 +108,23 @@ struct MiniPlayerView: View {
                     showingVolume: $showingVolume,
                     togglePanel: togglePanel
                 )
+                .environment(\.colorScheme, .dark)
                 .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
+    }
+
+    private func miniPlayerPlaceholder(side: CGFloat) -> some View {
+        ZStack {
+            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
+
+            Image(systemName: "music.note")
+                .font(.system(size: side * 0.38, weight: .light))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .frame(width: side, height: side)
     }
 
     private func updateHover(_ hovering: Bool) {
@@ -156,6 +172,9 @@ private struct MiniPlayerControlsLayer: View {
     let song: SubsonicSong
     @Binding var showingVolume: Bool
     let togglePanel: (AppState.PlayerPanelTab) -> Void
+
+    @State private var isHoveringStar = false
+    @State private var isHoveringEllipsis = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -242,27 +261,42 @@ private struct MiniPlayerControlsLayer: View {
             } label: {
                 Image(systemName: app.isStarred(song) ? "star.fill" : "star")
                     .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(
+                        app.isStarred(song)
+                            ? AMColor.accent
+                            : (isHoveringStar ? Color.black.opacity(0.85) : Color.white)
+                    )
                     .frame(width: Self.trackActionSide, height: Self.trackActionSide)
-                    .miniPlayerMatteCircle(fill: .white.opacity(0.30))
+                    .miniPlayerMatteCircle(fill: isHoveringStar ? .white.opacity(0.75) : .white.opacity(0.30))
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .onHover { isHoveringStar = $0 }
             .help(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
             .accessibilityLabel(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
 
-            Menu {
-                NowPlayingActionMenuItems(song: song)
-            } label: {
+            ZStack {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(isHoveringEllipsis ? Color.black.opacity(0.85) : Color.white)
                     .frame(width: Self.trackActionSide, height: Self.trackActionSide)
-                    .miniPlayerMatteCircle(fill: .white.opacity(0.30))
-                    .contentShape(Circle())
+                    .miniPlayerMatteCircle(fill: isHoveringEllipsis ? .white.opacity(0.75) : .white.opacity(0.30))
+
+                Menu {
+                    NowPlayingActionMenuItems(song: song)
+                } label: {
+                    Image(nsImage: EllipsisMenuIcon.transparentImage(size: Self.trackActionSide))
+                        .frame(width: Self.trackActionSide, height: Self.trackActionSide)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .frame(width: Self.trackActionSide, height: Self.trackActionSide)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .help("Ещё")
-            .accessibilityLabel("Действия для песни")
+            .frame(width: Self.trackActionSide, height: Self.trackActionSide)
+            .contentShape(Circle())
+            .onHover { isHoveringEllipsis = $0 }
+            .help("Ещё".localized)
+            .accessibilityLabel("Действия для песни".localized)
         }
     }
 
@@ -290,174 +324,6 @@ private struct MiniPlayerControlsLayer: View {
     }
 }
 
-private struct MiniPlayerTopControls: View {
-    private enum Control: Hashable {
-        case lyrics
-        case queue
-        case volume
-    }
-
-    @Environment(AppState.self) private var app
-    @State private var hoveredControl: Control?
-    @State private var secondaryControlsVisible = true
-    @State private var volumeBarExpanded = false
-    @State private var volumeSliderVisible = false
-    @State private var volumeTransitionTask: Task<Void, Never>?
-
-    @Binding var showingVolume: Bool
-    let togglePanel: (AppState.PlayerPanelTab) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if volumeBarExpanded {
-                MatteVolumeSlider(value: Bindable(app).player.volume)
-                    .frame(width: 144)
-                    .opacity(volumeSliderVisible ? 1 : 0)
-                    .allowsHitTesting(volumeSliderVisible)
-            } else {
-                secondaryControls
-                    .opacity(secondaryControlsVisible ? 1 : 0)
-                    .allowsHitTesting(secondaryControlsVisible)
-            }
-
-            volumeButton
-        }
-        .padding(.leading, volumeBarExpanded ? 12 : 3)
-        .padding(.trailing, 3)
-        .padding(.vertical, 3)
-        .matteTopControlSurface()
-        .animation(.easeOut(duration: 0.16), value: volumeBarExpanded)
-        .animation(.easeOut(duration: 0.08), value: volumeSliderVisible)
-    }
-
-    private var secondaryControls: some View {
-        HStack(spacing: 4) {
-            panelButton(.lyrics, systemName: "quote.bubble", control: .lyrics)
-            panelButton(.queue, systemName: "list.bullet", control: .queue)
-            Rectangle()
-                .fill(.white.opacity(0.32))
-                .frame(width: 1, height: 22)
-                .padding(.horizontal, 3)
-        }
-    }
-
-    private var volumeButton: some View {
-        Button {
-            showingVolume ? dismissVolumeSlider() : presentVolumeSlider()
-        } label: {
-            Image(systemName: volumeIcon)
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 38, height: 38)
-                .background(hoveredControl == .volume ? .white.opacity(0.28) : .clear, in: Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hoveredControl = $0 ? .volume : nil }
-        .help(showingVolume ? "Скрыть громкость" : "Громкость")
-        .accessibilityLabel(showingVolume ? "Скрыть громкость" : "Громкость")
-    }
-
-    private func presentVolumeSlider() {
-        volumeTransitionTask?.cancel()
-        showingVolume = true
-        withAnimation(.linear(duration: 0.1)) {
-            secondaryControlsVisible = false
-        }
-        volumeTransitionTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .milliseconds(100))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.16)) {
-                volumeBarExpanded = true
-            }
-            do {
-                try await Task.sleep(for: .milliseconds(160))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.08)) {
-                volumeSliderVisible = true
-            }
-        }
-    }
-
-    private func dismissVolumeSlider() {
-        volumeTransitionTask?.cancel()
-        withAnimation(.linear(duration: 0.1)) {
-            volumeSliderVisible = false
-        }
-        volumeTransitionTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .milliseconds(100))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.16)) {
-                volumeBarExpanded = false
-            }
-            do {
-                try await Task.sleep(for: .milliseconds(160))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            withAnimation(.linear(duration: 0.1)) {
-                secondaryControlsVisible = true
-            }
-            showingVolume = false
-        }
-    }
-
-    private func panelButton(
-        _ panel: AppState.PlayerPanelTab,
-        systemName: String,
-        control: Control
-    ) -> some View {
-        Button {
-            togglePanel(panel)
-        } label: {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 38, height: 38)
-                .background(buttonFill(for: panel, control: control), in: Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hoveredControl = $0 ? control : nil }
-        .help(panel.title)
-        .accessibilityLabel(panel.title)
-    }
-
-    private func buttonFill(for panel: AppState.PlayerPanelTab, control: Control) -> Color {
-        if app.visiblePlayerPanel == panel { return AMColor.accent.opacity(0.82) }
-        return hoveredControl == control ? .white.opacity(0.28) : .clear
-    }
-
-    private var volumeIcon: String {
-        if app.player.volume == 0 { return "speaker.slash.fill" }
-        if app.player.volume < 0.5 { return "speaker.wave.1.fill" }
-        return "speaker.wave.2.fill"
-    }
-}
-
-private extension View {
-    func matteTopControlSurface() -> some View {
-        background {
-            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                .clipShape(Capsule())
-        }
-        .overlay {
-            Capsule().strokeBorder(.white.opacity(0.32), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
-    }
-}
-
 /// A native hit-test region that drags the panel from the artwork while
 /// SwiftUI controls above it retain their own mouse interaction.
 private struct MiniPlayerWindowDragRegion: NSViewRepresentable {
@@ -477,11 +343,11 @@ private final class MiniPlayerWindowDragView: NSView {
 }
 
 extension View {
-    func miniPlayerMatteCircle(fill: Color = .white.opacity(0.24)) -> some View {
+    func miniPlayerMatteCircle(fill: Color = .white.opacity(0.30)) -> some View {
         background(fill, in: Circle())
             .overlay {
                 Circle().strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
             }
-            .shadow(color: .black.opacity(0.18), radius: 7, y: 2)
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
     }
 }

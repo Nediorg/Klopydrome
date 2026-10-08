@@ -63,7 +63,7 @@ struct CoverArtView: View {
                     .scaledToFill()
                     .id(coverArt)
                     .transition(.opacity)
-            } else {
+            } else if placeholderBackground != .clear {
                 ZStack {
                     Rectangle().fill(placeholderBackground ?? Color.primary.opacity(0.08))
                         .shimmering(coverArt?.isEmpty == false && !loadFailed && size >= 60)
@@ -72,14 +72,18 @@ struct CoverArtView: View {
                         .foregroundStyle(.tertiary)
                         .accessibilityHidden(true)
                 }
+            } else {
+                Color.clear
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
+        .overlay {
+            if placeholderBackground != .clear || displayImage != nil {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+            }
+        }
         .coverShadow(enabled: shadow, radius: shadowRadius, yOffset: shadowY)
         .accessibilityLabel(coverArt ?? String(localized: "Обложка"))
         .accessibilityAddTraits(.isImage)
