@@ -136,7 +136,7 @@ struct PlaylistDetailView: View {
                 actionRow(detail)
             }
             .frame(minHeight: 200)
-            .padding(.top, 4)
+            .alignmentGuide(.top) { $0[.top] + 6 }
             Spacer()
         }
     }
