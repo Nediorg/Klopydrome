@@ -70,3 +70,32 @@ final class LibraryCache {
         })
     }
 }
+
+extension AppState {
+    /// Atomically updates the Home view shelves and cached favorites in a single MainActor
+    /// commit, avoiding piecemeal Observable mutations that trigger layout shifts.
+    @MainActor
+    func updateHomeSnapshot(
+        shelves: [AlbumListType: [SubsonicAlbum]],
+        shelfErrors: [AlbumListType: String],
+        favoritesArtists: [Artist]?,
+        favoritesAlbums: [SubsonicAlbum]?,
+        favoritesSongs: [SubsonicSong]? = nil
+    ) {
+        library.homeShelves = shelves
+        library.homeShelfErrors = shelfErrors
+        if let favoritesArtists {
+            library.favoritesArtists = favoritesArtists
+        }
+        if let favoritesAlbums {
+            library.favoritesAlbums = favoritesAlbums
+        }
+        if let favoritesSongs {
+            library.favoritesSongs = favoritesSongs
+        }
+        library.homeShelvesLoaded = true
+        if favoritesArtists != nil || favoritesAlbums != nil || favoritesSongs != nil {
+            library.favoritesLoaded = true
+        }
+    }
+}

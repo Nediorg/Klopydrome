@@ -11,6 +11,7 @@ struct ContentPillContainer<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
                 .background(

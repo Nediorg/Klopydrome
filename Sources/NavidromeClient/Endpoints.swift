@@ -419,7 +419,7 @@ public extension SubsonicClient {
     }
 }
 
-public enum AlbumListType: String, CaseIterable {
+public enum AlbumListType: String, CaseIterable, Codable, Sendable {
     case random
     case newest
     case highest

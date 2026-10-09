@@ -7,6 +7,8 @@ extension AppState {
     private static let playlistsMetadataKey = "library_tab_playlists"
     private static let recentAlbumsMetadataKey = "library_tab_recent_albums"
     private static let homeShelvesMetadataKey = "library_tab_home_shelves"
+    private static let favoritesArtistsMetadataKey = "library_tab_favorites_artists"
+    private static let favoritesAlbumsMetadataKey = "library_tab_favorites_albums"
 
     /// Immediately restores cached tab manifests from the SSD (.metadata store)
     /// into memory at launch so visiting tabs feels instantaneous without network delay.
@@ -44,8 +46,23 @@ extension AppState {
             }
             if !shelves.isEmpty {
                 library.homeShelves = shelves
-                library.homeShelvesLoaded = true
             }
+        }
+
+        // 4. Favorite Artists
+        if library.favoritesArtists.isEmpty,
+           let data = await cache.readData(for: .metadata, key: Self.favoritesArtistsMetadataKey),
+           let artists = try? JSONDecoder().decode([Artist].self, from: data),
+           !artists.isEmpty {
+            library.favoritesArtists = artists
+        }
+
+        // 5. Favorite Albums
+        if library.favoritesAlbums.isEmpty,
+           let data = await cache.readData(for: .metadata, key: Self.favoritesAlbumsMetadataKey),
+           let albums = try? JSONDecoder().decode([SubsonicAlbum].self, from: data),
+           !albums.isEmpty {
+            library.favoritesAlbums = albums
         }
     }
 
@@ -74,6 +91,19 @@ extension AppState {
         }
         if let data = try? JSONEncoder().encode(rawShelves) {
             _ = try? await cache.write(data: data, to: .metadata, key: Self.homeShelvesMetadataKey)
+        }
+    }
+
+    /// Persists cached favorite artists and albums to disk for instant next-launch recovery.
+    func persistFavoritesToDisk() async {
+        guard let cache else { return }
+        if !library.favoritesArtists.isEmpty,
+           let data = try? JSONEncoder().encode(library.favoritesArtists) {
+            _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesArtistsMetadataKey)
+        }
+        if !library.favoritesAlbums.isEmpty,
+           let data = try? JSONEncoder().encode(library.favoritesAlbums) {
+            _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesAlbumsMetadataKey)
         }
     }
 

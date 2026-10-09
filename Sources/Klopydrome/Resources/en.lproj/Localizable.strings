@@ -956,3 +956,9 @@
 "format.playlist.duplicate.multipleTitle" = "%d of %d songs are already in playlist \"%@\"";
 "format.filter.count" = "%d of %d";
 "Поведение" = "Look and Feel";
+
+/* Home */
+"Недавно прослушанные" = "Recently Played";
+"Часто слушаемые" = "Most Played";
+"Любимые альбомы" = "Favorite Albums";
+"Повторить попытку" = "Retry";

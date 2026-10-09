@@ -7,20 +7,31 @@ struct HomeView: View {
     @Environment(AppState.self) private var app
 
     enum Shelf: String, CaseIterable, Identifiable {
-        case new = "Новые релизы"
-        case recent = "Недавно добавленные"
+        case recent = "Недавно прослушанные"
+        case new = "Недавно добавленные"
+        case frequent = "Часто слушаемые"
+        case starred = "Любимые альбомы"
         case random = "Для вас"
-        case frequent = "Частое"
 
         var listType: AlbumListType {
             switch self {
-            case .new: return .newest
             case .recent: return .recent
-            case .random: return .random
+            case .new: return .newest
             case .frequent: return .frequent
+            case .starred: return .starred
+            case .random: return .random
             }
         }
         var id: String { rawValue }
+
+        var localizedTitle: String {
+            rawValue.localized
+        }
+    }
+
+    private enum HomeFetchResult {
+        case shelf(Shelf, [SubsonicAlbum], String?)
+        case starred(artists: [Artist], albums: [SubsonicAlbum], songs: [SubsonicSong])
     }
 
     @State private var loading = true
@@ -50,10 +61,15 @@ struct HomeView: View {
         } else {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 32) {
-                    HomeQuickAccessSection()
+                    HomeQuickAccessSection(loading: loading && app.library.homeShelves.isEmpty)
 
                     ForEach(Shelf.allCases) { shelf in
-                        albumShelf(shelf)
+                        let albums = albumsByShelf[shelf] ?? []
+                        let hasError = errorsByShelf[shelf] != nil
+                        let isLoading = loadingShelves.contains(shelf) || (loading && albums.isEmpty)
+                        if !albums.isEmpty || isLoading || hasError {
+                            albumShelf(shelf)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -69,7 +85,7 @@ struct HomeView: View {
 
     private func shelfHeader(_ shelf: Shelf) -> some View {
         HStack(spacing: 6) {
-            Text(shelf.rawValue)
+            Text(shelf.localizedTitle)
                 .font(.title2.bold())
             Spacer()
             if loadingShelves.contains(shelf) {
@@ -86,15 +102,15 @@ struct HomeView: View {
             .buttonStyle(.borderless)
             .foregroundStyle(AMColor.accent)
             .hoverBrighten()
-            .accessibilityLabel("Обновить")
-            .help("Обновить")
+            .accessibilityLabel("Обновить".localized)
+            .help("Обновить".localized)
         }
     }
 
     @ViewBuilder
     private func shelfContent(_ shelf: Shelf) -> some View {
         let albums = albumsByShelf[shelf] ?? []
-        if loadingShelves.contains(shelf) || (loading && albums.isEmpty) {
+        if albums.isEmpty && (loading || loadingShelves.contains(shelf)) {
             ForEach(0..<6, id: \.self) { _ in AlbumCardPlaceholder() }
         } else if let error = errorsByShelf[shelf] {
             retryRow(shelf, error: error)
@@ -133,7 +149,7 @@ struct HomeView: View {
                 .font(.caption)
                 .foregroundStyle(AMColor.secondaryText)
                 .lineLimit(2)
-            Button("Повторить") {
+            Button("Повторить попытку".localized) {
                 Task { await reloadShelf(shelf) }
             }
             .buttonStyle(.bordered)
@@ -160,6 +176,25 @@ struct HomeView: View {
         await load()
     }
 
+    private func fetchShelf(_ shelf: Shelf, client: SubsonicClient) async -> HomeFetchResult? {
+        do {
+            let albums = try await client.getAlbumList2(type: shelf.listType, size: 24)
+            return .shelf(shelf, albums, nil)
+        } catch {
+            if error is CancellationError { return nil }
+            let nsError = error as NSError
+            if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+                return nil
+            }
+            return .shelf(shelf, [], error.localizedDescription)
+        }
+    }
+
+    private func fetchStarred(client: SubsonicClient) async -> HomeFetchResult? {
+        guard let starred = try? await client.getStarred2() else { return nil }
+        return .starred(artists: starred.artists, albums: starred.albums, songs: starred.songs)
+    }
+
     private func load() async {
         guard let client = app.client else {
             loading = false
@@ -171,44 +206,56 @@ struct HomeView: View {
             loading = false
             loadingShelves.removeAll()
         }
-        await withTaskGroup(of: (Shelf, [SubsonicAlbum], String?).self) { group in
+        await withTaskGroup(of: HomeFetchResult?.self) { group in
             for shelf in Shelf.allCases {
-                group.addTask {
-                    do {
-                        let albums = try await client.getAlbumList2(type: shelf.listType, size: 24)
-                        return (shelf, albums, nil)
-                    } catch {
-                        if error is CancellationError { return (shelf, [], nil) }
-                        let nsError = error as NSError
-                        if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
-                            return (shelf, [], nil)
-                        }
-                        return (shelf, [], error.localizedDescription)
-                    }
+                group.addTask { await fetchShelf(shelf, client: client) }
+            }
+            group.addTask { await fetchStarred(client: client) }
+
+            var shelves: [AlbumListType: [SubsonicAlbum]] = [:]
+            var errors: [AlbumListType: String] = [:]
+            var artists: [Artist]?
+            var albums: [SubsonicAlbum]?
+            var songs: [SubsonicSong]?
+
+            for await result in group {
+                guard let result else { continue }
+                switch result {
+                case .shelf(let shelf, let albums, let error):
+                    shelves[shelf.listType] = albums
+                    if let error { errors[shelf.listType] = error }
+                case .starred(let starredArtists, let starredAlbums, let starredSongs):
+                    artists = starredArtists
+                    albums = starredAlbums
+                    songs = starredSongs
                 }
             }
-            var anySuccess = false
-            for await (shelf, albums, error) in group {
-                if albums.isEmpty, error == nil { continue }
-                app.library.homeShelves[shelf.listType] = albums
-                app.library.homeShelfErrors[shelf.listType] = error
-                if !albums.isEmpty { anySuccess = true }
-            }
-            app.library.homeShelvesLoaded = anySuccess || !app.library.homeShelvesLoaded
-            if anySuccess {
-                await app.persistHomeShelvesToDisk()
-            }
+
+            guard !Task.isCancelled else { return }
+            await applyHomeSnapshot(shelves: shelves, errors: errors, artists: artists, albums: albums, songs: songs)
         }
-        await warmupFavorites(using: client)
     }
 
-    private func warmupFavorites(using client: SubsonicClient) async {
-        guard app.library.favoritesArtists.isEmpty else { return }
-        guard let starred = try? await client.getStarred2() else { return }
-        app.library.favoritesArtists = starred.artists
-        app.library.favoritesAlbums = starred.albums
-        app.library.favoritesSongs = starred.songs
-        app.library.favoritesLoaded = true
+    private func applyHomeSnapshot(
+        shelves: [AlbumListType: [SubsonicAlbum]],
+        errors: [AlbumListType: String],
+        artists: [Artist]?,
+        albums: [SubsonicAlbum]?,
+        songs: [SubsonicSong]?
+    ) async {
+        app.updateHomeSnapshot(
+            shelves: shelves,
+            shelfErrors: errors,
+            favoritesArtists: artists,
+            favoritesAlbums: albums,
+            favoritesSongs: songs
+        )
+        if shelves.values.contains(where: { !$0.isEmpty }) {
+            await app.persistHomeShelvesToDisk()
+        }
+        if artists != nil || albums != nil {
+            await app.persistFavoritesToDisk()
+        }
     }
 
     private func reloadShelf(_ shelf: Shelf) async {
