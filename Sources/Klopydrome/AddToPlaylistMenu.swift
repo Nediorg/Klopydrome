@@ -26,7 +26,7 @@ struct AddToPlaylistMenu: View {
         let targets = await resolvedSongs()
         guard !targets.isEmpty else { return }
         guard app.confirmOfflineAction() else { return }
-        await app.addToPlaylist(targets, playlistID: playlist.id)
+        await app.addSongsCheckingDuplicates(targets, to: playlist)
     }
 
     private func newPlaylist() async {

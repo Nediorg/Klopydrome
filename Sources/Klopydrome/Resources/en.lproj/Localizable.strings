@@ -933,3 +933,26 @@
 "Применение изменений" = "Applying Changes";
 "Подключение" = "Connecting";
 "Синхронизация с сервером…" = "Syncing with server…";
+
+/* Playlist duplicates & Quick Access */
+"Дубликаты в плейлистах" = "Duplicates in Playlists";
+"Спрашивать" = "Ask";
+"Пропускать дубликаты" = "Skip Duplicates";
+"Добавлять копии" = "Add Copies";
+"Добавить копию" = "Add Copy";
+"Добавить копии" = "Add Copies";
+"Добавить все" = "Add All";
+"Больше не спрашивать" = "Do not ask again";
+"Добавить копию трека?" = "Add a copy of this track?";
+"Добавить копии треков?" = "Add copies of these tracks?";
+"Вы можете пропустить существующие песни или добавить копии." = "You can skip existing songs or add copies.";
+"Быстрый доступ" = "Quick Access";
+"Треки" = "Tracks";
+"Раскрывает поле поиска" = "Reveals the search field";
+"Закрыть поиск" = "Close Search";
+"Попробуйте изменить запрос." = "Try changing your query.";
+"format.playlist.duplicate.singleTitle" = "\"%@\" is already in playlist \"%@\"";
+"format.playlist.duplicate.allTitle" = "All %d songs are already in playlist \"%@\"";
+"format.playlist.duplicate.multipleTitle" = "%d of %d songs are already in playlist \"%@\"";
+"format.filter.count" = "%d of %d";
+"Поведение" = "Look and Feel";

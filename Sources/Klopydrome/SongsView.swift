@@ -62,7 +62,13 @@ struct SongsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            LibraryHeader(title: "Песни", searchText: $searchText, isLoading: isLoadingMore) {
+            LibraryHeader(
+                title: "",
+                searchText: $searchText,
+                isLoading: isLoadingMore,
+                filteredCount: searchText.isEmpty ? nil : processedSongs.count,
+                totalCount: searchText.isEmpty ? nil : songs.count
+            ) {
                 Picker("Показать", selection: $favoritesOnly) {
                     Text("Все песни".localized).tag(false)
                     Text("Только избранное".localized).tag(true)

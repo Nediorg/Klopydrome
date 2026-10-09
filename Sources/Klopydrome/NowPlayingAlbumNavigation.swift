@@ -99,6 +99,7 @@ extension AppState {
 
     /// Reveals a concrete playlist in the main library.
     func openPlaylist(_ playlist: PlaylistSummary) {
+        recordRecentPlaylist(playlist.id)
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.history.append(.playlist(playlist))
         nav.navVersion += 1

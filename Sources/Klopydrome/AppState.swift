@@ -745,6 +745,8 @@ final class AppState {
         guard let client else { return }
         try? await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
         recordRecentPlaylist(playlistID)
+        invalidatePlaylistDetail(for: playlistID)
+        await refreshPlaylists()
     }
 
     @discardableResult
@@ -764,12 +766,12 @@ final class AppState {
     }
 
     /// Moves a playlist to the front of the "recent" list used by the
-    /// "Добавить в плейлист" submenu.
-    private func recordRecentPlaylist(_ id: String) {
+    /// "Добавить в плейлист" submenu and Quick Access.
+    func recordRecentPlaylist(_ id: String) {
         var recent = recentPlaylistIDs
         recent.removeAll { $0 == id }
         recent.insert(id, at: 0)
-        recentPlaylistIDs = Array(recent.prefix(5))
+        recentPlaylistIDs = Array(recent.prefix(10))
     }
 
     /// Reloads the sidebar playlist manifest from the server. Navidrome includes

@@ -266,7 +266,7 @@ struct SongRow: View {
                     .transition(.opacity)
             } else {
                 Color.clear
-                    .frame(width: isNarrow ? 28 : 36, height: isNarrow ? 20 : 28)
+                    .frame(width: isNarrow ? 22 : 28, height: isNarrow ? 22 : 28)
             }
         }
     }

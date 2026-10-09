@@ -74,4 +74,96 @@ extension PlaylistDetailView {
             await app.refreshPlaylists()
         }
     }
+
+    func kindLine(_ detail: PlaylistDetail) -> some View {
+        var parts: [String] = []
+        parts.append(detail.isSmart ? "Умный плейлист".localized : "Плейлист".localized)
+        if detail.isPublic == true { parts.append("Открытый".localized) }
+        return Text(parts.joined(separator: " · "))
+            .font(.title3.weight(.medium))
+            .foregroundStyle(.secondary)
+    }
+
+    func metaRow(_ detail: PlaylistDetail) -> some View {
+        var parts: [String] = []
+        let count = detail.songCount ?? rows.count
+        parts.append("\(count) \(Pluralized.song(count))")
+        if let duration = detail.duration {
+            parts.append(Player.format(seconds: Double(duration)))
+        }
+        return Text(parts.joined(separator: " · "))
+            .font(.callout)
+            .foregroundStyle(AMColor.secondaryText)
+    }
+
+    func actionRow(_ detail: PlaylistDetail) -> some View {
+        HStack(spacing: 10) {
+            ActionPill(
+                title: "Слушать",
+                systemImage: "play.fill",
+                filled: true
+            ) {
+                Task { await startPlayback(shuffled: false) }
+            }
+            .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
+
+            ActionPill(
+                title: "Перемешать",
+                systemImage: "shuffle",
+                filled: true
+            ) {
+                Task { await startPlayback(shuffled: true) }
+            }
+            .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
+
+            Spacer()
+            HStack(spacing: 8) {
+                if loading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Синхронизация с сервером…".localized)
+                        .transition(.opacity)
+                }
+                RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
+                    app.toggleFollow(detail.summary)
+                }
+                RoundEllipsisMenu {
+                    PlaylistContextMenuItems(
+                        playlist: detail.summary,
+                        onRename: { activeEditor = .playlist(detail.summary) },
+                        onEditRules: {
+                            guard detail.isSmart else { return }
+                            activeEditor = .serverRules(ServerSmartPlaylist(summary: detail.summary))
+                        },
+                        onDelete: { confirmingDelete = true }
+                    )
+                }
+                .help("Действия над плейлистом".localized)
+            }
+            .animation(.easeInOut(duration: 0.2), value: loading)
+        }
+    }
+
+    /// Placeholder song rows shown while the playlist's songs stream in.
+    var skeletonRows: some View {
+        ForEach(0..<12, id: \.self) { _ in
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+                    .frame(width: 36, height: 36)
+                VStack(alignment: .leading, spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(width: 180, height: 12)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.05))
+                        .frame(width: 120, height: 10)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            Divider().opacity(0.3)
+        }
+    }
 }

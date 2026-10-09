@@ -5,7 +5,7 @@ struct PlaylistDetailView: View {
     let playlist: PlaylistSummary
     @Environment(AppState.self) var app
 
-    private enum ActiveEditor: Identifiable {
+    enum ActiveEditor: Identifiable {
         case playlist(PlaylistSummary)
         case serverRules(ServerSmartPlaylist)
 
@@ -17,8 +17,8 @@ struct PlaylistDetailView: View {
         }
     }
 
-    @State private var activeEditor: ActiveEditor?
-    @State private var confirmingDelete = false
+    @State var activeEditor: ActiveEditor?
+    @State var confirmingDelete = false
     @State var isPreparingPlayback = false
 
     /// The shared loader retains every song for Player, but SwiftUI only builds a
@@ -26,13 +26,32 @@ struct PlaylistDetailView: View {
     /// entire list becoming a layout cost on the main actor.
     @State private var displayedCount = 0
     @State private var selection = SongRowSelection()
+    @State private var filterText = ""
+    @State private var isScrolled = false
+    @State private var isSearchExpanded = false
     private let pageSize = 100
 
+    private struct ScrollOffsetKey: PreferenceKey {
+        static let defaultValue: CGFloat = 24
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
+    }
+
     private var state: PlaylistLoadState? { app.playlistLoadState(for: playlist) }
-    private var rows: [SubsonicSong] { state?.songs ?? [] }
-    private var loading: Bool { state?.isLoading ?? true }
+    var rows: [SubsonicSong] { state?.songs ?? [] }
+    var loading: Bool { state?.isLoading ?? true }
     private var loadError: String? { state?.error }
-    private var displayedSongs: [SubsonicSong] { Array(rows.prefix(displayedCount)) }
+    private var filteredRows: [SubsonicSong] {
+        guard !filterText.isEmpty else { return rows }
+        let query = filterText.localizedLowercase
+        return rows.filter {
+            $0.displayTitle.localizedLowercase.contains(query) ||
+            ($0.artist?.localizedLowercase.contains(query) ?? false) ||
+            ($0.album?.localizedLowercase.contains(query) ?? false)
+        }
+    }
+    private var displayedSongs: [SubsonicSong] { Array(filteredRows.prefix(displayedCount)) }
 
     /// Whether the current user may edit the playlist's tracks (remove rows).
     /// Server-side smart playlists (and shared ones) are readonly.
@@ -40,19 +59,63 @@ struct PlaylistDetailView: View {
         (currentDetail.isReadonly ?? false) == false
     }
 
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                header(currentDetail)
-                    .padding(.bottom, 28)
-                if let loadError, !rows.isEmpty {
-                    inlineErrorNotice(loadError)
-                        .padding(.bottom, 16)
-                }
-                songList(currentDetail)
+    private var topBar: some View {
+        let barOpaque = isScrolled || isSearchExpanded || !filterText.isEmpty
+        return LibraryHeader(
+            title: isScrolled ? currentDetail.displayName : "",
+            searchText: $filterText,
+            filteredCount: filterText.isEmpty ? nil : filteredRows.count,
+            totalCount: filterText.isEmpty ? nil : rows.count,
+            isSearchExpanded: $isSearchExpanded
+        )
+        .padding(.horizontal, 20)
+        .background {
+            if barOpaque {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(alignment: .bottom) {
+                        Divider().opacity(0.35)
+                    }
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: proxy.frame(in: .named("playlistScrollSpace")).minY
+                        )
+                    }
+                    .frame(height: 0)
+
+                    header(currentDetail)
+                        .padding(.bottom, 28)
+                    if let loadError, !rows.isEmpty {
+                        inlineErrorNotice(loadError)
+                            .padding(.bottom, 16)
+                    }
+                    songList(currentDetail)
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 24)
+            }
+            .coordinateSpace(name: "playlistScrollSpace")
+            .onPreferenceChange(ScrollOffsetKey.self) { minY in
+                let scrolled = minY < 5
+                if scrolled != isScrolled {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isScrolled = scrolled
+                    }
+                }
+            }
+
+            topBar
+                .zIndex(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .refreshable {
@@ -71,6 +134,9 @@ struct PlaylistDetailView: View {
                 // arrived after the first page are visible without a scroll.
                 displayedCount = min(displayedCount + pageSize, count)
             }
+        }
+        .onChange(of: filterText) { _, _ in
+            displayedCount = min(filteredRows.count, pageSize)
         }
         .sheet(item: $activeEditor) { editor in
             switch editor {
@@ -141,90 +207,29 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func kindLine(_ detail: PlaylistDetail) -> some View {
-        var parts: [String] = []
-        parts.append(detail.isSmart ? "Умный плейлист".localized : "Плейлист".localized)
-        if detail.isPublic == true { parts.append("Открытый".localized) }
-        return Text(parts.joined(separator: " · "))
-            .font(.title3.weight(.medium))
-            .foregroundStyle(.secondary)
-    }
-
-    private func metaRow(_ detail: PlaylistDetail) -> some View {
-        var parts: [String] = []
-        let count = detail.songCount ?? rows.count
-        parts.append("\(count) \(Pluralized.song(count))")
-        if let duration = detail.duration {
-            parts.append(Player.format(seconds: Double(duration)))
-        }
-        return Text(parts.joined(separator: " · "))
-            .font(.callout)
-            .foregroundStyle(AMColor.secondaryText)
-    }
-
-    private var playableSongs: [SubsonicSong] {
+    var playableSongs: [SubsonicSong] {
         if app.isOfflineSession {
             return rows.filter { app.isCached($0) }
         }
         return rows
     }
 
-    private func actionRow(_ detail: PlaylistDetail) -> some View {
-        HStack(spacing: 10) {
-            ActionPill(
-                title: "Слушать",
-                systemImage: "play.fill",
-                filled: true
-            ) {
-                Task { await startPlayback(shuffled: false) }
-            }
-            .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
-
-            ActionPill(
-                title: "Перемешать",
-                systemImage: "shuffle",
-                filled: true
-            ) {
-                Task { await startPlayback(shuffled: true) }
-            }
-            .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
-
-            Spacer()
-            HStack(spacing: 8) {
-                if loading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .help("Синхронизация с сервером…".localized)
-                        .transition(.opacity)
-                }
-                RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
-                    app.toggleFollow(detail.summary)
-                }
-                RoundEllipsisMenu {
-                    PlaylistContextMenuItems(
-                        playlist: detail.summary,
-                        onRename: { activeEditor = .playlist(detail.summary) },
-                        onEditRules: {
-                            guard detail.isSmart else { return }
-                            activeEditor = .serverRules(ServerSmartPlaylist(summary: detail.summary))
-                        },
-                        onDelete: { confirmingDelete = true }
-                    )
-                }
-                .help("Действия над плейлистом".localized)
-            }
-            .animation(.easeInOut(duration: 0.2), value: loading)
-        }
-    }
-
     @ViewBuilder
     private func songList(_ detail: PlaylistDetail) -> some View {
         let currentID = app.player.currentSong?.id
-        let allSongs = rows
+        let allSongs = filteredRows
         if rows.isEmpty && loading {
             skeletonRows
         } else if rows.isEmpty, let loadError {
             emptyErrorState(loadError)
+        } else if filteredRows.isEmpty && !rows.isEmpty {
+            ContentUnavailableView(
+                "Ничего не найдено".localized,
+                systemImage: "magnifyingglass",
+                description: Text("Попробуйте изменить запрос.".localized)
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
         } else {
             ForEach(Array(displayedSongs.enumerated()), id: \.offset) { index, song in
                 SongRow(
@@ -243,7 +248,7 @@ struct PlaylistDetailView: View {
                             let playIndex = playable.firstIndex(where: { $0.id == clickedSong.id }) ?? 0
                             app.play(playable, at: playIndex)
                         } else {
-                            app.play(rows, at: rowIndex)
+                            app.play(filteredRows, at: rowIndex)
                         }
                     },
                     isSelected: selection.isSelected(song.id),
@@ -254,35 +259,13 @@ struct PlaylistDetailView: View {
             }
             // Sentinel: appears when the user scrolls near the bottom of the
             // current page window. Grows the window by one page.
-            if displayedCount < rows.count {
+            if displayedCount < filteredRows.count {
                 Color.clear.frame(height: 80)
                     .onAppear {
-                        displayedCount = min(displayedCount + pageSize, rows.count)
+                        displayedCount = min(displayedCount + pageSize, filteredRows.count)
                     }
             }
         }
     }
 
-    /// Placeholder song rows shown while the playlist's songs stream in.
-    private var skeletonRows: some View {
-        ForEach(0..<12, id: \.self) { _ in
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.primary.opacity(0.05))
-                    .frame(width: 36, height: 36)
-                VStack(alignment: .leading, spacing: 4) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.primary.opacity(0.06))
-                        .frame(width: 180, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(width: 120, height: 10)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            Divider().opacity(0.3)
-        }
-    }
 }

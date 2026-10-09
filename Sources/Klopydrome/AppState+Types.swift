@@ -83,6 +83,23 @@ enum PlaybackEngine: String, CaseIterable, Identifiable {
     }
 }
 
+/// Action to take when adding tracks that already exist in the target playlist.
+enum DuplicatePlaylistAction: String, CaseIterable, Codable, Sendable, Identifiable {
+    case ask
+    case skip
+    case allow
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ask: return "Спрашивать".localized
+        case .skip: return "Пропускать дубликаты".localized
+        case .allow: return "Добавлять копии".localized
+        }
+    }
+}
+
 struct NavigationState {
     enum Section: String, Hashable, CaseIterable {
         case home = "Home"

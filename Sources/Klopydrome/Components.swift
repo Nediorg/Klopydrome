@@ -338,22 +338,30 @@ struct SongEllipsisMenu: View {
         app ?? envApp
     }
 
+    private var side: CGFloat {
+        compact ? 22 : 28
+    }
+
     var body: some View {
-        Menu {
-            if let extraMenuItems { extraMenuItems() }
-            SongActionItems(app: resolvedApp, song: song, selection: [song])
-        } label: {
+        ZStack {
             Image(systemName: "ellipsis")
                 .font(.system(size: compact ? 12 : 14, weight: .medium))
                 .foregroundStyle(foregroundStyle)
-                .frame(width: compact ? 28 : 36, height: compact ? 20 : 28)
-                .contentShape(Rectangle())
+
+            Menu {
+                if let extraMenuItems { extraMenuItems() }
+                SongActionItems(app: resolvedApp, song: song, selection: [song])
+            } label: {
+                Image(nsImage: EllipsisMenuIcon.transparentImage(size: side))
+                    .frame(width: side, height: side)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: side, height: side)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .frame(width: compact ? 28 : 36, height: compact ? 20 : 28)
+        .frame(width: side, height: side)
         .contentShape(Rectangle())
-        .tint(foregroundStyle)
+        .hoverBrighten()
         .help("Ещё".localized)
         .accessibilityLabel("Действия для песни".localized)
     }

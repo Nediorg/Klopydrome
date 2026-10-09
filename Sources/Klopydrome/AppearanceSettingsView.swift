@@ -10,6 +10,7 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             appearanceSection
+            playlistsSection
             lyricsSection
         }
         .formStyle(.grouped)
@@ -36,6 +37,18 @@ struct AppearanceSettingsView: View {
             }
         } header: {
             Text("Оформление".localized)
+        }
+    }
+
+    private var playlistsSection: some View {
+        Section {
+            Picker("Дубликаты в плейлистах".localized, selection: Bindable(app).duplicatePlaylistAction) {
+                ForEach(DuplicatePlaylistAction.allCases) { action in
+                    Text(action.title).tag(action)
+                }
+            }
+        } header: {
+            Text("Плейлисты".localized)
         }
     }
 

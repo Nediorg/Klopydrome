@@ -50,6 +50,8 @@ struct HomeView: View {
         } else {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 32) {
+                    HomeQuickAccessSection()
+
                     ForEach(Shelf.allCases) { shelf in
                         albumShelf(shelf)
                     }
@@ -197,6 +199,16 @@ struct HomeView: View {
                 await app.persistHomeShelvesToDisk()
             }
         }
+        await warmupFavorites(using: client)
+    }
+
+    private func warmupFavorites(using client: SubsonicClient) async {
+        guard app.library.favoritesArtists.isEmpty else { return }
+        guard let starred = try? await client.getStarred2() else { return }
+        app.library.favoritesArtists = starred.artists
+        app.library.favoritesAlbums = starred.albums
+        app.library.favoritesSongs = starred.songs
+        app.library.favoritesLoaded = true
     }
 
     private func reloadShelf(_ shelf: Shelf) async {

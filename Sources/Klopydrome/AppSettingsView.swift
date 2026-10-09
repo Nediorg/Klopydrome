@@ -10,7 +10,7 @@ struct AppSettingsView: View {
             GeneralSettingsView()
                 .tabItem { Label("Общие".localized, systemImage: "gearshape") }
             AppearanceSettingsView()
-                .tabItem { Label("Внешний вид".localized, systemImage: "paintpalette") }
+                .tabItem { Label("Поведение".localized, systemImage: "paintpalette") }
             PlaybackSettingsView()
                 .tabItem { Label("Воспроизведение".localized, systemImage: "play.circle") }
             CacheSettingsView()
