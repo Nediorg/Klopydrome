@@ -100,4 +100,51 @@ final class PlaylistCacheTests: XCTestCase {
         XCTAssertNil(app.playlistLoadState(for: summary()))
         XCTAssertNil(app.cachedPlaylistDetail(for: summary()))
     }
+
+    // MARK: - Disk & Memory SWR Cache
+
+    func testAlbumDetailMemoryAndDiskCacheRoundTrip() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let cache = CacheManager(rootURL: tempDir)
+        let app = AppState()
+        app.cache = cache
+
+        let albumDetail = AlbumDetail(
+            id: "al-1",
+            name: "Test Album",
+            artist: "Test Artist",
+            song: [SubsonicSong(id: "s1", title: "Track 1")]
+        )
+
+        await app.persistAlbumDetail(albumDetail)
+
+        // Memory hit
+        let mem = await app.cachedAlbumDetail(for: "al-1")
+        XCTAssertEqual(mem?.name, "Test Album")
+        XCTAssertEqual(mem?.song?.count, 1)
+
+        // Clear memory to verify disk hit
+        app.library.albumDetails.removeAll()
+        let disk = await app.cachedAlbumDetail(for: "al-1")
+        XCTAssertEqual(disk?.name, "Test Album")
+        XCTAssertEqual(disk?.song?.first?.title, "Track 1")
+
+        try? FileManager.default.removeItem(at: tempDir)
+    }
+
+    func testPlaylistDetailDiskCacheRoundTrip() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let cache = CacheManager(rootURL: tempDir)
+        let app = AppState()
+        app.cache = cache
+
+        let playlist = detail()
+        await app.persistPlaylistDetailToDisk(playlist)
+
+        let loaded = await app.cachedPlaylistDetailFromDisk(for: playlist.id)
+        XCTAssertEqual(loaded?.name, "Playlist")
+        XCTAssertEqual(loaded?.entry?.count, 2)
+
+        try? FileManager.default.removeItem(at: tempDir)
+    }
 }

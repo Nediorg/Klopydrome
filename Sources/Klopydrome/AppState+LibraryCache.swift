@@ -21,6 +21,8 @@ final class LibraryCache {
     /// invalidates a detail only when Navidrome reports a changed timestamp or
     /// song count, so returning to a large playlist avoids another full payload.
     var playlistDetails: [String: PlaylistDetail] = [:]
+    /// Full entries for albums visited during this session.
+    var albumDetails: [String: AlbumDetail] = [:]
     var songs: [SubsonicSong] = []
     var homeShelves: [AlbumListType: [SubsonicAlbum]] = [:]
     var homeShelfErrors: [AlbumListType: String] = [:]
@@ -41,6 +43,8 @@ final class LibraryCache {
     /// Clears the loaded flags after a server library scan completes so
     /// tabs refresh their data on subsequent visits.
     func invalidateForScan() {
+        albumDetails = [:]
+        playlistDetails = [:]
         albumsLoaded = false
         recentAlbumsLoaded = false
         artistIndexesLoaded = false

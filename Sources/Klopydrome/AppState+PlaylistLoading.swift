@@ -56,7 +56,15 @@ extension AppState {
         state.error = nil
         playlistLoadStates[id] = state
         playlistLoadTasks[id] = Task { [weak self, client] in
-            await self?.streamPlaylist(playlist, client: client, token: token)
+            await self?.streamPlaylist(playlist, client: client, token: token, forceReload: forceReload)
+        }
+    }
+
+    /// Forces a fresh reload of a playlist (used by pull-to-refresh).
+    func reloadPlaylist(_ playlist: PlaylistSummary) async {
+        loadPlaylistIfNeeded(playlist, forceReload: true)
+        if let task = playlistLoadTasks[playlist.id] {
+            await task.value
         }
     }
 
@@ -136,33 +144,48 @@ extension AppState {
         playlistLoadStates[playlistID] = nil
     }
 
+    private func hydratePlaylistFromDiskCache(
+        playlist: PlaylistSummary,
+        id: String,
+        token: UUID,
+        forceReload: Bool
+    ) async -> Bool {
+        guard let diskCached = await cachedPlaylistDetailFromDisk(for: id) else { return false }
+        guard playlistLoadTokens[id] == token, !Task.isCancelled else { return true }
+
+        if !forceReload,
+           diskCached.changed == playlist.changed,
+           diskCached.songCount == playlist.songCount {
+            installCompletedPlaylist(diskCached, for: playlist)
+            cachePlaylistDetail(diskCached)
+            return true
+        }
+
+        var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
+        if state.songs.isEmpty {
+            state.detail = diskCached
+            state.songs = diskCached.entry ?? []
+            playlistLoadStates[id] = state
+            cachePlaylistDetail(diskCached)
+        }
+        return false
+    }
+
     private func streamPlaylist(
         _ playlist: PlaylistSummary,
         client: SubsonicClient,
-        token: UUID
+        token: UUID,
+        forceReload: Bool = false
     ) async {
         let id = playlist.id
+        if await hydratePlaylistFromDiskCache(playlist: playlist, id: id, token: token, forceReload: forceReload) {
+            playlistLoadTasks[id] = nil
+            playlistLoadTokens[id] = nil
+            return
+        }
+
         do {
-            for try await chunk in client.getPlaylistChunked(id: id) {
-                guard playlistLoadTokens[id] == token, !Task.isCancelled else { return }
-                var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
-                switch chunk {
-                case .header(let detail):
-                    state.detail = detail
-                case .songs(let songs):
-                    state.songs.append(contentsOf: songs)
-                }
-                playlistLoadStates[id] = state
-            }
-            guard playlistLoadTokens[id] == token, !Task.isCancelled else { return }
-            var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
-            let detail = playlistDetail(from: state.detail, playlist: playlist, songs: state.songs)
-            state.detail = detail
-            state.isLoading = false
-            state.isComplete = true
-            playlistLoadStates[id] = state
-            cachePlaylistDetail(detail)
-            await persistOfflinePlaylistDetail(detail)
+            try await streamPlaylistChunks(playlist, client: client, token: token)
         } catch {
             guard playlistLoadTokens[id] == token, !Task.isCancelled else { return }
             var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
@@ -177,6 +200,43 @@ extension AppState {
         guard playlistLoadTokens[id] == token else { return }
         playlistLoadTasks[id] = nil
         playlistLoadTokens[id] = nil
+    }
+
+    private func streamPlaylistChunks(
+        _ playlist: PlaylistSummary,
+        client: SubsonicClient,
+        token: UUID
+    ) async throws {
+        let id = playlist.id
+        var didReplaceStaleSongs = false
+        for try await chunk in client.getPlaylistChunked(id: id) {
+            guard playlistLoadTokens[id] == token, !Task.isCancelled else { return }
+            var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
+            switch chunk {
+            case .header(let detail):
+                state.detail = detail
+            case .songs(let songs):
+                if !didReplaceStaleSongs {
+                    state.songs = songs
+                    didReplaceStaleSongs = true
+                } else {
+                    state.songs.append(contentsOf: songs)
+                }
+            }
+            playlistLoadStates[id] = state
+        }
+        guard playlistLoadTokens[id] == token, !Task.isCancelled else { return }
+        var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
+        let songs = didReplaceStaleSongs ? state.songs : []
+        let detail = playlistDetail(from: state.detail, playlist: playlist, songs: songs)
+        state.detail = detail
+        state.songs = songs
+        state.isLoading = false
+        state.isComplete = true
+        playlistLoadStates[id] = state
+        cachePlaylistDetail(detail)
+        await persistPlaylistDetailToDisk(detail)
+        await persistOfflinePlaylistDetail(detail)
     }
 
     private func installCompletedPlaylist(_ detail: PlaylistDetail, for playlist: PlaylistSummary) {

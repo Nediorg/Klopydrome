@@ -55,6 +55,9 @@ struct PlaylistDetailView: View {
             .padding(.vertical, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .refreshable {
+            await app.reloadPlaylist(playlist)
+        }
         .task(id: playlist.id) {
             displayedCount = 0
             app.loadPlaylistIfNeeded(playlist)
@@ -188,6 +191,12 @@ struct PlaylistDetailView: View {
 
             Spacer()
             HStack(spacing: 8) {
+                if loading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Синхронизация с сервером…".localized)
+                        .transition(.opacity)
+                }
                 RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
                     app.toggleFollow(detail.summary)
                 }
@@ -204,6 +213,7 @@ struct PlaylistDetailView: View {
                 }
                 .help("Действия над плейлистом".localized)
             }
+            .animation(.easeInOut(duration: 0.2), value: loading)
         }
     }
 

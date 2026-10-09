@@ -12,6 +12,7 @@ struct AlbumDetailView: View {
 
     @State private var detail: AlbumDetail?
     @State private var loading = true
+    @State private var isSyncing = false
     @State private var artistHovered = false
     @State private var selection = SongRowSelection()
 
@@ -47,6 +48,9 @@ struct AlbumDetailView: View {
             .padding(.vertical, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .refreshable {
+            await load(forceReload: true)
+        }
         .task(id: LoadID(albumID: album.id, offlineSession: app.isOfflineSession)) {
             await load()
         }
@@ -193,6 +197,12 @@ struct AlbumDetailView: View {
             .disabled(playableSongs.isEmpty)
             Spacer()
             HStack(spacing: 8) {
+                if isSyncing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Синхронизация с сервером…".localized)
+                        .transition(.opacity)
+                }
                 RoundFavoriteButton(isStarred: app.isStarred(album)) {
                     app.toggleStar(album)
                 }
@@ -201,6 +211,7 @@ struct AlbumDetailView: View {
                 }
                 .help("Действия над альбомом".localized)
             }
+            .animation(.easeInOut(duration: 0.2), value: isSyncing)
         }
     }
 
@@ -352,27 +363,63 @@ extension AlbumDetailView {
         SubsonicDate.longDate(detail?.created)
     }
 
-    func load() async {
+    func load(forceReload: Bool = false) async {
         let albumID = album.id
-        let isOffline = app.isOfflineSession
-        loading = true
         loadError = nil
+
+        if app.isOfflineSession {
+            await loadOffline(albumID: albumID)
+            return
+        }
+
+        if !forceReload {
+            _ = await applyCachedAlbumDetail(albumID: albumID)
+        }
+
+        await fetchOnlineAlbumDetail(albumID: albumID)
+    }
+
+    private func loadOffline(albumID: String) async {
+        loading = true
         defer {
             if !Task.isCancelled { loading = false }
         }
+        let offline = await app.offlineAlbumDetail(for: albumID)
+        if !Task.isCancelled {
+            detail = offline
+        }
+    }
 
-        if isOffline {
-            let offline = await app.offlineAlbumDetail(for: albumID)
-            if !Task.isCancelled {
-                detail = offline
-            }
+    private func applyCachedAlbumDetail(albumID: String) async -> Bool {
+        guard let cached = await app.cachedAlbumDetail(for: albumID) else { return false }
+        guard !Task.isCancelled else { return false }
+        detail = cached
+        loading = false
+        return true
+    }
+
+    private func fetchOnlineAlbumDetail(albumID: String) async {
+        guard let client = app.client else {
+            loading = false
             return
         }
-        guard let client = app.client else { return }
+
+        if detail == nil {
+            loading = true
+        }
+        isSyncing = true
+        defer {
+            if !Task.isCancelled {
+                loading = false
+                isSyncing = false
+            }
+        }
+
         do {
             let loadedDetail = try await client.getAlbum(id: albumID)
             guard !Task.isCancelled else { return }
             detail = loadedDetail
+            await app.persistAlbumDetail(loadedDetail)
             await app.persistOfflineAlbumDetail(loadedDetail)
         } catch {
             guard !Task.isCancelled else { return }
