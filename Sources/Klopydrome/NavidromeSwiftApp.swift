@@ -77,6 +77,9 @@ struct ContentView: View {
                 .onChange(of: app.isConnected) { _, _ in
                     CoverArtStore.shared.configure(client: app.client, cache: app.cache)
                 }
+                .onChange(of: app.isOfflineSession) { _, _ in
+                    CoverArtStore.shared.configure(client: app.client, cache: app.cache)
+                }
             // Non-sheet dim: a sheet disables the whole window chrome
             // (the toolbar items look "hidden" until it dismisses).
             // Hidden during background reconnect, offline transitions, or offline sessions.

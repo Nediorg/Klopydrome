@@ -84,4 +84,90 @@ final class CoverResolutionAndDiskReuseTests: XCTestCase {
         // Clean up store memory
         store.configure(client: nil, cache: nil)
     }
+
+    func testOfflineDiskFallbackToSmallerCachedCoverWithoutNetwork() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CoverSmallerReuseTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let cache = CacheManager(rootURL: tempDir)
+        let store = CoverArtStore.shared
+        store.configure(client: nil, cache: cache, coverResolution: .high)
+
+        let coverId = "smaller-reuse-test-\(UUID().uuidString)"
+        guard let jpegData = makeDummyJPEG(width: 240, height: 240) else {
+            XCTFail("Failed to encode dummy JPEG")
+            return
+        }
+
+        // Only 240 is on disk
+        let smallKey = CacheManager.coverKey(coverArt: coverId, size: 240)
+        _ = try await cache.write(data: jpegData, to: .covers, key: smallKey)
+
+        // Request 720 card in offline mode (client == nil)
+        let outcome = await store.resolveCover(coverArt: coverId, size: 720)
+
+        guard case .image(let resolved) = outcome else {
+            XCTFail("Expected .image outcome from offline smaller disk fallback")
+            return
+        }
+
+        XCTAssertNotNil(resolved)
+        store.configure(client: nil, cache: nil)
+    }
+
+    func testOfflineDiskFallbackWhenOriginalRequestedWithoutNetwork() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CoverOrigReuseTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let cache = CacheManager(rootURL: tempDir)
+        let store = CoverArtStore.shared
+        store.configure(client: nil, cache: cache, coverResolution: .high)
+
+        let coverId = "orig-reuse-test-\(UUID().uuidString)"
+        guard let jpegData = makeDummyJPEG(width: 720, height: 720) else {
+            XCTFail("Failed to encode dummy JPEG")
+            return
+        }
+
+        // Only 720 is on disk
+        let cardKey = CacheManager.coverKey(coverArt: coverId, size: 720)
+        _ = try await cache.write(data: jpegData, to: .covers, key: cardKey)
+
+        // Request original (size == nil) in offline mode (client == nil)
+        let outcome = await store.resolveCover(coverArt: coverId, size: nil)
+
+        guard case .image(let resolved) = outcome else {
+            XCTFail("Expected .image outcome from offline original disk fallback")
+            return
+        }
+
+        XCTAssertNotNil(resolved)
+        store.configure(client: nil, cache: nil)
+    }
+
+    private func makeDummyJPEG(width: Int, height: Int) -> Data? {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        let image = NSImage(size: NSSize(width: width, height: height))
+        image.addRepresentation(rep)
+        guard let tiff = image.tiffRepresentation,
+              let repImage = NSBitmapImageRep(data: tiff) else {
+            return nil
+        }
+        return repImage.representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+    }
 }

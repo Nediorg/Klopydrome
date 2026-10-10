@@ -232,6 +232,11 @@ extension AppState {
             pruneOfflineNavigation()
         }
         isOfflineSession = true
+        CoverArtStore.shared.configure(
+            client: nil,
+            cache: offlineCache,
+            coverResolution: serverConfig.coverResolution ?? .high
+        )
         return true
     }
 

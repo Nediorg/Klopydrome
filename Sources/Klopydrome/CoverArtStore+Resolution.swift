@@ -20,6 +20,11 @@ extension CoverArtStore {
             return .image(larger)
         }
         guard let client else {
+            // Offline fallback: check any available cached size on disk (smaller or alternative bucket)
+            // so offline mode renders actual artwork instead of a placeholder.
+            if let fallback = await findAnyCachedCoverOnDisk(coverArt: coverArt, requestedSize: size) {
+                return .image(fallback)
+            }
             return .transient
         }
         guard let url = client.coverArtURL(id: coverArt, size: size) else {
@@ -36,7 +41,43 @@ extension CoverArtStore {
                 await cache.removeFile(for: .covers, key: thumbKey)
             }
         }
+        if case .transient = outcome,
+           let fallback = await findAnyCachedCoverOnDisk(coverArt: coverArt, requestedSize: size) {
+            return .image(fallback)
+        }
         return outcome
+    }
+
+    private static let candidateFallbackSizes = [0, 2048, 1200, 1000, 750, 720, 500, 360, 240, 200, 160, 80]
+
+    /// Searches disk for any available cached version of `coverArt` when exact and
+    /// strictly larger sizes are missing (crucial for offline sessions or network drops).
+    /// Orders candidates from highest available down to lowest.
+    func findAnyCachedCoverOnDisk(coverArt: String, requestedSize: Int?) async -> NSImage? {
+        guard let cache else { return nil }
+        let candidates: [Int]
+        if let requested = requestedSize, requested > 0 {
+            let larger = Self.candidateFallbackSizes.filter { $0 > requested }.sorted()
+            let smaller = Self.candidateFallbackSizes.filter { $0 > 0 && $0 < requested }.sorted(by: >)
+            candidates = larger + (Self.candidateFallbackSizes.contains(0) ? [0] : []) + smaller
+        } else {
+            candidates = Self.candidateFallbackSizes.filter { $0 > 0 }.sorted(by: >)
+        }
+
+        for candidate in candidates {
+            let key = CacheManager.coverKey(coverArt: coverArt, size: candidate)
+            if await cache.hasFile(for: .covers, key: key),
+               let data = await cache.readData(for: .covers, key: key),
+               let image = decodeImage(from: data, requestedSize: requestedSize) {
+                // swiftlint:disable:next line_length
+                coverLogger.debug("disk reuse fallback coverArt=\(coverArt, privacy: .private) found=\(candidate) for=\(requestedSize.map(String.init) ?? "orig")")
+                lock.withLock {
+                    _ = cachedSizes[coverArt, default: []].insert(requestedSize ?? 0)
+                }
+                return image
+            }
+        }
+        return nil
     }
 
     /// Looks for a larger version of `coverArt` already stored on disk.
@@ -78,6 +119,7 @@ extension CoverArtStore {
            let image = NSImage(data: data) {
             return .image(bounded(image, requestedSize: size))
         }
+        guard client != nil else { return .dead }
         return await fetch(url: resolved, cacheKey: cacheKey, requestedSize: size)
     }
 
