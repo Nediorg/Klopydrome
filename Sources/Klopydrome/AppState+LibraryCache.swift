@@ -23,6 +23,8 @@ final class LibraryCache {
     var playlistDetails: [String: PlaylistDetail] = [:]
     /// Full entries for albums visited during this session.
     var albumDetails: [String: AlbumDetail] = [:]
+    /// Full entries for artists visited during this session.
+    var artistDetails: [String: ArtistDetail] = [:]
     var songs: [SubsonicSong] = []
     var homeShelves: [AlbumListType: [SubsonicAlbum]] = [:]
     var homeShelfErrors: [AlbumListType: String] = [:]
@@ -45,6 +47,7 @@ final class LibraryCache {
     func invalidateForScan() {
         albumDetails = [:]
         playlistDetails = [:]
+        artistDetails = [:]
         albumsLoaded = false
         recentAlbumsLoaded = false
         artistIndexesLoaded = false

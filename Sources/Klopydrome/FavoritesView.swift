@@ -31,7 +31,7 @@ struct FavoritesView: View {
                                        retry: { Task { await load() } })
                     .emptyStatePinnedToTop()
             } else if loading && isAllEmpty {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                favoritesSkeletonView
             } else if isAllEmpty {
                 LibraryUnavailableView(title: "Нет избранного",
                                        systemImage: "star",
@@ -197,6 +197,88 @@ struct FavoritesView: View {
         }
     }
 
+    private var favoritesSkeletonView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                // 1. Songs section skeleton (3 rows)
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionHeader("Песни".localized)
+                    VStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.primary.opacity(0.08))
+                                    .frame(width: 48, height: 48)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(Color.primary.opacity(0.08))
+                                        .frame(width: 140, height: 12)
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(Color.primary.opacity(0.05))
+                                        .frame(width: 90, height: 10)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .shimmering()
+                }
+
+                // 2. Albums section skeleton
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionHeader("Альбомы".localized)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color.primary.opacity(0.08))
+                                        .frame(width: 150, height: 150)
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(Color.primary.opacity(0.08))
+                                        .frame(width: 110, height: 12)
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(Color.primary.opacity(0.05))
+                                        .frame(width: 70, height: 10)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .scrollClipDisabled()
+                    .shimmering()
+                }
+
+                // 3. Artists section skeleton
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionHeader("Исполнители".localized)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
+                            ForEach(0..<5, id: \.self) { _ in
+                                VStack(spacing: 8) {
+                                    Circle()
+                                        .fill(Color.primary.opacity(0.08))
+                                        .frame(width: 90, height: 90)
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(Color.primary.opacity(0.08))
+                                        .frame(width: 70, height: 11)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .scrollClipDisabled()
+                    .shimmering()
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+        }
+        .scrollClipDisabled()
+    }
+
     private func load() async {
         guard let client = app.client else { return }
         if isAllEmpty { loading = true }
@@ -204,10 +286,13 @@ struct FavoritesView: View {
         do {
             let result = try await client.getStarred2()
             loadError = nil
-            app.library.favoritesArtists = result.artists
-            app.library.favoritesAlbums = result.albums
-            app.library.favoritesSongs = result.songs
-            app.library.favoritesLoaded = true
+            withAnimation(.snappy(duration: 0.25)) {
+                app.library.favoritesArtists = result.artists
+                app.library.favoritesAlbums = result.albums
+                app.library.favoritesSongs = result.songs
+                app.library.favoritesLoaded = true
+            }
+            await app.persistFavoritesToDisk()
         } catch {
             if isAllEmpty { loadError = error.localizedDescription }
         }

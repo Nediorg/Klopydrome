@@ -147,4 +147,58 @@ final class PlaylistCacheTests: XCTestCase {
 
         try? FileManager.default.removeItem(at: tempDir)
     }
+
+    func testArtistDetailMemoryAndDiskCacheRoundTrip() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let cache = CacheManager(rootURL: tempDir)
+        let app = AppState()
+        app.cache = cache
+
+        let artistDetail = ArtistDetail(
+            id: "ar-1",
+            name: "Test Artist",
+            coverArt: "cover-1",
+            albumCount: 2,
+            album: [SubsonicAlbum(id: "al-1", name: "Album 1")]
+        )
+
+        await app.persistArtistDetail(artistDetail)
+
+        // Memory hit
+        let mem = await app.cachedArtistDetail(for: "ar-1")
+        XCTAssertEqual(mem?.name, "Test Artist")
+        XCTAssertEqual(mem?.albumCount, 2)
+
+        // Clear memory to verify disk hit
+        app.library.artistDetails.removeAll()
+        let disk = await app.cachedArtistDetail(for: "ar-1")
+        XCTAssertEqual(disk?.name, "Test Artist")
+        XCTAssertEqual(disk?.album?.first?.id, "al-1")
+
+        try? FileManager.default.removeItem(at: tempDir)
+    }
+
+    func testFavoritesSongsDiskCacheRoundTrip() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let cache = CacheManager(rootURL: tempDir)
+        let app = AppState()
+        app.cache = cache
+
+        app.library.favoritesSongs = [
+            SubsonicSong(id: "fav-1", title: "Favorite Song 1"),
+            SubsonicSong(id: "fav-2", title: "Favorite Song 2")
+        ]
+
+        await app.persistFavoritesToDisk()
+
+        // Clear memory
+        app.library.favoritesSongs.removeAll()
+
+        // Restore from disk
+        await app.restoreLibraryFromDiskCache()
+        XCTAssertEqual(app.library.favoritesSongs.count, 2)
+        XCTAssertEqual(app.library.favoritesSongs.first?.title, "Favorite Song 1")
+
+        try? FileManager.default.removeItem(at: tempDir)
+    }
 }

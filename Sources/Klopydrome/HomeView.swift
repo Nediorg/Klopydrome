@@ -253,7 +253,7 @@ struct HomeView: View {
         if shelves.values.contains(where: { !$0.isEmpty }) {
             await app.persistHomeShelvesToDisk()
         }
-        if artists != nil || albums != nil {
+        if artists != nil || albums != nil || songs != nil {
             await app.persistFavoritesToDisk()
         }
     }

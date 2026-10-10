@@ -1,7 +1,7 @@
 import Foundation
 import NavidromeClient
 
-// MARK: - Stale-While-Revalidate Album and Playlist Detail Disk Caching
+// MARK: - Stale-While-Revalidate Album, Playlist and Artist Detail Disk Caching
 
 extension AppState {
     private static func albumDetailMetadataKey(for albumID: String) -> String {
@@ -10,6 +10,10 @@ extension AppState {
 
     private static func playlistDetailMetadataKey(for playlistID: String) -> String {
         "detail_playlist_\(playlistID)"
+    }
+
+    private static func artistDetailMetadataKey(for artistID: String) -> String {
+        "detail_artist_\(artistID)"
     }
 
     /// Reads cached AlbumDetail from in-memory LibraryCache or disk metadata store.
@@ -50,6 +54,29 @@ extension AppState {
         guard let cache else { return }
         if let data = try? JSONEncoder().encode(detail) {
             _ = try? await cache.write(data: data, to: .metadata, key: Self.playlistDetailMetadataKey(for: detail.id))
+        }
+    }
+
+    /// Reads cached ArtistDetail from in-memory LibraryCache or disk metadata store.
+    func cachedArtistDetail(for artistID: String) async -> ArtistDetail? {
+        if let memory = library.artistDetails[artistID] {
+            return memory
+        }
+        guard let cache,
+              let data = await cache.readData(for: .metadata, key: Self.artistDetailMetadataKey(for: artistID)),
+              let detail = try? JSONDecoder().decode(ArtistDetail.self, from: data) else {
+            return nil
+        }
+        library.artistDetails[artistID] = detail
+        return detail
+    }
+
+    /// Caches ArtistDetail both in memory and to disk metadata store.
+    func persistArtistDetail(_ detail: ArtistDetail) async {
+        library.artistDetails[detail.id] = detail
+        guard let cache else { return }
+        if let data = try? JSONEncoder().encode(detail) {
+            _ = try? await cache.write(data: data, to: .metadata, key: Self.artistDetailMetadataKey(for: detail.id))
         }
     }
 }

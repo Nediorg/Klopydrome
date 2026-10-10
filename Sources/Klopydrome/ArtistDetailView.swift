@@ -47,23 +47,34 @@ struct ArtistDetailView: View {
     }
 
     /// Role label inferred from the OpenSubsonic `roles` tag when present,
-    /// identifying the artist's primary role (album artist vs composer vs guest).
+    /// Identifying the artist's primary role (album artist vs composer vs guest).
     private var roleLabel: String? {
         ArtistRole.primaryRole(
-            roles: detail?.roles,
-            hasAlbums: !(albums.isEmpty && (detail?.albumCount ?? 0) == 0),
+            roles: displayDetail.roles,
+            hasAlbums: !(albums.isEmpty && (displayDetail.albumCount ?? 0) == 0),
             songs: allSongs
+        )
+    }
+
+    private var displayDetail: ArtistDetail {
+        detail ?? ArtistDetail(
+            id: artist.id,
+            name: artist.name,
+            coverArt: artist.artistImageUrl,
+            albumCount: artist.albumCount,
+            artistImageUrl: artist.artistImageUrl,
+            starred: artist.starred
         )
     }
 
     var body: some View {
         Group {
-            if let detail {
+            if detail != nil || loading {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         ArtistHeroBanner(
                             artist: artist,
-                            detail: detail,
+                            detail: displayDetail,
                             roleLabel: roleLabel,
                             albums: albums,
                             allSongs: allSongs,
@@ -86,6 +97,8 @@ struct ArtistDetailView: View {
                             )
                             if !albums.isEmpty {
                                 albumsShelf
+                            } else if loading {
+                                albumsShelfSkeleton
                             }
                             if !appearsOn.isEmpty {
                                 appearsOnSection()
@@ -96,27 +109,23 @@ struct ArtistDetailView: View {
                     }
                 }
                 .scrollClipDisabled()
-            } else if loading {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView("Исполнитель недоступен", systemImage: "music.mic")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .inWindowModal(isPresented: $showInfoSheet) {
-            if let detail {
-                ArtistInfoSheet(
-                    artist: artist,
-                    detail: detail,
-                    roleLabel: roleLabel,
-                    albums: albums,
-                    allSongs: allSongs,
-                    artistInfo: artistInfo,
-                    onDismiss: {
-                        showInfoSheet = false
-                    }
-                )
-            }
+            ArtistInfoSheet(
+                artist: artist,
+                detail: displayDetail,
+                roleLabel: roleLabel,
+                albums: albums,
+                allSongs: allSongs,
+                artistInfo: artistInfo,
+                onDismiss: {
+                    showInfoSheet = false
+                }
+            )
         }
         .task(id: "\(artist.id)|\(app.isOfflineSession)") { await load() }
         .onChange(of: detail) { updateCachedAlbums() }
@@ -193,17 +202,32 @@ struct ArtistDetailView: View {
             return
         }
 
+        // 1. Instant restore from SWR disk/memory cache
+        if detail == nil, let cached = await app.cachedArtistDetail(for: artist.id) {
+            detail = cached
+            updateCachedAlbums()
+        }
+
         guard let client = app.client else {
             loadingTopSongs = false
             return
         }
 
         let (resolvedID, fetchedDetail) = await resolveArtistID(client: client)
-        detail = fetchedDetail
-        artistInfo = try? await client.getArtistInfo(id: resolvedID)
+        if let fetchedDetail {
+            withAnimation(.snappy(duration: 0.2)) {
+                detail = fetchedDetail
+            }
+            await app.persistArtistDetail(fetchedDetail)
+        }
         let name = detail?.name ?? artist.name
 
-        await loadTracks(client: client, resolvedID: resolvedID, name: name)
+        // Fetch artist info and tracks concurrently
+        async let infoTask: ArtistInfoPayload? = try? await client.getArtistInfo(id: resolvedID)
+        async let tracksTask: Void = loadTracks(client: client, resolvedID: resolvedID, name: name)
+
+        let (info, _) = await (infoTask, tracksTask)
+        artistInfo = info
 
         if appearsOn.isEmpty {
             await loadAppearsOn(client: client)
@@ -351,6 +375,34 @@ private extension ArtistDetailView {
                 .scrollClipDisabled()
                 .transition(.opacity)
             }
+        }
+    }
+
+    private var albumsShelfSkeleton: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Альбомы".localized)
+                .font(.title2.bold())
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        VStack(alignment: .leading, spacing: 6) {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(width: 150, height: 150)
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(width: 100, height: 11)
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(Color.primary.opacity(0.05))
+                                .frame(width: 60, height: 9)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+            }
+            .scrollClipDisabled()
+            .shimmering()
         }
     }
 

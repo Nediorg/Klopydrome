@@ -9,6 +9,7 @@ extension AppState {
     private static let homeShelvesMetadataKey = "library_tab_home_shelves"
     private static let favoritesArtistsMetadataKey = "library_tab_favorites_artists"
     private static let favoritesAlbumsMetadataKey = "library_tab_favorites_albums"
+    private static let favoritesSongsMetadataKey = "library_tab_favorites_songs"
 
     /// Immediately restores cached tab manifests from the SSD (.metadata store)
     /// into memory at launch so visiting tabs feels instantaneous without network delay.
@@ -64,6 +65,14 @@ extension AppState {
            !albums.isEmpty {
             library.favoritesAlbums = albums
         }
+
+        // 6. Favorite Songs
+        if library.favoritesSongs.isEmpty,
+           let data = await cache.readData(for: .metadata, key: Self.favoritesSongsMetadataKey),
+           let songs = try? JSONDecoder().decode([SubsonicSong].self, from: data),
+           !songs.isEmpty {
+            library.favoritesSongs = songs
+        }
     }
 
     /// Persists the latest playlists manifest to disk for instant next-launch recovery.
@@ -94,7 +103,7 @@ extension AppState {
         }
     }
 
-    /// Persists cached favorite artists and albums to disk for instant next-launch recovery.
+    /// Persists cached favorite artists, albums, and songs to disk for instant next-launch recovery.
     func persistFavoritesToDisk() async {
         guard let cache else { return }
         if !library.favoritesArtists.isEmpty,
@@ -104,6 +113,10 @@ extension AppState {
         if !library.favoritesAlbums.isEmpty,
            let data = try? JSONEncoder().encode(library.favoritesAlbums) {
             _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesAlbumsMetadataKey)
+        }
+        if !library.favoritesSongs.isEmpty,
+           let data = try? JSONEncoder().encode(library.favoritesSongs) {
+            _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesSongsMetadataKey)
         }
     }
 
