@@ -5,7 +5,10 @@ extension AppState {
     /// Attempts to reconnect to the server without throwing away the user's active
     /// offline playback session if connection fails.
     @discardableResult
-    func reconnect(silent: Bool = false) async -> Bool {
+    func reconnect(
+        silent: Bool = false,
+        promptMutations: Bool = true
+    ) async -> Bool {
         guard !isReconnecting else { return false }
         guard !serverConfig.url.isEmpty else { return false }
         guard let password = passwordForLoginPrefill() else { return false }
@@ -35,7 +38,9 @@ extension AppState {
             }
             connectionError = nil
             isOfflineSession = false
-            await flushOfflineMutations()
+            if promptMutations {
+                await flushOfflineMutations(promptUser: !silent, context: .offlineDisabled)
+            }
             return true
         } catch {
             if !silent {
@@ -57,14 +62,51 @@ extension AppState {
 
     /// Toggles forced offline mode on or off.
     func setWorkOffline(_ offline: Bool) async {
-        serverConfig.forceOfflineMode = offline
-        saveSettings()
         if offline {
+            serverConfig.forceOfflineMode = true
+            saveSettings()
             isPreparingOfflineSession = true
             client = nil
             _ = await beginOfflineSession()
         } else {
-            _ = await reconnect(silent: false)
+            let store = ensureOfflineMutationStore()
+            let mutations = await store?.currentMutations() ?? OfflineMutations()
+            if !mutations.isEmpty && !serverConfig.effectiveSuppressOfflinePrompts {
+                let choice = promptPendingMutationsConfirmation(
+                    mutations: mutations,
+                    context: .offlineDisabled
+                )
+                switch choice {
+                case .apply:
+                    serverConfig.forceOfflineMode = false
+                    saveSettings()
+                    let connected = await reconnect(silent: false, promptMutations: false)
+                    if connected {
+                        await flushOfflineMutations(promptUser: false)
+                    }
+                case .discard:
+                    await store?.clear()
+                    withMutation(keyPath: \.starOverrides) { starOverrides.removeAll() }
+                    withMutation(keyPath: \.ratingOverrides) { ratingOverrides.removeAll() }
+                    for (id, star) in mutations.stars where star.kind == .playlist {
+                        if star.isStarred {
+                            followedPlaylistIDs.remove(id)
+                        } else {
+                            followedPlaylistIDs.insert(id)
+                        }
+                    }
+                    serverConfig.forceOfflineMode = false
+                    saveSettings()
+                    _ = await reconnect(silent: false, promptMutations: false)
+                case .cancel:
+                    withMutation(keyPath: \.serverConfig) {}
+                    return
+                }
+            } else {
+                serverConfig.forceOfflineMode = false
+                saveSettings()
+                _ = await reconnect(silent: false)
+            }
         }
     }
 }

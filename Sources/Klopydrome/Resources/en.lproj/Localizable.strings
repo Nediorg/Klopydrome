@@ -925,14 +925,27 @@
 "Автоматически сохраняет выбранные элементы медиатеки для воспроизведения без интернета." = "Automatically saves selected library items for playback without internet.";
 
 /* Offline Actions */
-"Не спрашивать о серверных действиях" = "Do not ask about server actions";
-"Действие в офлайн-режиме" = "Offline Action";
-"Клиент находится в офлайн-режиме. После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?" = "The client is in offline mode. After reconnecting, some changes may not be applied. Continue anyway?";
+"Спрашивать перед синхронизацией" = "Ask before syncing";
+"Сервер офлайн" = "Server Offline";
+"После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?" = "After reconnecting, some changes may not be applied. Continue anyway?";
 "Не спрашивать снова" = "Do not ask again";
+"Больше не спрашивать" = "Do not ask again";
 "Продолжить" = "Continue";
 "Применение изменений" = "Applying Changes";
 "Подключение" = "Connecting";
 "Синхронизация с сервером…" = "Syncing with server…";
+"Локальные изменения" = "Local Changes";
+"Неприменённые изменения" = "Pending Changes";
+"С прошлого сеанса остались локальные изменения:" = "Local changes from the previous session were not synced:";
+"В офлайн-режиме накопились локальные изменения:" = "Local changes accumulated while offline:";
+"Применить их на сервере?" = "Apply them to the server?";
+"Применить" = "Apply";
+"Не применять" = "Don't Apply";
+"Изменение или добавление плейлистов" = "Playlist changes or additions";
+"Отметки «Избранное»" = "Favorites";
+"Оценки треков" = "Track ratings";
+"Обновить медиатеку?" = "Scan Library?";
+"Этот процесс займёт некоторое время и обновит контент на сервере. Продолжить?" = "This process may take some time and will update content on the server. Continue?";
 
 /* Playlist duplicates & Quick Access */
 "Дубликаты в плейлистах" = "Duplicates in Playlists";

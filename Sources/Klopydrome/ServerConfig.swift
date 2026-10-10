@@ -54,8 +54,13 @@ struct ServerConfig: Codable, Equatable {
     var cacheStarredSongs: Bool?
     var cacheStarredAlbums: Bool?
     var cacheStarredArtists: Bool?
-    /// Whether offline action warning alerts are suppressed.
+    /// Whether confirmation before applying offline changes / actions is suppressed.
+    var suppressOfflinePrompts: Bool?
+    /// Legacy properties kept for backward-compatibility decoding:
     var suppressOfflineActionWarning: Bool?
+    var suppressPendingMutations: Bool?
+    /// Whether confirmation before starting server library scan is suppressed.
+    var suppressServerScanWarning: Bool?
 }
 
 extension ServerConfig {
@@ -88,7 +93,23 @@ extension ServerConfig {
     var effectiveCacheStarredSongs: Bool { cacheStarredSongs ?? false }
     var effectiveCacheStarredAlbums: Bool { cacheStarredAlbums ?? false }
     var effectiveCacheStarredArtists: Bool { cacheStarredArtists ?? false }
-    var effectiveSuppressOfflineActionWarning: Bool { suppressOfflineActionWarning ?? false }
+    var effectiveSuppressOfflinePrompts: Bool {
+        get {
+            suppressOfflinePrompts ?? (suppressPendingMutations ?? false)
+        }
+        set {
+            suppressOfflinePrompts = newValue
+            suppressPendingMutations = newValue
+        }
+    }
+    var effectiveSuppressOfflineActionWarning: Bool {
+        get { suppressOfflineActionWarning ?? false }
+        set { suppressOfflineActionWarning = newValue }
+    }
+    var effectiveSuppressPendingMutations: Bool { effectiveSuppressOfflinePrompts }
+    var effectiveSuppressServerScanWarning: Bool {
+        suppressServerScanWarning ?? false
+    }
 
     static var empty: ServerConfig {
         ServerConfig(url: "", username: "", authMode: .token,
@@ -109,6 +130,9 @@ extension ServerConfig {
                      downloadTranscoded: nil,
                      cacheStarredSongs: nil, cacheStarredAlbums: nil,
                      cacheStarredArtists: nil,
-                     suppressOfflineActionWarning: nil)
+                     suppressOfflinePrompts: nil,
+                     suppressOfflineActionWarning: nil,
+                     suppressPendingMutations: nil,
+                     suppressServerScanWarning: nil)
     }
 }

@@ -56,19 +56,29 @@ extension AppState {
         followedPlaylistIDs.contains(playlist.id)
     }
 
-    func toggleFollow(_ playlist: PlaylistSummary) {
-        if followedPlaylistIDs.contains(playlist.id) {
-            followedPlaylistIDs.remove(playlist.id)
-        } else {
+    func toggleFollow(_ playlist: PlaylistSummary, skipOfflineConfirm: Bool = false) {
+        if !skipOfflineConfirm, !confirmOfflineAction() { return }
+        let willFollow = !isFollowed(playlist)
+        if willFollow {
             followedPlaylistIDs.insert(playlist.id)
+        } else {
+            followedPlaylistIDs.remove(playlist.id)
+        }
+        if isOfflineSession {
+            queueOfflineStar(id: playlist.id, kind: .playlist, isStarred: willFollow)
         }
     }
 
-    func toggleFollow(_ playlist: PlaylistDetail) {
-        if followedPlaylistIDs.contains(playlist.id) {
-            followedPlaylistIDs.remove(playlist.id)
-        } else {
+    func toggleFollow(_ playlist: PlaylistDetail, skipOfflineConfirm: Bool = false) {
+        if !skipOfflineConfirm, !confirmOfflineAction() { return }
+        let willFollow = !isFollowed(playlist)
+        if willFollow {
             followedPlaylistIDs.insert(playlist.id)
+        } else {
+            followedPlaylistIDs.remove(playlist.id)
+        }
+        if isOfflineSession {
+            queueOfflineStar(id: playlist.id, kind: .playlist, isStarred: willFollow)
         }
     }
 

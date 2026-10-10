@@ -274,6 +274,7 @@ final class AppState {
                 try await group.next()
                 group.cancelAll()
             }
+            await self.flushOfflineMutations(promptUser: true, context: .previousSession)
         } catch is CancellationError {
             connectionError = "Нет соединения с сервером.".localized
             if await beginOfflineSession() {
@@ -742,27 +743,35 @@ final class AppState {
 
     func addToPlaylist(_ songs: [SubsonicSong], playlistID: String) async {
         guard confirmOfflineAction() else { return }
-        guard let client else { return }
-        try? await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
-        recordRecentPlaylist(playlistID)
-        invalidatePlaylistDetail(for: playlistID)
-        await refreshPlaylists()
+        if let client {
+            try? await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
+            recordRecentPlaylist(playlistID)
+            invalidatePlaylistDetail(for: playlistID)
+            await refreshPlaylists()
+        } else {
+            queueOfflineAddToPlaylist(playlistID: playlistID, songIDs: songs.map(\.id))
+            recordRecentPlaylist(playlistID)
+        }
     }
 
     @discardableResult
     func createPlaylist(name: String, songs: [SubsonicSong], comment: String? = nil) async -> PlaylistDetail? {
         guard confirmOfflineAction() else { return nil }
-        guard let client else { return nil }
-        let created = try? await client.createPlaylist(name: name, songIds: songs.map(\.id))
-        guard let id = created?.id else { return nil }
-        recordRecentPlaylist(id)
-        if let comment, !comment.isEmpty {
-            try? await client.updatePlaylist(id: id, comment: comment)
+        if let client {
+            let created = try? await client.createPlaylist(name: name, songIds: songs.map(\.id))
+            guard let id = created?.id else { return nil }
+            recordRecentPlaylist(id)
+            if let comment, !comment.isEmpty {
+                try? await client.updatePlaylist(id: id, comment: comment)
+            }
+            // The new playlist must appear in the sidebar immediately; reload the
+            // summary list so the "All Playlists" row reflects creation.
+            await refreshPlaylists()
+            return created
+        } else {
+            queueOfflineCreatePlaylist(name: name, songIDs: songs.map(\.id), comment: comment)
+            return nil
         }
-        // The new playlist must appear in the sidebar immediately; reload the
-        // summary list so the "All Playlists" row reflects creation.
-        await refreshPlaylists()
-        return created
     }
 
     /// Moves a playlist to the front of the "recent" list used by the

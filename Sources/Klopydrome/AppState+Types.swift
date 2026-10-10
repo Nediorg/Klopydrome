@@ -6,7 +6,7 @@ import SwiftUI
 /// (songIds / albumIds / artistIds). This lets client code star any entity
 /// without branching on concrete types everywhere.
 enum StarKind: String, Codable, Sendable {
-    case song, album, artist
+    case song, album, artist, playlist
 }
 
 /// Anything that can be starred (songs, albums, artists): stable `id` plus the

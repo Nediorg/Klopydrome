@@ -58,21 +58,22 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
     func testConfirmOfflineActionWhenOnlineOrSuppressed() {
         let app = AppState()
         app.isOfflineSession = false
-        app.serverConfig.suppressOfflineActionWarning = false
+        app.serverConfig.effectiveSuppressOfflineActionWarning = false
 
         // When online, confirmOfflineAction always returns true without prompt
         XCTAssertTrue(app.confirmOfflineAction())
 
         // When offline but suppressed in preferences, returns true without prompt
         app.isOfflineSession = true
-        app.serverConfig.suppressOfflineActionWarning = true
+        app.serverConfig.effectiveSuppressOfflineActionWarning = true
         XCTAssertTrue(app.confirmOfflineAction())
     }
 
     func testOfflineStarAndRatingQueuedAndRestored() async {
         let app = AppState()
         app.isOfflineSession = true
-        app.serverConfig.suppressOfflineActionWarning = true
+        app.serverConfig.effectiveSuppressOfflineActionWarning = true
+        app.serverConfig.effectiveSuppressOfflinePrompts = false
         app.serverConfig.url = "http://localhost:4533"
 
         let song = SubsonicSong(id: "test-track-1", title: "Test Track")
@@ -153,5 +154,144 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
             SidebarStatusCard.resolveStatus(for: app),
             .applyingChanges
         )
+    }
+
+    func testServerConfigPendingMutationsAndScanSuppressionPreferences() {
+        var config = ServerConfig.empty
+        XCTAssertFalse(config.effectiveSuppressOfflinePrompts)
+        XCTAssertFalse(config.effectiveSuppressServerScanWarning)
+
+        config.effectiveSuppressOfflinePrompts = true
+        config.suppressServerScanWarning = true
+        XCTAssertTrue(config.effectiveSuppressOfflinePrompts)
+        XCTAssertTrue(config.effectiveSuppressServerScanWarning)
+    }
+
+    func testOfflineMutationStorePlaylistActionsPersistence() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("test_playlist_mutations.json")
+        let store = OfflineMutationStore(fileURL: fileURL)
+
+        await store.recordPlaylistAdd(playlistID: "pl-1", songIDs: ["s-1", "s-2"])
+        await store.recordPlaylistCreate(name: "Road Trip", songIDs: ["s-3"], comment: "Summer")
+
+        let current = await store.currentMutations()
+        XCTAssertFalse(current.isEmpty)
+        XCTAssertEqual(current.playlists.count, 2)
+        XCTAssertEqual(current.playlists[0].type, .addSongs)
+        XCTAssertEqual(current.playlists[0].playlistID, "pl-1")
+        XCTAssertEqual(current.playlists[1].type, .create)
+        XCTAssertEqual(current.playlists[1].playlistName, "Road Trip")
+
+        // Reload fresh from disk
+        let reloaded = OfflineMutationStore(fileURL: fileURL)
+        let reloadedMutations = await reloaded.currentMutations()
+        XCTAssertEqual(reloadedMutations.playlists.count, 2)
+
+        // Remove first action
+        let firstID = current.playlists[0].id
+        await reloaded.removePlaylists(ids: [firstID])
+        let afterRemove = await reloaded.currentMutations()
+        XCTAssertEqual(afterRemove.playlists.count, 1)
+        XCTAssertEqual(afterRemove.playlists[0].playlistName, "Road Trip")
+    }
+
+    func testPendingActionsSummaryCategories() {
+        let app = AppState()
+        var mutations = OfflineMutations()
+        XCTAssertTrue(app.pendingActionsSummary(for: mutations).isEmpty)
+
+        mutations.playlists.append(
+            QueuedPlaylistAction(
+                id: "1",
+                type: .addSongs,
+                playlistID: "pl-1",
+                playlistName: nil,
+                songIDs: ["s-1"],
+                comment: nil,
+                timestamp: Date()
+            )
+        )
+        let playlistSummary = app.pendingActionsSummary(for: mutations)
+        XCTAssertEqual(playlistSummary, ["Изменение или добавление плейлистов".localized])
+
+        mutations.stars["song-1"] = QueuedStarAction(id: "song-1", kind: .song, isStarred: true, timestamp: Date())
+        let starAndPlaylist = app.pendingActionsSummary(for: mutations)
+        XCTAssertEqual(starAndPlaylist.count, 2)
+        XCTAssertTrue(starAndPlaylist.contains("Изменение или добавление плейлистов".localized))
+        XCTAssertTrue(starAndPlaylist.contains("Отметки «Избранное»".localized))
+
+        mutations.ratings["song-2"] = QueuedRatingAction(songID: "song-2", rating: 5, timestamp: Date())
+        let allSummary = app.pendingActionsSummary(for: mutations)
+        XCTAssertEqual(allSummary.count, 3)
+        XCTAssertTrue(allSummary.contains("Оценки треков".localized))
+    }
+
+    func testPendingMutationsContextLocalization() {
+        let prevSession = "С прошлого сеанса остались локальные изменения:".localized
+        let offlineDisabled = "В офлайн-режиме накопились локальные изменения:".localized
+        XCTAssertFalse(prevSession.isEmpty)
+        XCTAssertFalse(offlineDisabled.isEmpty)
+        XCTAssertNotEqual(prevSession, offlineDisabled)
+    }
+
+    func testSetWorkOfflineDisablingWithSuppressedPrompts() async {
+        let app = AppState()
+        app.serverConfig.forceOfflineMode = true
+        app.serverConfig.effectiveSuppressOfflinePrompts = true
+
+        await app.setWorkOffline(false)
+        XCTAssertFalse(app.serverConfig.effectiveForceOfflineMode)
+    }
+
+    func testServerConfigSeparateOfflineActionAndSyncSuppression() {
+        var config = ServerConfig.empty
+        XCTAssertFalse(config.effectiveSuppressOfflinePrompts)
+        XCTAssertFalse(config.effectiveSuppressOfflineActionWarning)
+
+        config.effectiveSuppressOfflineActionWarning = true
+        XCTAssertTrue(config.effectiveSuppressOfflineActionWarning)
+        XCTAssertFalse(config.effectiveSuppressOfflinePrompts)
+
+        config.effectiveSuppressOfflinePrompts = true
+        XCTAssertTrue(config.effectiveSuppressOfflinePrompts)
+        XCTAssertTrue(config.effectiveSuppressOfflineActionWarning)
+    }
+
+    func testOfflinePlaylistFollowQueuedAndRestored() async {
+        let app = AppState()
+        app.isOfflineSession = true
+        app.serverConfig.effectiveSuppressOfflineActionWarning = true
+        app.serverConfig.effectiveSuppressOfflinePrompts = false
+        app.serverConfig.url = "http://localhost:4533"
+
+        let playlist = PlaylistSummary(id: "pl-test-1", name: "Favorites Playlist")
+        XCTAssertFalse(app.isFollowed(playlist))
+
+        // Follow playlist offline
+        app.toggleFollow(playlist)
+        XCTAssertTrue(app.isFollowed(playlist))
+
+        try? await Task.sleep(for: .milliseconds(50))
+
+        if let store = app.ensureOfflineMutationStore() {
+            let mutations = await store.currentMutations()
+            XCTAssertEqual(mutations.stars["pl-test-1"]?.isStarred, true)
+            XCTAssertEqual(mutations.stars["pl-test-1"]?.kind, .playlist)
+
+            // Simulate app restart / clear local state
+            app.followedPlaylistIDs.removeAll()
+            XCTAssertFalse(app.isFollowed(playlist))
+
+            // Restore from disk mutations
+            await app.restorePendingOfflineMutations()
+            XCTAssertTrue(app.isFollowed(playlist))
+
+            // Cleanup
+            await store.clear()
+        }
     }
 }

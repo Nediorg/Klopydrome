@@ -11,21 +11,22 @@ extension AppState {
         guard isOfflineSession else { return true }
         guard !serverConfig.effectiveSuppressOfflineActionWarning else { return true }
 
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Сервер офлайн".localized
-        // swiftlint:disable:next line_length
-        alert.informativeText = "Клиент находится в офлайн-режиме. После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?".localized
+        let msg = "После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?".localized
+        alert.informativeText = msg
         alert.addButton(withTitle: "Продолжить".localized)
         let cancel = alert.addButton(withTitle: "Отмена".localized)
         cancel.keyEquivalent = "\u{1b}"
 
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Не спрашивать снова".localized
+        alert.suppressionButton?.title = "Больше не спрашивать".localized
 
         let response = alert.runModal()
         if alert.suppressionButton?.state == .on {
-            serverConfig.suppressOfflineActionWarning = true
+            serverConfig.effectiveSuppressOfflineActionWarning = true
             saveSettings()
         }
         return response == .alertFirstButtonReturn
@@ -48,7 +49,15 @@ extension AppState {
         if !mutations.stars.isEmpty {
             withMutation(keyPath: \.starOverrides) {
                 for (id, star) in mutations.stars {
-                    starOverrides[id] = star.isStarred
+                    if star.kind == .playlist {
+                        if star.isStarred {
+                            followedPlaylistIDs.insert(id)
+                        } else {
+                            followedPlaylistIDs.remove(id)
+                        }
+                    } else {
+                        starOverrides[id] = star.isStarred
+                    }
                 }
             }
         }
@@ -70,6 +79,7 @@ extension AppState {
     }
 
     func pushStarToServer(client: SubsonicClient, id: String, kind: StarKind, willStar: Bool) {
+        guard kind != .playlist else { return }
         let capturedClient = client
         Task(priority: .userInitiated) {
             do {
@@ -80,6 +90,7 @@ extension AppState {
                 case (.album, false): try await capturedClient.unstar(albumIds: [id])
                 case (.artist, true): try await capturedClient.star(artistIds: [id])
                 case (.artist, false): try await capturedClient.unstar(artistIds: [id])
+                case (.playlist, _): break
                 }
             } catch is CancellationError {
                 return
@@ -99,6 +110,22 @@ extension AppState {
         }
     }
 
+    @discardableResult
+    func queueOfflineAddToPlaylist(playlistID: String, songIDs: [String]) -> Task<Void, Never>? {
+        guard let store = ensureOfflineMutationStore() else { return nil }
+        return Task {
+            await store.recordPlaylistAdd(playlistID: playlistID, songIDs: songIDs)
+        }
+    }
+
+    @discardableResult
+    func queueOfflineCreatePlaylist(name: String, songIDs: [String], comment: String?) -> Task<Void, Never>? {
+        guard let store = ensureOfflineMutationStore() else { return nil }
+        return Task {
+            await store.recordPlaylistCreate(name: name, songIDs: songIDs, comment: comment)
+        }
+    }
+
     func pushRatingToServer(client: SubsonicClient, id: String, rating: Int) {
         let capturedClient = client
         Task(priority: .userInitiated) {
@@ -114,15 +141,117 @@ extension AppState {
         }
     }
 
+    enum PendingMutationsChoice {
+        case apply
+        case discard
+        case cancel
+    }
+
+    enum PendingMutationsContext {
+        case previousSession
+        case offlineDisabled
+    }
+
+    /// Builds a user-friendly list of categories for queued offline actions.
+    func pendingActionsSummary(for mutations: OfflineMutations) -> [String] {
+        var summary: [String] = []
+        if !mutations.playlists.isEmpty {
+            summary.append("Изменение или добавление плейлистов".localized)
+        }
+        if !mutations.stars.isEmpty {
+            summary.append("Отметки «Избранное»".localized)
+        }
+        if !mutations.ratings.isEmpty {
+            summary.append("Оценки треков".localized)
+        }
+        return summary
+    }
+
+    /// Displays an NSAlert asking the user whether to apply pending offline mutations.
+    @MainActor
+    func promptPendingMutationsConfirmation(
+        mutations: OfflineMutations,
+        context: PendingMutationsContext? = nil
+    ) -> PendingMutationsChoice {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Локальные изменения".localized
+
+        let actions = pendingActionsSummary(for: mutations)
+        let bulletList = actions.map { "• \($0)" }.joined(separator: "\n")
+        let effectiveContext = context ?? (isLaunching ? .previousSession : .offlineDisabled)
+        let intro: String
+        switch effectiveContext {
+        case .previousSession:
+            intro = "С прошлого сеанса остались локальные изменения:".localized
+        case .offlineDisabled:
+            intro = "В офлайн-режиме накопились локальные изменения:".localized
+        }
+        let question = "Применить их на сервере?".localized
+        alert.informativeText = "\(intro)\n\n\(bulletList)\n\n\(question)"
+
+        alert.addButton(withTitle: "Применить".localized)
+        alert.addButton(withTitle: "Не применять".localized)
+        let cancelButton = alert.addButton(withTitle: "Отмена".localized)
+        cancelButton.keyEquivalent = "\u{1b}"
+
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Больше не спрашивать".localized
+
+        let response = alert.runModal()
+        if alert.suppressionButton?.state == .on {
+            serverConfig.effectiveSuppressOfflinePrompts = true
+            saveSettings()
+        }
+
+        switch response {
+        case .alertFirstButtonReturn:
+            return .apply
+        case .alertSecondButtonReturn:
+            return .discard
+        default:
+            return .cancel
+        }
+    }
+
     /// Replays queued offline mutations to the server upon reconnection.
-    func flushOfflineMutations() async {
+    func flushOfflineMutations(
+        promptUser: Bool = true,
+        context: PendingMutationsContext? = nil
+    ) async {
         guard let client, let store = ensureOfflineMutationStore() else { return }
         let mutations = await store.currentMutations()
-        guard !mutations.stars.isEmpty || !mutations.ratings.isEmpty else { return }
+        guard !mutations.isEmpty else { return }
+
+        if promptUser && !serverConfig.effectiveSuppressOfflinePrompts {
+            let choice = promptPendingMutationsConfirmation(mutations: mutations, context: context)
+            switch choice {
+            case .apply:
+                break
+            case .discard:
+                await store.clear()
+                withMutation(keyPath: \.starOverrides) { starOverrides.removeAll() }
+                withMutation(keyPath: \.ratingOverrides) { ratingOverrides.removeAll() }
+                for (id, star) in mutations.stars where star.kind == .playlist {
+                    if star.isStarred {
+                        followedPlaylistIDs.remove(id)
+                    } else {
+                        followedPlaylistIDs.insert(id)
+                    }
+                }
+                return
+            case .cancel:
+                return
+            }
+        }
 
         isFlushingOfflineMutations = true
         defer { isFlushingOfflineMutations = false }
 
+        if !mutations.playlists.isEmpty {
+            await flushQueuedPlaylists(client: client, store: store, playlists: mutations.playlists)
+        }
         if !mutations.stars.isEmpty {
             await flushQueuedStars(client: client, store: store, stars: mutations.stars)
         }
@@ -130,6 +259,44 @@ extension AppState {
             await flushQueuedRatings(client: client, store: store, ratings: mutations.ratings)
         }
         try? await Task.sleep(for: .milliseconds(300))
+    }
+
+    private func flushQueuedPlaylists(
+        client: SubsonicClient,
+        store: OfflineMutationStore,
+        playlists: [QueuedPlaylistAction]
+    ) async {
+        var appliedIDs = Set<String>()
+        for action in playlists {
+            do {
+                switch action.type {
+                case .addSongs:
+                    if let playlistID = action.playlistID {
+                        try await client.updatePlaylist(id: playlistID, addSongIds: action.songIDs)
+                        appliedIDs.insert(action.id)
+                    }
+                case .create:
+                    if let name = action.playlistName {
+                        let created = try await client.createPlaylist(name: name, songIds: action.songIDs)
+                        if let comment = action.comment, !comment.isEmpty {
+                            try? await client.updatePlaylist(id: created.id, comment: comment)
+                        }
+                        appliedIDs.insert(action.id)
+                    }
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                let errDesc = String(describing: error)
+                Self.offlineMutationLog.error(
+                    "flush playlist failed for \(action.id, privacy: .public): \(errDesc, privacy: .public)"
+                )
+            }
+        }
+        if !appliedIDs.isEmpty {
+            await store.removePlaylists(ids: appliedIDs)
+            await refreshPlaylists()
+        }
     }
 
     private func flushQueuedStars(
@@ -152,6 +319,13 @@ extension AppState {
         }
         if !appliedIDs.isEmpty {
             await store.removeStars(ids: appliedIDs)
+            withMutation(keyPath: \.starOverrides) {
+                for id in appliedIDs {
+                    if let star = stars[id] {
+                        starOverrides[id] = star.isStarred
+                    }
+                }
+            }
         }
     }
 
@@ -163,6 +337,7 @@ extension AppState {
         case (.album, false): try await client.unstar(albumIds: [star.id])
         case (.artist, true): try await client.star(artistIds: [star.id])
         case (.artist, false): try await client.unstar(artistIds: [star.id])
+        case (.playlist, _): break
         }
     }
 
@@ -187,6 +362,13 @@ extension AppState {
         }
         if !appliedIDs.isEmpty {
             await store.removeRatings(ids: appliedIDs)
+            withMutation(keyPath: \.ratingOverrides) {
+                for id in appliedIDs {
+                    if let rating = ratings[id] {
+                        ratingOverrides[id] = rating.rating
+                    }
+                }
+            }
         }
     }
 

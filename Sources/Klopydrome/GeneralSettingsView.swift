@@ -69,8 +69,14 @@ struct GeneralSettingsView: View {
             .disabled(isWorkOffline)
 
             Toggle(
-                "Не спрашивать о серверных действиях".localized,
-                isOn: Bindable(app).serverConfig.suppressOfflineActionWarning.orFalse
+                "Спрашивать перед синхронизацией".localized,
+                isOn: Binding(
+                    get: { !app.serverConfig.effectiveSuppressOfflinePrompts },
+                    set: { newValue in
+                        app.serverConfig.effectiveSuppressOfflinePrompts = !newValue
+                        app.saveSettings()
+                    }
+                )
             )
 
             LabeledContent("Статус".localized) {

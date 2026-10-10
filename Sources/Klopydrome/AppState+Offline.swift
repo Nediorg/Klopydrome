@@ -83,9 +83,6 @@ extension AppState {
         let tracks = (try? await offlineRepository.fetchDownloadedTracks()) ?? []
         let songs = tracks.filter { isCached($0) }
         replaceDownloadedSongs(songs)
-        if client != nil {
-            await flushOfflineMutations()
-        }
     }
 
     var effectiveUsername: String {

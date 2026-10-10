@@ -14,9 +14,50 @@ struct QueuedRatingAction: Codable, Equatable, Sendable {
     let timestamp: Date
 }
 
+enum QueuedPlaylistActionType: String, Codable, Sendable {
+    case addSongs
+    case create
+}
+
+struct QueuedPlaylistAction: Codable, Equatable, Sendable {
+    let id: String
+    let type: QueuedPlaylistActionType
+    let playlistID: String?
+    let playlistName: String?
+    let songIDs: [String]
+    let comment: String?
+    let timestamp: Date
+}
+
 struct OfflineMutations: Codable, Equatable, Sendable {
     var stars: [String: QueuedStarAction] = [:]
     var ratings: [String: QueuedRatingAction] = [:]
+    var playlists: [QueuedPlaylistAction] = []
+
+    var isEmpty: Bool {
+        stars.isEmpty && ratings.isEmpty && playlists.isEmpty
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case stars, ratings, playlists
+    }
+
+    init(
+        stars: [String: QueuedStarAction] = [:],
+        ratings: [String: QueuedRatingAction] = [:],
+        playlists: [QueuedPlaylistAction] = []
+    ) {
+        self.stars = stars
+        self.ratings = ratings
+        self.playlists = playlists
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.stars = (try? container.decode([String: QueuedStarAction].self, forKey: .stars)) ?? [:]
+        self.ratings = (try? container.decode([String: QueuedRatingAction].self, forKey: .ratings)) ?? [:]
+        self.playlists = (try? container.decode([QueuedPlaylistAction].self, forKey: .playlists)) ?? []
+    }
 }
 
 actor OfflineMutationStore {
@@ -84,13 +125,46 @@ actor OfflineMutationStore {
         persist()
     }
 
+    func recordPlaylistAdd(playlistID: String, songIDs: [String]) {
+        let action = QueuedPlaylistAction(
+            id: UUID().uuidString,
+            type: .addSongs,
+            playlistID: playlistID,
+            playlistName: nil,
+            songIDs: songIDs,
+            comment: nil,
+            timestamp: Date()
+        )
+        mutations.playlists.append(action)
+        persist()
+    }
+
+    func recordPlaylistCreate(name: String, songIDs: [String], comment: String?) {
+        let action = QueuedPlaylistAction(
+            id: UUID().uuidString,
+            type: .create,
+            playlistID: nil,
+            playlistName: name,
+            songIDs: songIDs,
+            comment: comment,
+            timestamp: Date()
+        )
+        mutations.playlists.append(action)
+        persist()
+    }
+
+    func removePlaylists(ids: Set<String>) {
+        mutations.playlists.removeAll { ids.contains($0.id) }
+        persist()
+    }
+
     func clear() {
         mutations = OfflineMutations()
         try? FileManager.default.removeItem(at: fileURL)
     }
 
     private func persist() {
-        if mutations.stars.isEmpty && mutations.ratings.isEmpty {
+        if mutations.isEmpty {
             try? FileManager.default.removeItem(at: fileURL)
             return
         }
