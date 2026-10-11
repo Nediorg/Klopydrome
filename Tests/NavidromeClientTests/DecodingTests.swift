@@ -223,4 +223,19 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(shares[0].entry?.count, 1)
         XCTAssertEqual(shares[0].entry?.first?.title, "Song Title")
     }
+
+    func testSimilarSongs2Decoding() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,
+          "similarSongs2":{"song":[
+            {"id":"s2","title":"Similar Song","artist":"Similar Artist","album":"Similar Album","duration":180}
+          ]}}}
+        """
+        let songs = try decode(json).similarSongs2?.song ?? []
+        XCTAssertEqual(songs.count, 1)
+        XCTAssertEqual(songs[0].id, "s2")
+        XCTAssertEqual(songs[0].title, "Similar Song")
+        XCTAssertEqual(songs[0].artist, "Similar Artist")
+        XCTAssertEqual(songs[0].duration, 180)
+    }
 }

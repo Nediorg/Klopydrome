@@ -11,6 +11,8 @@ struct AlbumDetailView: View {
     @Environment(AppState.self) private var app
 
     @State private var detail: AlbumDetail?
+    @State private var albumInfo: AlbumInfoPayload?
+    @State private var isNotesExpanded = false
     @State private var loading = true
     @State private var isSyncing = false
     @State private var artistHovered = false
@@ -37,6 +39,9 @@ struct AlbumDetailView: View {
                         inlineErrorNotice(loadError)
                     }
                     trackList(displayedDetail)
+                }
+                if let notes = albumInfo?.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    albumNotesSection(notes)
                 }
                 if let artistId = displayedDetail.artistId ?? album.artistId,
                    let name = displayedDetail.artist ?? album.artist, !artistId.isEmpty {
@@ -416,9 +421,12 @@ extension AlbumDetailView {
         }
 
         do {
-            let loadedDetail = try await client.getAlbum(id: albumID)
+            async let albumTask = client.getAlbum(id: albumID)
+            async let infoTask: AlbumInfoPayload? = try? await client.getAlbumInfo2(id: albumID)
+            let (loadedDetail, loadedInfo) = await (try albumTask, infoTask)
             guard !Task.isCancelled else { return }
             detail = loadedDetail
+            albumInfo = loadedInfo
             await app.persistAlbumDetail(loadedDetail)
             await app.persistOfflineAlbumDetail(loadedDetail)
         } catch {
@@ -428,5 +436,52 @@ extension AlbumDetailView {
             }
             loadError = error.localizedDescription
         }
+    }
+
+    @ViewBuilder
+    private func albumNotesSection(_ rawNotes: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Об альбоме".localized)
+                .font(.title3.bold())
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(cleanNotes(rawNotes))
+                    .font(.callout)
+                    .foregroundStyle(AMColor.secondaryText)
+                    .lineSpacing(3)
+                    .lineLimit(isNotesExpanded ? nil : 4)
+                    .textSelection(.enabled)
+
+                if rawNotes.count > 220 {
+                    Button(isNotesExpanded ? "Меньше".localized : "Подробнее".localized) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isNotesExpanded.toggle()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func cleanNotes(_ raw: String) -> LocalizedStringKey {
+        var text = raw
+        if let lastFm = albumInfo?.lastFmUrl, !lastFm.isEmpty {
+            text = text.replacingOccurrences(
+                of: "<a href=\"[^\"]+\">Read more on Last.fm</a>",
+                with: "[Read more on Last.fm](\(lastFm))",
+                options: .regularExpression
+            )
+            text = text.replacingOccurrences(
+                of: "Read more on Last.fm",
+                with: "[Read more on Last.fm](\(lastFm))"
+            )
+        }
+        text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return LocalizedStringKey(text)
     }
 }

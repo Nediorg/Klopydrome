@@ -103,6 +103,9 @@ struct ArtistDetailView: View {
                             if !appearsOn.isEmpty {
                                 appearsOnSection()
                             }
+                            if let similar = artistInfo?.similarArtist, !similar.isEmpty {
+                                similarArtistsSection(similar)
+                            }
                         }
                         .padding(.horizontal, 28)
                         .padding(.bottom, 24)
@@ -151,6 +154,43 @@ struct ArtistDetailView: View {
                             AlbumCard(album: album, width: 150, showsYear: true, reservesTitleLines: true)
                         }
                         .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func similarArtistsSection(_ similar: [Artist]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Похожие исполнители".localized)
+                .font(.title2.bold())
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 18) {
+                    ForEach(similar) { artist in
+                        Button {
+                            app.openArtistInLibrary(artist)
+                        } label: {
+                            VStack(spacing: 8) {
+                                CircularArtistArt(
+                                    name: artist.name,
+                                    imageURL: artist.artistImageUrl,
+                                    coverArt: artist.coverArt ?? app.coverArtForArtist(artist),
+                                    size: 110
+                                )
+                                Text(artist.name)
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.center)
+                                    .frame(width: 110)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            ArtistContextMenuItems(artist: artist)
+                        }
                     }
                 }
                 .padding(.vertical, 8)

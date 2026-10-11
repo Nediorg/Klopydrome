@@ -38,6 +38,8 @@ public struct SubsonicEnvelope: Decodable {
     public let artistInfo: ArtistInfoPayload?
     public let artistInfo2: ArtistInfoPayload?
     public let topSongs: SongListPayload?
+    public let similarSongs: SongListPayload?
+    public let similarSongs2: SongListPayload?
     public let scanStatus: ScanStatus?
     public let shares: SharesPayload?
 

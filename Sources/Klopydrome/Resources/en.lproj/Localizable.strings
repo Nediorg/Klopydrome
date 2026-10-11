@@ -975,3 +975,9 @@
 "Часто слушаемые" = "Most Played";
 "Любимые альбомы" = "Favorite Albums";
 "Повторить попытку" = "Retry";
+
+/* About album and similar artists */
+"Об альбоме" = "About Album";
+"Похожие исполнители" = "Similar Artists";
+"Подробнее" = "More";
+"Меньше" = "Less";

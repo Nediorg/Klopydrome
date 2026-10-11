@@ -43,6 +43,15 @@ public extension SubsonicClient {
         return envelope.topSongs?.song ?? []
     }
 
+    func getSimilarSongs2(id: String, count: Int = 50) async throws -> [SubsonicSong] {
+        let params = [
+            URLQueryItem(name: "id", value: id),
+            URLQueryItem(name: "count", value: String(count))
+        ]
+        let envelope = try await requestEnvelope(endpoint: "getSimilarSongs2", params: params)
+        return envelope.similarSongs2?.song ?? envelope.similarSongs?.song ?? []
+    }
+
     func getAlbum(id: String) async throws -> AlbumDetail {
         let params = [URLQueryItem(name: "id", value: id)]
         guard let album = try await requestEnvelope(endpoint: "getAlbum", params: params).album else {

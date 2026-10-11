@@ -284,6 +284,20 @@ final class AppState {
 
     // MARK: Connection
 
+    private func pingWithTimeout(client: SubsonicClient) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await client.ping()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 12_000_000_000)
+                throw URLError(.timedOut)
+            }
+            try await group.next()
+            group.cancelAll()
+        }
+    }
+
     func connect(url: String, username: String, password: String,
                  authMode: AuthMode, cacheEnabled: Bool? = nil, allowInsecureHTTP: Bool = false) async throws {
         isConnecting = true
@@ -293,17 +307,7 @@ final class AppState {
             let config = SubsonicConfig(baseURL: base, username: username,
                                         password: password, authMode: authMode)
             let client = SubsonicClient(config: config)
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    try await client.ping()
-                }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: 12_000_000_000)
-                    throw URLError(.timedOut)
-                }
-                try await group.next()
-                group.cancelAll()
-            }
+            try await pingWithTimeout(client: client)
 
             var updatedConfig = serverConfig
             updatedConfig.url = url
@@ -457,24 +461,25 @@ final class AppState {
     }
 
     /// Emulates a radio "station" for a song: fetches the full track list of
-    /// the song's album and starts playing it from the current track, so it
-    /// behaves like continuous similar-music radio. Falls back to just playing
-    /// the song solo when it has no album.
+    /// Starts a radio station seeded by the given song using server-side similarity.
+    /// Fetches similar tracks via `getSimilarSongs2` and queues them behind the seed track.
     func playStation(from song: SubsonicSong) {
-        guard let client, let albumId = song.albumId else {
+        guard let client else {
             play([song])
             return
         }
         Task {
-            let songs = (try? await client.getAlbum(id: albumId))?.song ?? []
-            let fallback: [SubsonicSong] = [song]
-            let list = songs.isEmpty ? fallback : songs
+            var similar = (try? await client.getSimilarSongs2(id: song.id, count: 50)) ?? []
+            if similar.isEmpty, let artistId = song.artistId, !artistId.isEmpty {
+                similar = (try? await client.getTopSongs(artistId: artistId, count: 50)) ?? []
+            }
+            if similar.isEmpty, let albumId = song.albumId {
+                similar = (try? await client.getAlbum(id: albumId))?.song ?? []
+            }
+            var stationQueue = [song]
+            stationQueue.append(contentsOf: similar.filter { $0.id != song.id })
             await MainActor.run {
-                if let index = list.firstIndex(where: { $0.id == song.id }) {
-                    player.play(list, startAt: index)
-                } else {
-                    play(list)
-                }
+                player.play(stationQueue, startAt: 0)
             }
         }
     }
@@ -513,7 +518,7 @@ final class AppState {
     }
 
     /// Persists the current play queue (songs + current id + position) to the
-    /// server so it can be restored on the next launch.
+    /// server so it can be restored on the next launch. Position is saved in ms.
     func saveQueueToServer() {
         guard queuePersistenceEnabled, let client,
               !player.queue.isEmpty else { return }
@@ -522,7 +527,7 @@ final class AppState {
             try? await client.savePlayQueue(
                 songIds: ids,
                 currentId: player.currentSong?.id,
-                position: player.currentTime
+                position: player.currentTime * 1000.0
             )
         }
     }
@@ -532,20 +537,25 @@ final class AppState {
         guard queuePersistenceEnabled, let client else { return }
         guard let queue = try? await client.getPlayQueue(),
               let entries = queue.entry, !entries.isEmpty else { return }
-        var restored = entries
+        let restored = entries
+        let targetIndex: Int
         if let current = queue.current, let index = restored.firstIndex(where: { $0.id == current }) {
-            let song = restored.remove(at: index)
-            restored.insert(song, at: 0)
+            targetIndex = index
+        } else {
+            targetIndex = 0
         }
         await MainActor.run {
             let wasLoaded = player.hasLoadedItem
             let previousID = player.currentSong?.id
             player.queue = restored
-            player.currentIndex = 0
+            player.currentIndex = targetIndex
             // Load the restored track into AVPlayer so Play actually starts
             // after a fresh relaunch — but stay paused (no surprise audio).
             if !wasLoaded || previousID != player.currentSong?.id {
                 player.startCurrent(autoPlay: false)
+                if let posMs = queue.position, posMs > 0 {
+                    player.seek(to: Double(posMs) / 1000.0)
+                }
                 player.pause()
             }
             saveQueueToServer()
