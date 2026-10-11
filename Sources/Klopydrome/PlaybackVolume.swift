@@ -1,17 +1,22 @@
 import Foundation
 
 /// Keeps the user-facing 0...1 volume control consistent across AVFoundation
-/// and libmpv. The lifted low end leaves room for quiet listening without a
-/// hidden mute threshold near the first few slider percent.
+/// and libmpv with a natural non-linear psychoacoustic audio taper (cubic curve).
+///
+/// Human loudness perception is logarithmic (Weber-Fechner law). A cubic curve
+/// provides generous physical resolution in the lower slider range (0...30%),
+/// allowing users to comfortably dial in quiet and late-night listening levels
+/// without abrupt drop-offs or loud initial jumps.
 enum PlaybackVolume {
-    private static let quietRangeLift: Float = 0.15
+    private static let curveExponent: Float = 3.0
 
-    /// Converts the slider position into linear output gain. Only an explicit
-    /// zero mutes; 5% remains about -40 dB instead of dropping near silence.
+    /// Converts the slider position (0...1) into linear output gain using a cubic
+    /// audio taper. 50% slider corresponds to ~-18 dB (comfortable reference level),
+    /// while 10%–30% slider gives precise, fine-grained control over quiet listening.
     static func outputGain(for control: Float) -> Float {
         let normalized = min(max(control, 0), 1)
         guard normalized > 0 else { return 0 }
-        return normalized * (quietRangeLift + (1 - quietRangeLift) * normalized)
+        return pow(normalized, curveExponent)
     }
 
     /// libmpv applies a cubic curve to its `volume` property internally. Feed it

@@ -230,16 +230,7 @@ extension AppState {
             case .apply:
                 break
             case .discard:
-                await store.clear()
-                withMutation(keyPath: \.starOverrides) { starOverrides.removeAll() }
-                withMutation(keyPath: \.ratingOverrides) { ratingOverrides.removeAll() }
-                for (id, star) in mutations.stars where star.kind == .playlist {
-                    if star.isStarred {
-                        followedPlaylistIDs.remove(id)
-                    } else {
-                        followedPlaylistIDs.insert(id)
-                    }
-                }
+                await discardPendingMutations(store: store, mutations: mutations)
                 return
             case .cancel:
                 return
@@ -259,6 +250,22 @@ extension AppState {
             await flushQueuedRatings(client: client, store: store, ratings: mutations.ratings)
         }
         try? await Task.sleep(for: .milliseconds(300))
+    }
+
+    private func discardPendingMutations(
+        store: OfflineMutationStore,
+        mutations: OfflineMutations
+    ) async {
+        await store.clear()
+        withMutation(keyPath: \.starOverrides) { starOverrides.removeAll() }
+        withMutation(keyPath: \.ratingOverrides) { ratingOverrides.removeAll() }
+        for (id, star) in mutations.stars where star.kind == .playlist {
+            if star.isStarred {
+                followedPlaylistIDs.remove(id)
+            } else {
+                followedPlaylistIDs.insert(id)
+            }
+        }
     }
 
     private func flushQueuedPlaylists(
