@@ -10,6 +10,7 @@ struct SmartPlaylistEditorView: View {
     /// `playlist`; when set, Save replaces the server's rules (PUT) and
     /// Save-as creates a new server playlist (POST).
     var server: ServerSmartPlaylist?
+    var onDismiss: (() -> Void)?
 
     @Environment(AppState.self) var app
     @Environment(\.dismiss) var dismiss
@@ -52,9 +53,10 @@ struct SmartPlaylistEditorView: View {
     /// initial model is authoritative, rather than briefly showing an empty tree.
     @State var isLoadingInitialRules: Bool
 
-    init(playlist: SmartPlaylist?, server: ServerSmartPlaylist? = nil) {
+    init(playlist: SmartPlaylist?, server: ServerSmartPlaylist? = nil, onDismiss: (() -> Void)? = nil) {
         self.playlist = playlist
         self.server = server
+        self.onDismiss = onDismiss
         _isLoadingInitialRules = State(initialValue: server != nil)
     }
 
@@ -77,10 +79,12 @@ struct SmartPlaylistEditorView: View {
     /// A fresh local playlist (no target). Server targets edit in place.
     private var isNewLocal: Bool { playlist == nil && server == nil }
     private var loadID: String { server?.id ?? playlist?.id ?? "new" }
-    private static let editorWidth: CGFloat = 960
-    private static let editorHeight: CGFloat = 640
+    private static let minEditorWidth: CGFloat = 720
+    private static let maxEditorWidth: CGFloat = 960
+    private static let minEditorHeight: CGFloat = 480
+    private static let maxEditorHeight: CGFloat = 640
 
-    private var hasUnsavedChanges: Bool {
+    var hasUnsavedChanges: Bool {
         Self.shouldConfirmDiscard(
             name: name,
             query: visualQuery(),
@@ -118,7 +122,19 @@ struct SmartPlaylistEditorView: View {
                 }
             }
         }
-        .frame(width: Self.editorWidth, height: Self.editorHeight)
+        .frame(
+            minWidth: Self.minEditorWidth,
+            maxWidth: Self.maxEditorWidth,
+            minHeight: Self.minEditorHeight,
+            maxHeight: Self.maxEditorHeight
+        )
+        .onInWindowModalAttemptDismiss {
+            if hasUnsavedChanges {
+                confirmingDiscard = true
+            } else {
+                dismissModal()
+            }
+        }
         .task(id: loadID) { await load() }
         .onReceive(model.objectWillChange) {
             hasChanges = true
@@ -132,7 +148,7 @@ struct SmartPlaylistEditorView: View {
             Button("Отмена", role: .cancel) {}
         }
         .confirmationDialog("Отменить изменения?", isPresented: $confirmingDiscard) {
-            Button("Отменить изменения", role: .destructive) { dismiss() }
+            Button("Отменить изменения", role: .destructive) { dismissModal() }
             Button("Остаться", role: .cancel) {}
         }
     }
@@ -261,7 +277,7 @@ struct SmartPlaylistEditorView: View {
                 if hasUnsavedChanges {
                     confirmingDiscard = true
                 } else {
-                    dismiss()
+                    dismissModal()
                 }
             }
             if !isNewLocal {
@@ -280,56 +296,5 @@ struct SmartPlaylistEditorView: View {
     var isLoading: Bool {
         if case .loading = previewState { return true }
         return false
-    }
-
-    private var previewContent: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("Просмотр".localized)
-                    .font(.headline)
-                if case .loaded(let songs) = previewState, !songs.isEmpty {
-                    Text(L10n.format("format.smartPlaylist.songs", songs.count))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(12)
-            Divider()
-            switch previewState {
-            case .idle, .loading:
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .failed(let message):
-                ContentUnavailableView {
-                    Label("Не удалось загрузить", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Повторить") { preview() }
-                }
-            case .loaded(let songs) where songs.isEmpty:
-                ContentUnavailableView {
-                    Label("Нет совпадений", systemImage: "music.note.list")
-                } description: {
-                    Text("Ни одна песня не подходит под текущие правила.".localized)
-                }
-            case .loaded(let songs):
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                            QueueTrackRow(
-                                song: song,
-                                isCurrent: app.player.currentSong?.id == song.id
-                            ) {
-                                app.play(songs, at: index)
-                            }
-                            Divider().padding(.leading, 56)
-                        }
-                    }
-                }
-            }
-        }
-        .frame(width: 520, height: 420)
     }
 }

@@ -26,19 +26,51 @@ extension View {
     }
 }
 
+/// An Equatable action wrapper so dismissal interceptors can be propagated via SwiftUI preferences.
+struct InWindowModalAttemptDismissAction: Equatable {
+    let id: String
+    let action: () -> Void
+
+    init(id: String = UUID().uuidString, action: @escaping () -> Void) {
+        self.id = id
+        self.action = action
+    }
+
+    static func == (lhs: InWindowModalAttemptDismissAction, rhs: InWindowModalAttemptDismissAction) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+/// Preference key enabling content inside an in-window modal to intercept
+/// dismissal attempts (e.g. to prompt the user before discarding unsaved edits).
+struct InWindowModalAttemptDismissKey: PreferenceKey {
+    static var defaultValue: InWindowModalAttemptDismissAction?
+    static func reduce(
+        value: inout InWindowModalAttemptDismissAction?,
+        nextValue: () -> InWindowModalAttemptDismissAction?
+    ) {
+        value = nextValue() ?? value
+    }
+}
+
 /// A centered in-window modal card presentation with an interactive dimmed backdrop.
 ///
 /// Backdrop strictly transitions with `.opacity` and never scales.
 /// Card transitions with `.opacity.combined(with: .scale(scale: 0.96))`.
 struct InWindowModalOverlay<Content: View>: View {
     @Binding var isPresented: Bool
+    var onAttemptDismiss: (() -> Void)?
     @ViewBuilder let content: () -> Content
+
+    @State private var interceptDismiss: InWindowModalAttemptDismissAction?
 
     init(
         isPresented: Binding<Bool>,
+        onAttemptDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._isPresented = isPresented
+        self.onAttemptDismiss = onAttemptDismiss
         self.content = content
     }
 
@@ -49,12 +81,15 @@ struct InWindowModalOverlay<Content: View>: View {
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        dismiss()
+                        attemptDismiss()
                     }
                     .transition(.opacity)
 
                 content()
                     .inWindowModalCardStyle()
+                    .onPreferenceChange(InWindowModalAttemptDismissKey.self) { action in
+                        interceptDismiss = action
+                    }
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
@@ -62,16 +97,26 @@ struct InWindowModalOverlay<Content: View>: View {
         .allowsHitTesting(isPresented)
         .onKeyPress(.escape) {
             guard isPresented else { return .ignored }
-            dismiss()
+            attemptDismiss()
             return .handled
         }
         .background {
             if isPresented {
-                Button("") { dismiss() }
+                Button("") { attemptDismiss() }
                     .keyboardShortcut(.cancelAction)
                     .opacity(0)
                     .allowsHitTesting(false)
             }
+        }
+    }
+
+    private func attemptDismiss() {
+        if let onAttemptDismiss {
+            onAttemptDismiss()
+        } else if let interceptDismiss {
+            interceptDismiss.action()
+        } else {
+            dismiss()
         }
     }
 
@@ -88,15 +133,19 @@ struct InWindowModalOverlay<Content: View>: View {
 /// the card content does not vanish or encounter `nil` state before it finishes fading and scaling down.
 struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
     @Binding var item: Item?
+    var onAttemptDismiss: (() -> Void)?
     @ViewBuilder let content: (Item) -> Content
 
     @State private var retainedItem: Item?
+    @State private var interceptDismiss: InWindowModalAttemptDismissAction?
 
     init(
         item: Binding<Item?>,
+        onAttemptDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping (Item) -> Content
     ) {
         self._item = item
+        self.onAttemptDismiss = onAttemptDismiss
         self.content = content
     }
 
@@ -107,12 +156,15 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        dismiss()
+                        attemptDismiss()
                     }
                     .transition(.opacity)
 
                 content(displayItem)
                     .inWindowModalCardStyle()
+                    .onPreferenceChange(InWindowModalAttemptDismissKey.self) { action in
+                        interceptDismiss = action
+                    }
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
@@ -120,12 +172,12 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
         .allowsHitTesting(retainedItem != nil)
         .onKeyPress(.escape) {
             guard retainedItem != nil else { return .ignored }
-            dismiss()
+            attemptDismiss()
             return .handled
         }
         .background {
             if retainedItem != nil {
-                Button("") { dismiss() }
+                Button("") { attemptDismiss() }
                     .keyboardShortcut(.cancelAction)
                     .opacity(0)
                     .allowsHitTesting(false)
@@ -147,6 +199,16 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
         }
     }
 
+    private func attemptDismiss() {
+        if let onAttemptDismiss {
+            onAttemptDismiss()
+        } else if let interceptDismiss {
+            interceptDismiss.action()
+        } else {
+            dismiss()
+        }
+    }
+
     private func dismiss() {
         withAnimation(.snappy(duration: 0.2)) {
             item = nil
@@ -158,13 +220,23 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
 // MARK: - View Extension API
 
 extension View {
+    /// Allows a view presented inside an in-window modal to intercept backdrop taps
+    /// and Escape key presses (e.g. confirming discard of unsaved changes).
+    func onInWindowModalAttemptDismiss(id: String = "default", _ action: @escaping () -> Void) -> some View {
+        preference(
+            key: InWindowModalAttemptDismissKey.self,
+            value: InWindowModalAttemptDismissAction(id: id, action: action)
+        )
+    }
+
     /// Presents an in-window modal card overlay using a Boolean binding.
     func inWindowModal<Content: View>(
         isPresented: Binding<Bool>,
+        onAttemptDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         overlay {
-            InWindowModalOverlay(isPresented: isPresented, content: content)
+            InWindowModalOverlay(isPresented: isPresented, onAttemptDismiss: onAttemptDismiss, content: content)
         }
     }
 
@@ -172,10 +244,11 @@ extension View {
     /// retaining the item during dismissal animations.
     func inWindowModal<Item: Identifiable, Content: View>(
         item: Binding<Item?>,
+        onAttemptDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping (Item) -> Content
     ) -> some View {
         overlay {
-            InWindowModalItemOverlay(item: item, content: content)
+            InWindowModalItemOverlay(item: item, onAttemptDismiss: onAttemptDismiss, content: content)
         }
     }
 }

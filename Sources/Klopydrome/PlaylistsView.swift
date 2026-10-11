@@ -6,7 +6,6 @@ struct PlaylistsView: View {
 
     private var playlists: [PlaylistSummary] { app.library.playlists }
     @State private var loading = true
-    @State private var activeSheet: ActiveSheet?
     @State private var smartRenamePresented = false
     @State private var smartRenameName: String = ""
     @State private var smartRenameID: String = ""
@@ -17,25 +16,6 @@ struct PlaylistsView: View {
     @State private var displayedPlaylistCount = 100
     private var displayedPlaylists: [PlaylistSummary] {
         Array(playlists.prefix(displayedPlaylistCount))
-    }
-
-    /// Presentations owned by this view. Merged into one `.sheet(item:)`
-    /// because SwiftUI only honours the last `.sheet` modifier on a view.
-    enum ActiveSheet: Identifiable {
-        case edit(PlaylistSummary)
-        case smart(SmartPlaylist?)
-        case serverSmart(ServerSmartPlaylist)
-
-        var id: String {
-            switch self {
-            case .edit(let playlist):
-                return "edit-\(playlist.id)"
-            case .smart(let smart):
-                return "smart-\(smart?.id ?? "new")"
-            case .serverSmart(let server):
-                return "server-smart-\(server.id)"
-            }
-        }
     }
 
     var body: some View {
@@ -73,7 +53,7 @@ struct PlaylistsView: View {
                                     PlaylistContextMenuItems(playlist: playlist) {
                                         rename(playlist)
                                     } onEditRules: {
-                                        activeSheet = .serverSmart(ServerSmartPlaylist(summary: playlist))
+                                        app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: playlist))
                                     } onDelete: {
                                         confirmingDeleteID = playlist.id
                                     }
@@ -121,16 +101,6 @@ struct PlaylistsView: View {
                 confirmingDeleteID = nil
             }
             Button("Отмена", role: .cancel) { confirmingDeleteID = nil }
-        }
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .edit(let playlist):
-                CreatePlaylistModal(songs: [], existing: playlist)
-            case .smart(let target):
-                SmartPlaylistEditorView(playlist: target)
-            case .serverSmart(let target):
-                SmartPlaylistEditorView(playlist: nil, server: target)
-            }
         }
         .alert("Переименовать умный плейлист", isPresented: $smartRenamePresented) {
             TextField("Название плейлиста", text: $smartRenameName)
@@ -191,7 +161,7 @@ struct PlaylistsView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         SmartPlaylistContextMenuItems(playlist: smart) {
-                            activeSheet = .smart(smart)
+                            app.openSmartPlaylistEditor(playlist: smart)
                         } onRename: {
                             smartRenameID = smart.id
                             smartRenameName = smart.name
@@ -232,7 +202,7 @@ struct PlaylistsView: View {
     }
 
     private func rename(_ playlist: PlaylistSummary) {
-        activeSheet = .edit(playlist)
+        app.openCreatePlaylist(existing: playlist)
     }
 
     private func smartRename(_ id: String, _ name: String) {

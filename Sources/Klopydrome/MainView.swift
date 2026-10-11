@@ -46,11 +46,32 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miniPlayerDidClose)) { _ in
             isMiniPlayerVisible = false
         }
-        .sheet(isPresented: Binding(
+        .inWindowModal(isPresented: Binding(
             get: { app.isCreatingPlaylist },
             set: { app.isCreatingPlaylist = $0 }
         )) {
-            CreatePlaylistModal(songs: app.creatingPlaylistSongs)
+            CreatePlaylistModal(
+                songs: app.creatingPlaylistSongs,
+                existing: app.editingPlaylistTarget,
+                onSaved: {
+                    app.onPlaylistModalSaved?()
+                },
+                onDismiss: {
+                    app.isCreatingPlaylist = false
+                }
+            )
+        }
+        .inWindowModal(item: Binding(
+            get: { app.editingSmartPlaylist },
+            set: { app.editingSmartPlaylist = $0 }
+        )) { target in
+            SmartPlaylistEditorView(
+                playlist: target.playlist,
+                server: target.server,
+                onDismiss: {
+                    app.editingSmartPlaylist = nil
+                }
+            )
         }
         .sheet(item: Binding(
             get: { app.shareTarget },

@@ -78,12 +78,34 @@ final class AppState {
     /// UI never flashes LoginView before the app knows whether to auto-connect.
     var isLaunching = true
 
-    /// Present the "new playlist" sheet at the app root. Hoisting this here
-    /// (instead of inside `AddToPlaylistMenu`) is what makes the modal actually
-    /// appear: a `.sheet` attached to a menu's transient view tree is torn down
-    /// as soon as the menu closes, so the presentation never happens.
+    /// Present the "new / edit playlist" modal at the app root via inWindowModal.
     var isCreatingPlaylist = false
     var creatingPlaylistSongs: [SubsonicSong] = []
+    var editingPlaylistTarget: PlaylistSummary?
+    var onPlaylistModalSaved: (() -> Void)?
+
+    /// Present the smart playlist editor modal at the app root via inWindowModal.
+    var editingSmartPlaylist: SmartPlaylistEditorTarget?
+
+    /// Opens the playlist creation / edit in-window modal at the app root.
+    func openCreatePlaylist(
+        songs: [SubsonicSong] = [],
+        existing: PlaylistSummary? = nil,
+        onSaved: (() -> Void)? = nil
+    ) {
+        creatingPlaylistSongs = songs
+        editingPlaylistTarget = existing
+        onPlaylistModalSaved = onSaved
+        isCreatingPlaylist = true
+    }
+
+    /// Opens the smart playlist rule editor in-window modal at the app root.
+    func openSmartPlaylistEditor(
+        playlist: SmartPlaylist? = nil,
+        server: ServerSmartPlaylist? = nil
+    ) {
+        editingSmartPlaylist = SmartPlaylistEditorTarget(playlist: playlist, server: server)
+    }
 
     /// Present the "share" sheet at the app root. Hoisting this here (instead of
     /// inside a context-menu component) is what makes the modal actually appear:

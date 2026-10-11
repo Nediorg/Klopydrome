@@ -63,3 +63,66 @@ enum SmartSort: String, CaseIterable {
         json.first == "-" || json.first == "+" ? String(json.dropFirst()) : json
     }
 }
+
+// MARK: - Preview popover & dismissal
+
+extension SmartPlaylistEditorView {
+    var previewContent: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Просмотр".localized)
+                    .font(.headline)
+                if case .loaded(let songs) = previewState, !songs.isEmpty {
+                    Text(L10n.format("format.smartPlaylist.songs", songs.count))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(12)
+            Divider()
+            switch previewState {
+            case .idle, .loading:
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed(let message):
+                ContentUnavailableView {
+                    Label("Не удалось загрузить", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Повторить") { preview() }
+                }
+            case .loaded(let songs) where songs.isEmpty:
+                ContentUnavailableView {
+                    Label("Нет совпадений", systemImage: "music.note.list")
+                } description: {
+                    Text("Ни одна песня не подходит под текущие правила.".localized)
+                }
+            case .loaded(let songs):
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                            QueueTrackRow(
+                                song: song,
+                                isCurrent: app.player.currentSong?.id == song.id
+                            ) {
+                                app.play(songs, at: index)
+                            }
+                            Divider().padding(.leading, 56)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: 520, height: 420)
+    }
+
+    func dismissModal() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            dismiss()
+        }
+    }
+}

@@ -5,19 +5,6 @@ struct PlaylistDetailView: View {
     let playlist: PlaylistSummary
     @Environment(AppState.self) var app
 
-    enum ActiveEditor: Identifiable {
-        case playlist(PlaylistSummary)
-        case serverRules(ServerSmartPlaylist)
-
-        var id: String {
-            switch self {
-            case .playlist(let playlist): return "playlist-\(playlist.id)"
-            case .serverRules(let playlist): return "server-rules-\(playlist.id)"
-            }
-        }
-    }
-
-    @State var activeEditor: ActiveEditor?
     @State var confirmingDelete = false
     @State var isPreparingPlayback = false
 
@@ -137,17 +124,6 @@ struct PlaylistDetailView: View {
         }
         .onChange(of: filterText) { _, _ in
             displayedCount = min(filteredRows.count, pageSize)
-        }
-        .sheet(item: $activeEditor) { editor in
-            switch editor {
-            case .playlist(let summary):
-                CreatePlaylistModal(songs: [], existing: summary) {
-                    app.invalidatePlaylistDetail(for: playlist.id)
-                    app.loadPlaylistIfNeeded(playlist, forceReload: true)
-                }
-            case .serverRules(let server):
-                SmartPlaylistEditorView(playlist: nil, server: server)
-            }
         }
         .confirmationDialog(
             L10n.format("format.playlist.delete.confirmation", playlist.displayName),

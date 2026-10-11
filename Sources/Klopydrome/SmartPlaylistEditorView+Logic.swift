@@ -233,7 +233,7 @@ extension SmartPlaylistEditorView {
         smartPlaylist.minRating = nil
         app.upsertSmartPlaylist(smartPlaylist)
         hasChanges = false
-        dismiss()
+        dismissModal()
     }
 
     /// Save and replace: PUT the edited rules back to the server playlist.
@@ -249,7 +249,7 @@ extension SmartPlaylistEditorView {
                                               isPublic: target.isPublic,
                                               comment: target.comment, query: query)
                 hasChanges = false
-                dismiss()
+                dismissModal()
             } catch {
                 jsonError = error.localizedDescription
             }
@@ -280,7 +280,7 @@ extension SmartPlaylistEditorView {
         app.upsertSmartPlaylist(copy)
         app.showPlaylistsGrid()
         hasChanges = false
-        dismiss()
+        dismissModal()
     }
 
     func saveAsServer(_ target: ServerSmartPlaylist, name: String, query: SmartQuery) {
@@ -291,7 +291,7 @@ extension SmartPlaylistEditorView {
                     app.showServerPlaylist(summary)
                 }
                 hasChanges = false
-                dismiss()
+                dismissModal()
             } catch {
                 jsonError = error.localizedDescription
             }

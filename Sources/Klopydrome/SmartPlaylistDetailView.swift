@@ -13,7 +13,6 @@ struct SmartPlaylistDetailView: View {
     }
 
     @State private var state: LoadState = .loading
-    @State private var editing = false
     @State private var confirmingDelete = false
     @State private var selection = SongRowSelection()
 
@@ -41,7 +40,7 @@ struct SmartPlaylistDetailView: View {
                 } description: {
                     Text("Пока нет песен, подходящих под правила этого умного плейлиста.".localized)
                 } actions: {
-                    Button("Изменить правила") { editing = true }
+                    Button("Изменить правила") { app.openSmartPlaylistEditor(playlist: playlist) }
                 }
             case .loaded:
                 ScrollView {
@@ -57,9 +56,6 @@ struct SmartPlaylistDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await load() }
-        .sheet(isPresented: $editing) {
-            SmartPlaylistEditorView(playlist: playlist)
-        }
         .confirmationDialog("Удалить умный плейлист?", isPresented: $confirmingDelete) {
             Button("Удалить", role: .destructive) { delete() }
             Button("Отмена", role: .cancel) {}
@@ -92,7 +88,7 @@ struct SmartPlaylistDetailView: View {
                         .truncationMode(.tail)
                 }
                 Button {
-                    editing = true
+                    app.openSmartPlaylistEditor(playlist: playlist)
                 } label: {
                     Label("Редактировать правила".localized, systemImage: "slider.horizontal.3")
                         .font(.callout)
@@ -122,9 +118,9 @@ struct SmartPlaylistDetailView: View {
             Spacer()
             RoundEllipsisMenu {
                 SmartPlaylistContextMenuItems(playlist: playlist) {
-                    editing = true
+                    app.openSmartPlaylistEditor(playlist: playlist)
                 } onRename: {
-                    editing = true
+                    app.openSmartPlaylistEditor(playlist: playlist)
                 } onDelete: {
                     confirmingDelete = true
                 }

@@ -130,10 +130,15 @@ extension PlaylistDetailView {
                 RoundEllipsisMenu {
                     PlaylistContextMenuItems(
                         playlist: detail.summary,
-                        onRename: { activeEditor = .playlist(detail.summary) },
+                        onRename: {
+                            app.openCreatePlaylist(existing: detail.summary) {
+                                app.invalidatePlaylistDetail(for: playlist.id)
+                                app.loadPlaylistIfNeeded(playlist, forceReload: true)
+                            }
+                        },
                         onEditRules: {
                             guard detail.isSmart else { return }
-                            activeEditor = .serverRules(ServerSmartPlaylist(summary: detail.summary))
+                            app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: detail.summary))
                         },
                         onDelete: { confirmingDelete = true }
                     )

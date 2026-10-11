@@ -24,179 +24,138 @@ extension AppState {
         await restoreHomeAndFavorites(cache: cache)
     }
 
+    private func readCached<T: Decodable>(cache: CacheManager, key: String) async -> T? {
+        guard let data = await cache.readData(for: .metadata, key: key) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func readCachedArray<T: Decodable>(cache: CacheManager, key: String) async -> [T]? {
+        guard let data = await cache.readData(for: .metadata, key: key),
+              let items = try? JSONDecoder().decode([T].self, from: data),
+              !items.isEmpty else { return nil }
+        return items
+    }
+
+    private func writeCached<T: Encodable>(cache: CacheManager, key: String, value: T) async {
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        _ = try? await cache.write(data: data, to: .metadata, key: key)
+    }
+
     private func restorePlaylistsAndAlbums(cache: CacheManager) async {
-        // 1. Playlists
         if library.playlists.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.playlistsMetadataKey),
-           let playlists = try? JSONDecoder().decode([PlaylistSummary].self, from: data),
-           !playlists.isEmpty {
-            library.playlists = playlists
+           let items: [PlaylistSummary] = await readCachedArray(cache: cache, key: Self.playlistsMetadataKey) {
+            library.playlists = items
             library.playlistsLoaded = true
         }
-
-        // 2. Recently Added Albums
         if library.recentAlbums.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.recentAlbumsMetadataKey),
-           let recent = try? JSONDecoder().decode([SubsonicAlbum].self, from: data),
-           !recent.isEmpty {
-            library.recentAlbums = recent
+           let items: [SubsonicAlbum] = await readCachedArray(cache: cache, key: Self.recentAlbumsMetadataKey) {
+            library.recentAlbums = items
             library.recentAlbumsLoaded = true
         }
-
-        // 3. Alphabetical Albums
         if library.albums.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.albumsMetadataKey),
-           let albums = try? JSONDecoder().decode([SubsonicAlbum].self, from: data),
-           !albums.isEmpty {
-            library.albums = albums
+           let items: [SubsonicAlbum] = await readCachedArray(cache: cache, key: Self.albumsMetadataKey) {
+            library.albums = items
             library.albumsLoaded = true
         }
     }
 
     private func restoreCatalogAndSongs(cache: CacheManager) async {
-        // 4. Artists Index
         if library.artistIndexes.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.artistsMetadataKey),
-           let indexes = try? JSONDecoder().decode([ArtistIndex].self, from: data),
-           !indexes.isEmpty {
-            library.artistIndexes = indexes
+           let items: [ArtistIndex] = await readCachedArray(cache: cache, key: Self.artistsMetadataKey) {
+            library.artistIndexes = items
             library.artistIndexesLoaded = true
         }
-
-        // 5. Genres
         if availableGenres.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.genresMetadataKey),
-           let genres = try? JSONDecoder().decode([Genre].self, from: data),
-           !genres.isEmpty {
-            availableGenres = genres
+           let items: [Genre] = await readCachedArray(cache: cache, key: Self.genresMetadataKey) {
+            availableGenres = items
         }
-
-        // 6. Songs
         if library.songs.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.songsMetadataKey),
-           let songs = try? JSONDecoder().decode([SubsonicSong].self, from: data),
-           !songs.isEmpty {
-            library.songs = songs
+           let items: [SubsonicSong] = await readCachedArray(cache: cache, key: Self.songsMetadataKey) {
+            library.songs = items
             library.songsLoaded = true
         }
     }
 
     private func restoreHomeAndFavorites(cache: CacheManager) async {
-        // 7. Home Shelves
         if library.homeShelves.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.homeShelvesMetadataKey),
-           let rawShelves = try? JSONDecoder().decode([String: [SubsonicAlbum]].self, from: data),
-           !rawShelves.isEmpty {
-            var shelves: [AlbumListType: [SubsonicAlbum]] = [:]
-            for (rawType, albums) in rawShelves {
-                if let type = AlbumListType(rawValue: rawType) {
-                    shelves[type] = albums
-                }
+           let raw: [String: [SubsonicAlbum]] = await readCached(cache: cache, key: Self.homeShelvesMetadataKey),
+           !raw.isEmpty {
+            let mapped = raw.compactMap { rawType, albums in
+                AlbumListType(rawValue: rawType).map { ($0, albums) }
             }
-            if !shelves.isEmpty {
-                library.homeShelves = shelves
+            if !mapped.isEmpty {
+                library.homeShelves = Dictionary(uniqueKeysWithValues: mapped)
             }
         }
 
-        // 8. Favorite Artists
         if library.favoritesArtists.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.favoritesArtistsMetadataKey),
-           let artists = try? JSONDecoder().decode([Artist].self, from: data),
-           !artists.isEmpty {
-            library.favoritesArtists = artists
+           let items: [Artist] = await readCachedArray(cache: cache, key: Self.favoritesArtistsMetadataKey) {
+            library.favoritesArtists = items
         }
-
-        // 9. Favorite Albums
         if library.favoritesAlbums.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.favoritesAlbumsMetadataKey),
-           let albums = try? JSONDecoder().decode([SubsonicAlbum].self, from: data),
-           !albums.isEmpty {
-            library.favoritesAlbums = albums
+           let items: [SubsonicAlbum] = await readCachedArray(cache: cache, key: Self.favoritesAlbumsMetadataKey) {
+            library.favoritesAlbums = items
         }
-
-        // 10. Favorite Songs
         if library.favoritesSongs.isEmpty,
-           let data = await cache.readData(for: .metadata, key: Self.favoritesSongsMetadataKey),
-           let songs = try? JSONDecoder().decode([SubsonicSong].self, from: data),
-           !songs.isEmpty {
-            library.favoritesSongs = songs
+           let items: [SubsonicSong] = await readCachedArray(cache: cache, key: Self.favoritesSongsMetadataKey) {
+            library.favoritesSongs = items
         }
     }
 
     /// Persists the latest playlists manifest to disk for instant next-launch recovery.
     func persistPlaylistsToDisk() async {
         guard let cache, !library.playlists.isEmpty else { return }
-        if let data = try? JSONEncoder().encode(library.playlists) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.playlistsMetadataKey)
-        }
+        await writeCached(cache: cache, key: Self.playlistsMetadataKey, value: library.playlists)
     }
 
     /// Persists the latest recently added albums to disk for instant next-launch recovery.
     func persistRecentAlbumsToDisk() async {
         guard let cache, !library.recentAlbums.isEmpty else { return }
-        if let data = try? JSONEncoder().encode(library.recentAlbums) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.recentAlbumsMetadataKey)
-        }
+        await writeCached(cache: cache, key: Self.recentAlbumsMetadataKey, value: library.recentAlbums)
     }
 
     /// Persists the first page of alphabetical albums to disk for instant next-launch recovery.
     func persistAlbumsToDisk() async {
         guard let cache, !library.albums.isEmpty else { return }
-        if let data = try? JSONEncoder().encode(library.albums) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.albumsMetadataKey)
-        }
+        await writeCached(cache: cache, key: Self.albumsMetadataKey, value: library.albums)
     }
 
     /// Persists the latest artist index to disk for instant next-launch recovery.
     func persistArtistsToDisk() async {
         guard let cache, !library.artistIndexes.isEmpty else { return }
-        if let data = try? JSONEncoder().encode(library.artistIndexes) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.artistsMetadataKey)
-        }
+        await writeCached(cache: cache, key: Self.artistsMetadataKey, value: library.artistIndexes)
     }
 
     /// Persists the latest genre list to disk for instant next-launch recovery.
     func persistGenresToDisk() async {
         guard let cache, !availableGenres.isEmpty else { return }
-        if let data = try? JSONEncoder().encode(availableGenres) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.genresMetadataKey)
-        }
+        await writeCached(cache: cache, key: Self.genresMetadataKey, value: availableGenres)
     }
 
     /// Persists the cached songs list to disk for instant next-launch recovery.
     func persistSongsToDisk() async {
         guard let cache, !library.songs.isEmpty else { return }
-        if let data = try? JSONEncoder().encode(library.songs) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.songsMetadataKey)
-        }
+        await writeCached(cache: cache, key: Self.songsMetadataKey, value: library.songs)
     }
 
     /// Persists the latest home shelves to disk for instant next-launch recovery.
     func persistHomeShelvesToDisk() async {
         guard let cache, !library.homeShelves.isEmpty else { return }
-        var rawShelves: [String: [SubsonicAlbum]] = [:]
-        for (type, albums) in library.homeShelves {
-            rawShelves[type.rawValue] = albums
-        }
-        if let data = try? JSONEncoder().encode(rawShelves) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.homeShelvesMetadataKey)
-        }
+        let raw = Dictionary(uniqueKeysWithValues: library.homeShelves.map { ($0.key.rawValue, $0.value) })
+        await writeCached(cache: cache, key: Self.homeShelvesMetadataKey, value: raw)
     }
 
     /// Persists cached favorite artists, albums, and songs to disk for instant next-launch recovery.
     func persistFavoritesToDisk() async {
         guard let cache else { return }
-        if !library.favoritesArtists.isEmpty,
-           let data = try? JSONEncoder().encode(library.favoritesArtists) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesArtistsMetadataKey)
+        if !library.favoritesArtists.isEmpty {
+            await writeCached(cache: cache, key: Self.favoritesArtistsMetadataKey, value: library.favoritesArtists)
         }
-        if !library.favoritesAlbums.isEmpty,
-           let data = try? JSONEncoder().encode(library.favoritesAlbums) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesAlbumsMetadataKey)
+        if !library.favoritesAlbums.isEmpty {
+            await writeCached(cache: cache, key: Self.favoritesAlbumsMetadataKey, value: library.favoritesAlbums)
         }
-        if !library.favoritesSongs.isEmpty,
-           let data = try? JSONEncoder().encode(library.favoritesSongs) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.favoritesSongsMetadataKey)
+        if !library.favoritesSongs.isEmpty {
+            await writeCached(cache: cache, key: Self.favoritesSongsMetadataKey, value: library.favoritesSongs)
         }
     }
 

@@ -13,7 +13,6 @@ struct SidebarView: View {
         case playlistID(String)
     }
 
-    @State private var activeSheet: SidebarSheet?
     @State private var confirmingDeleteID: String?
 
     private var currentSelection: Selection {
@@ -31,24 +30,6 @@ struct SidebarView: View {
                 select(newValue)
             }
         )
-    }
-
-    /// Presentations owned by the sidebar. Merged into one `.sheet(item:)`
-    /// because SwiftUI only honours the last `.sheet` modifier on a view.
-    enum SidebarSheet: Identifiable {
-        case newPlaylist
-        case newSmartPlaylist
-        case editPlaylist(PlaylistSummary)
-        case editServerSmartPlaylist(ServerSmartPlaylist)
-
-        var id: String {
-            switch self {
-            case .newPlaylist: return "new"
-            case .newSmartPlaylist: return "smart"
-            case .editPlaylist(let playlist): return "edit-\(playlist.id)"
-            case .editServerSmartPlaylist(let playlist): return "server-smart-\(playlist.id)"
-            }
-        }
     }
 
     private var playlists: [PlaylistSummary] { app.library.playlists }
@@ -160,18 +141,6 @@ struct SidebarView: View {
         // normally above the floor. Also skips per-frame List relayout.
         .frame(minWidth: LayoutMetrics.sidebarMinWidth, alignment: .leading)
         .clipped()
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .newPlaylist:
-                CreatePlaylistModal(songs: [])
-            case .newSmartPlaylist:
-                SmartPlaylistEditorView(playlist: nil)
-            case .editPlaylist(let playlist):
-                CreatePlaylistModal(songs: [], existing: playlist)
-            case .editServerSmartPlaylist(let playlist):
-                SmartPlaylistEditorView(playlist: nil, server: playlist)
-            }
-        }
         .confirmationDialog(
             "Удалить плейлист?",
             isPresented: Binding(
@@ -226,12 +195,12 @@ struct SidebarView: View {
     private var playlistContextMenu: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                activeSheet = .newPlaylist
+                app.openCreatePlaylist()
             } label: {
                 Label("Новый плейлист", systemImage: "plus")
             }
             Button {
-                activeSheet = .newSmartPlaylist
+                app.openSmartPlaylistEditor()
             } label: {
                 Label("Новый умный плейлист", systemImage: "gearshape")
             }
@@ -239,12 +208,12 @@ struct SidebarView: View {
     }
 
     private func beginRename(_ playlist: PlaylistSummary) {
-        activeSheet = .editPlaylist(playlist)
+        app.openCreatePlaylist(existing: playlist)
     }
 
     private func editRules(_ playlist: PlaylistSummary) {
         guard playlist.isSmart else { return }
-        activeSheet = .editServerSmartPlaylist(ServerSmartPlaylist(summary: playlist))
+        app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: playlist))
     }
 
     private var username: String {

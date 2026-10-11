@@ -16,6 +16,7 @@ struct CreatePlaylistModal: View {
     /// Called after a successful create or edit so the presenting view can
     /// refresh its own content (e.g. reload a playlist's detail).
     var onSaved: (() -> Void)?
+    var onDismiss: (() -> Void)?
 
     @State private var name = ""
     @State private var description = ""
@@ -29,10 +30,16 @@ struct CreatePlaylistModal: View {
     /// the sheet's first display cycle re-enters AppKit's constraint pass and
     /// crashes on macOS with the "marked as needing more Update Constraints"
     /// exception — latent on any screen, fatal inside a NavigationSplitView.
-    init(songs: [SubsonicSong], existing: PlaylistSummary? = nil, onSaved: (() -> Void)? = nil) {
+    init(
+        songs: [SubsonicSong],
+        existing: PlaylistSummary? = nil,
+        onSaved: (() -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
+    ) {
         self.songs = songs
         self.existing = existing
         self.onSaved = onSaved
+        self.onDismiss = onDismiss
         _name = State(initialValue: existing?.displayName ?? "")
         _description = State(initialValue: existing?.comment ?? "")
     }
@@ -102,7 +109,7 @@ struct CreatePlaylistModal: View {
             Divider()
 
             HStack(spacing: 10) {
-                Button("Отменить") { dismiss() }
+                Button("Отменить") { dismissSelf() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button {
@@ -323,6 +330,14 @@ struct CreatePlaylistModal: View {
             if isEditing { await app.refreshPlaylists() }
             onSaved?()
             creating = false
+            dismissSelf()
+        }
+    }
+
+    private func dismissSelf() {
+        if let onDismiss {
+            onDismiss()
+        } else {
             dismiss()
         }
     }

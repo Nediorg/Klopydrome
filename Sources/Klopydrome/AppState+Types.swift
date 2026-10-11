@@ -211,3 +211,16 @@ struct NavigationState {
         )
     }
 }
+
+/// Presentation target for the root-level smart playlist editor modal.
+struct SmartPlaylistEditorTarget: Identifiable {
+    let id: String
+    let playlist: SmartPlaylist?
+    let server: ServerSmartPlaylist?
+
+    init(playlist: SmartPlaylist? = nil, server: ServerSmartPlaylist? = nil) {
+        self.id = server?.id ?? playlist?.id ?? UUID().uuidString
+        self.playlist = playlist
+        self.server = server
+    }
+}
