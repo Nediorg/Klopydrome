@@ -126,8 +126,8 @@ struct SongTable: View {
         .onChange(of: displayedCount) {
             updateDisplayedSongs()
         }
-        .onChange(of: songs.count) {
-            displayedCount = min(displayedCount, songs.count)
+        .onChange(of: songs) {
+            displayedCount = min(pageSize, songs.count)
             updateDisplayedSongs()
         }
         .onChange(of: sortOrder) {

@@ -15,6 +15,18 @@ struct SongsView: View {
     private let chunkSize = 300
 
     private var songs: [SubsonicSong] { app.library.songs }
+    /// Filtered + sorted result to display. Falls back to raw `songs` on first
+    /// appearance while background sort/filter computation is running, avoiding
+    /// a flash of empty state or "Ничего не найдено".
+    private var displaySongs: [SubsonicSong] {
+        if !processedSongs.isEmpty {
+            return processedSongs
+        }
+        if searchText.isEmpty && !favoritesOnly {
+            return songs
+        }
+        return []
+    }
     /// True while the first page is still being fetched (nothing to show yet).
     @State private var loading = true
     /// True while additional pages are streaming in; the table stays visible.
@@ -66,7 +78,7 @@ struct SongsView: View {
                 title: "",
                 searchText: $searchText,
                 isLoading: isLoadingMore,
-                filteredCount: searchText.isEmpty ? nil : processedSongs.count,
+                filteredCount: searchText.isEmpty ? nil : displaySongs.count,
                 totalCount: searchText.isEmpty ? nil : songs.count
             ) {
                 Picker("Показать", selection: $favoritesOnly) {
@@ -92,14 +104,18 @@ struct SongsView: View {
                                                message: "Песни появятся здесь, когда будут в вашей библиотеке.")
                             .emptyStatePinnedToTop()
                     }
-                } else if processedSongs.isEmpty {
-                    ContentUnavailableView("Ничего не найдено",
-                                           systemImage: "magnifyingglass",
-                                           // swiftlint:disable:next line_length
-                                            description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))
-                        .emptyStatePinnedToTop()
+                } else if displaySongs.isEmpty {
+                    if reprocessing || (!app.library.songsLoaded && loading) {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ContentUnavailableView("Ничего не найдено",
+                                               systemImage: "magnifyingglass",
+                                               // swiftlint:disable:next line_length
+                                                description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))
+                            .emptyStatePinnedToTop()
+                    }
                 } else {
-                    SongTable(songs: processedSongs,
+                    SongTable(songs: displaySongs,
                               sortOrder: $sortOrder,
                               columnCustomization: $columnCustomization)
                         .environment(app)
@@ -108,7 +124,7 @@ struct SongsView: View {
 
             // Footer spinner while more chunks stream in; the table above is
             // already interactive and populated with everything fetched so far.
-            if isLoadingMore && !processedSongs.isEmpty {
+            if isLoadingMore && !displaySongs.isEmpty {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Загружаем остальные песни…".localized)
@@ -175,7 +191,7 @@ struct SongsView: View {
         if onlyFav { starredIDs = Set(base.filter { app.isStarred($0) }.map(\.id)) }
 
         reprocessTask?.cancel()
-        reprocessTask = Task.detached(priority: .utility) {
+        reprocessTask = Task.detached(priority: .userInitiated) {
             guard !Task.isCancelled else { return }
             let result = Self.compute(base, favoritesOnly: onlyFav, starredIDs: starredIDs,
                                       query: query, sortOrder: order)
