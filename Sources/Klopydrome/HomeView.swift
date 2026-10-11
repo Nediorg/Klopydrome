@@ -366,10 +366,10 @@ private extension AlbumCard {
                     Text("Название\nальбома".localized)
                         .font(.callout)
                         .lineLimit(2)
-                    if showsArtist {
+                    if showsArtist, album.artist?.isEmpty == false {
                         Text("Исполнитель".localized).font(.callout)
                     }
-                    if showsYear {
+                    if showsYear, album.year != nil {
                         Text("0000").font(.callout)
                     }
                 }

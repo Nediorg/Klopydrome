@@ -18,7 +18,7 @@ struct ArtistDetailView: View {
 
     /// Albums fetched concurrently at a time; keeps a big artist from issuing
     /// hundreds of simultaneous album requests to the server.
-    private let albumBatchSize = 8
+    let albumBatchSize = 8
 
     /// Sort chosen for the album shelf; defaults to release date.
     @State private var albumSort: ArtistAlbumSort = .release
@@ -151,7 +151,7 @@ struct ArtistDetailView: View {
                         Button {
                             app.openAlbumInLibrary(album)
                         } label: {
-                            AlbumCard(album: album, width: 150, showsYear: true, reservesTitleLines: true)
+                            AlbumCard(album: album, width: 150, showsYear: false, reservesTitleLines: false)
                         }
                         .buttonStyle(.plain)
                     }
@@ -160,6 +160,7 @@ struct ArtistDetailView: View {
                 .padding(.horizontal, 4)
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -168,24 +169,25 @@ struct ArtistDetailView: View {
             Text("Похожие исполнители".localized)
                 .font(.title2.bold())
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 18) {
+                HStack(alignment: .top, spacing: 16) {
                     ForEach(similar) { artist in
                         Button {
                             app.openArtistInLibrary(artist)
                         } label: {
-                            VStack(spacing: 8) {
+                            VStack(spacing: 6) {
                                 CircularArtistArt(
                                     name: artist.name,
                                     imageURL: artist.artistImageUrl,
                                     coverArt: artist.coverArt ?? app.coverArtForArtist(artist),
-                                    size: 110
+                                    size: 80
                                 )
                                 Text(artist.name)
-                                    .font(.subheadline.weight(.medium))
+                                    .font(.caption)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.center)
-                                    .frame(width: 110)
+                                    .frame(width: 80, alignment: .top)
                             }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
@@ -197,6 +199,7 @@ struct ArtistDetailView: View {
                 .padding(.horizontal, 4)
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -334,8 +337,9 @@ struct ArtistDetailView: View {
                 id: albumID,
                 title: song.album,
                 album: song.album,
-                artist: song.albumArtist,
-                coverArt: song.coverArt)
+                artist: song.albumArtist ?? song.artist,
+                coverArt: song.coverArt,
+                year: song.year)
         }
         appearsOn = made.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
@@ -413,6 +417,7 @@ private extension ArtistDetailView {
                     .padding(.horizontal, 4)
                 }
                 .scrollClipDisabled()
+                .fixedSize(horizontal: false, vertical: true)
                 .transition(.opacity)
             }
         }
@@ -442,6 +447,7 @@ private extension ArtistDetailView {
                 .padding(.horizontal, 4)
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: true)
             .shimmering()
         }
     }
@@ -462,37 +468,5 @@ private extension ArtistDetailView {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
-    }
-
-    /// Fetches every album of the artist (sequentially batched), returning the
-    /// concatenated songs. Serves the connection-local cache on revisits.
-    func allAlbumSongs() async -> [SubsonicSong] {
-        if let cached = await app.cache?.cachedDiscography(for: artist.id) {
-            return cached
-        }
-        guard let client = app.client else { return [] }
-        let ids = albums.map(\.id)
-        var all: [SubsonicSong] = []
-        var start = 0
-        while start < ids.count {
-            if Task.isCancelled { break }
-            let end = min(start + albumBatchSize, ids.count)
-            await withTaskGroup(of: [SubsonicSong].self) { group in
-                for id in ids[start..<end] {
-                    group.addTask {
-                        try? Task.checkCancellation()
-                        return (try? await client.getAlbum(id: id))?.song ?? []
-                    }
-                }
-                for await songs in group {
-                    all.append(contentsOf: songs)
-                }
-            }
-            start = end
-        }
-        if !Task.isCancelled, !all.isEmpty {
-            await app.cache?.cacheDiscography(all, for: artist.id)
-        }
-        return all
     }
 }

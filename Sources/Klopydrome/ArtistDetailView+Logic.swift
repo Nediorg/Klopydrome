@@ -36,8 +36,9 @@ extension ArtistDetailView {
                 id: id,
                 title: song.album,
                 album: song.album,
-                artist: song.albumArtist,
-                coverArt: song.coverArt
+                artist: song.albumArtist ?? song.artist,
+                coverArt: song.coverArt,
+                year: song.year
             )
         }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
 
@@ -141,5 +142,37 @@ extension ArtistDetailView {
             artistImageUrl: artist.artistImageUrl,
             album: matchingAlbums
         )
+    }
+
+    /// Fetches every album of the artist (sequentially batched), returning the
+    /// concatenated songs. Serves the connection-local cache on revisits.
+    func allAlbumSongs() async -> [SubsonicSong] {
+        if let cached = await app.cache?.cachedDiscography(for: artist.id) {
+            return cached
+        }
+        guard let client = app.client else { return [] }
+        let ids = albums.map(\.id)
+        var all: [SubsonicSong] = []
+        var start = 0
+        while start < ids.count {
+            if Task.isCancelled { break }
+            let end = min(start + albumBatchSize, ids.count)
+            await withTaskGroup(of: [SubsonicSong].self) { group in
+                for id in ids[start..<end] {
+                    group.addTask {
+                        try? Task.checkCancellation()
+                        return (try? await client.getAlbum(id: id))?.song ?? []
+                    }
+                }
+                for await songs in group {
+                    all.append(contentsOf: songs)
+                }
+            }
+            start = end
+        }
+        if !Task.isCancelled, !all.isEmpty {
+            await app.cache?.cacheDiscography(all, for: artist.id)
+        }
+        return all
     }
 }
