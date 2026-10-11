@@ -35,7 +35,7 @@ struct SongActionItems: View {
         Button("В конец очереди".localized) { targets.forEach { app.playLater($0) } }
             .disabled(!isPlayableOffline)
         Divider()
-        AddToPlaylistMenu(songs: targets)
+        AddToPlaylistMenu(app: app, songs: targets)
         Button((app.isStarred(song) ? "Убрать из избранного" : "В избранное").localized) {
             guard app.confirmOfflineAction() else { return }
             targets.forEach { app.toggleStar($0, skipOfflineConfirm: true) }
@@ -86,6 +86,33 @@ struct SongActionItems: View {
                 Label("Показать альбом в медиатеке".localized, systemImage: "square.stack")
             }
         }
+        CollaboratorsMenuItem(song: song, app: app)
+
+        Divider()
+        Button {
+            app.inspectSong(song)
+        } label: {
+            Label("Свойства…".localized, systemImage: "info.circle")
+        }
+        Button {
+            let parts = [song.displayTitle, song.artist, song.album].compactMap { $0 }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(parts.joined(separator: " — "), forType: .string)
+        } label: {
+            Label("Скопировать".localized, systemImage: "doc.on.doc")
+        }
+        Button("Поделиться…".localized) {
+            app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
+        }
+    }
+}
+
+/// Lazy menu item that resolves participating artists only when the menu is rendered.
+private struct CollaboratorsMenuItem: View {
+    let song: SubsonicSong
+    let app: AppState
+
+    var body: some View {
         let collaborators = SongCollaborators.parse(from: song, library: app.library)
         if collaborators.count > 1 {
             Menu {
@@ -103,23 +130,6 @@ struct SongActionItems: View {
             } label: {
                 Label("Перейти к исполнителю".localized, systemImage: "music.mic")
             }
-        }
-
-        Divider()
-        Button {
-            app.inspectSong(song)
-        } label: {
-            Label("Свойства…".localized, systemImage: "info.circle")
-        }
-        Button {
-            let parts = [song.displayTitle, song.artist, song.album].compactMap { $0 }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(parts.joined(separator: " — "), forType: .string)
-        } label: {
-            Label("Скопировать".localized, systemImage: "doc.on.doc")
-        }
-        Button("Поделиться…".localized) {
-            app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
         }
     }
 }

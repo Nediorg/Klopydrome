@@ -1,42 +1,83 @@
 import SwiftUI
+import AppKit
 import NavidromeClient
 
 /// Table column identifiers for the Songs tab.
 enum SongColumn: String, CaseIterable, Hashable, Identifiable {
     case title
+    case cloud
     case duration
     case artist
     case album
     case albumArtist
     case genre
+    case favorite
     case plays
     case year
     case composer
-    case favorite
     case bitrate
     case rating
     case added
 
     var id: String { rawValue }
 
-    /// Columns shown by default (title, duration, artist, album, genre are primary).
-    static let defaults: Set<SongColumn> = [.title, .duration, .artist, .album, .genre]
+    /// Columns shown by default (matches Apple Music layout).
+    static let defaults: Set<SongColumn> = [.title, .cloud, .duration, .artist, .album, .genre, .favorite, .plays]
 
     var title: String {
         switch self {
         case .title: return "Название".localized
+        case .cloud: return "Загрузка в облако".localized
         case .duration: return "Время".localized
         case .artist: return "Артист".localized
         case .album: return "Альбом".localized
         case .albumArtist: return "Исполнитель альбома".localized
         case .genre: return "Жанр".localized
-        case .plays: return "Воспроизведено".localized
+        case .favorite: return "Избранное".localized
+        case .plays: return "Прослушиваний".localized
         case .year: return "Год".localized
         case .composer: return "Композитор".localized
-        case .favorite: return "Избранное".localized
         case .bitrate: return "Битрейт".localized
         case .rating: return "Рейтинг".localized
         case .added: return "Добавлено".localized
+        }
+    }
+
+    /// Header text/icon for TableColumn. Cloud and favorite show SF symbols instead of text.
+    var headerText: Text {
+        switch self {
+        case .cloud:
+            return Self.styledHeader(Text(Image(systemName: "icloud")))
+        case .favorite:
+            return Self.styledHeader(Text(Image(systemName: "star")))
+        default:
+            return Self.styledHeader(Text(title))
+        }
+    }
+
+    /// Apple Music header look: small, regular weight, secondary colour.
+    /// NOTE: SwiftUI `Table` may ignore some of these on certain macOS builds;
+    /// if so, the header must be restyled via NSTableHeaderView instead.
+    private static func styledHeader(_ text: Text) -> Text {
+        text.font(.system(size: 11)).fontWeight(.regular).foregroundStyle(.secondary)
+    }
+
+    /// Numeric columns are right-aligned (header included) like Apple Music;
+    /// icon columns are centred. Requires macOS 14.4+ (`TableColumnAlignment`).
+    var alignment: TableColumnAlignment {
+        switch self {
+        case .duration, .plays, .year, .bitrate: return .trailing
+        case .cloud, .favorite: return .center
+        default: return .leading
+        }
+    }
+
+    /// Content alignment for SwiftUI cell views inside the column.
+    var contentAlignment: Alignment {
+        switch self {
+        case .duration, .plays, .year, .bitrate: return .trailing
+        case .cloud, .favorite: return .center
+        default: return .leading
         }
     }
 
@@ -44,18 +85,46 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
     var comparator: KeyPathComparator<SubsonicSong> {
         switch self {
         case .title: return KeyPathComparator(\.title)
+        case .cloud: return KeyPathComparator(\.path)
         case .duration: return KeyPathComparator(\.duration)
         case .artist: return KeyPathComparator(\.artist)
         case .album: return KeyPathComparator(\.album)
         case .albumArtist: return KeyPathComparator(\.albumArtist)
         case .genre: return KeyPathComparator(\.genre)
+        case .favorite: return KeyPathComparator(\.starred)
         case .plays: return KeyPathComparator(\.playCount)
         case .year: return KeyPathComparator(\.year)
         case .composer: return KeyPathComparator(\.composer)
-        case .favorite: return KeyPathComparator(\.starred)
         case .bitrate: return KeyPathComparator(\.bitRate)
         case .rating: return KeyPathComparator(\.userRating)
         case .added: return KeyPathComparator(\.created)
+        }
+    }
+
+    var minWidth: CGFloat {
+        switch self {
+        case .cloud, .favorite: return 24
+        case .duration: return 44
+        case .plays: return 40
+        default: return 50
+        }
+    }
+
+    var idealWidth: CGFloat {
+        switch self {
+        case .cloud, .favorite: return 26
+        case .duration: return 56
+        case .plays: return 60
+        default: return 140
+        }
+    }
+
+    var maxWidth: CGFloat {
+        switch self {
+        case .cloud, .favorite: return 28
+        case .duration: return 80
+        case .plays: return 90
+        default: return 400
         }
     }
 }
@@ -78,7 +147,7 @@ struct SongTable: View {
     @Environment(AppState.self) private var app
 
     /// Rows per render-window step (matches `PlaylistDetailView.pageSize`).
-    private let pageSize = 300
+    private let pageSize = 100
 
     /// Render window size; first `displayedCount` rows of `songs` are shown.
     @State private var displayedCount: Int = 0
@@ -91,29 +160,38 @@ struct SongTable: View {
 
     /// Tracks the selected rows so left-click selects and multi-select works.
     @State private var selection = Set<SubsonicSong.ID>()
+    @State private var hover = RowHover()
+
+    private func checkTailAndPrefetch(song: SubsonicSong) {
+        guard displayedCount > 0, displayedCount < songs.count else { return }
+        let prefetchIndex = max(0, displayedCount - 15)
+        if songs.indices.contains(prefetchIndex), songs[prefetchIndex].id == song.id {
+            displayedCount = min(displayedCount + pageSize, songs.count)
+        }
+    }
 
     var body: some View {
         Table(displayedSongs, selection: $selection, sortOrder: $sortOrder,
               columnCustomization: $columnCustomization) {
-            TableColumnForEach(SongColumn.allCases) { column in
-                TableColumn(column.title, sortUsing: column.comparator) { song in
-                    // Pass `app` explicitly: `Table` cells are hosted in an
-                    // NSTableView that doesn't reliably propagate the SwiftUI
-                    // environment, so `@Environment(AppState.self)` here would
-                    // force-unwrap nil (crashes on sort, which re-lays-out rows).
-                    SongColumnCell(column: column, song: song, app: app)
-                        // Prefetch next page when the tail row appears. Only
-                        // the title column installs the appearance hook — otherwise each
-                        // row would create one hook per column (×8–10).
-                        .onAppear {
-                            guard column == .title else { return }
-                            guard displayedCount > 0, displayedCount < songs.count else { return }
-                            let tailIndex = displayedCount - 1
-                            if songs.indices.contains(tailIndex), songs[tailIndex].id == song.id {
-                                displayedCount = min(displayedCount + pageSize, songs.count)
-                            }
+            TableColumnForEach(SongColumn.allCases) { (column: SongColumn) in
+                TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+                    let cell = SongColumnCell(
+                        column: column,
+                        song: song,
+                        app: app,
+                        hover: hover
+                    )
+
+                    if column == .title {
+                        cell.onAppear {
+                            checkTailAndPrefetch(song: song)
                         }
+                    } else {
+                        cell
+                    }
                 }
+                .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+                .alignment(column.alignment)
                 .customizationID(column.id)
             }
         }
@@ -127,7 +205,7 @@ struct SongTable: View {
             updateDisplayedSongs()
         }
         .onChange(of: songs) {
-            displayedCount = min(pageSize, songs.count)
+            displayedCount = max(displayedCount, min(pageSize, songs.count))
             updateDisplayedSongs()
         }
         .onChange(of: sortOrder) {
@@ -142,6 +220,15 @@ struct SongTable: View {
         // Light-gray selection accent (matches the sidebar) instead of the red
         // accent, so a selected row reads as a neutral highlight, not a colored one.
         .tint(AMColor.sidebarSelection)
+        // Apple Music-style 22 pt row height plus native AppKit hover tracking
+        // over the backing NSTableView.
+        .background(
+            TableTweaks(
+                displayedSongs: displayedSongs,
+                hover: hover,
+                rowHeight: 22
+            )
+        )
         // `contextMenu(forSelectionType:)` auto-selects the clicked row (and lets
         // Cmd/Shift multi-select), so the menu always has a concrete target.
         // Pass `ids` (the current right-clicked selection) rather than the `selection`
@@ -207,12 +294,19 @@ private struct SongColumnCell: View {
     let column: SongColumn
     let song: SubsonicSong
     let app: AppState
+    let hover: RowHover
 
     private var isCurrent: Bool {
         app.player.currentSong?.id == song.id
     }
 
     var body: some View {
+        cellContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: column.contentAlignment)
+    }
+
+    @ViewBuilder
+    private var cellContent: some View {
         switch column {
         case .title:
             HStack(spacing: 6) {
@@ -222,10 +316,20 @@ private struct SongColumnCell: View {
                         .foregroundStyle(AMColor.accent)
                 }
                 Text(song.displayTitle)
-                    .fontWeight(isCurrent ? .semibold : .regular)
                     .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     .lineLimit(1)
+                Spacer(minLength: 4)
+                SongEllipsisMenu(
+                    song: song,
+                    foregroundStyle: AMColor.accent,
+                    app: app,
+                    compact: true,
+                    side: 16
+                )
             }
+            .padding(.leading, 8)
+        case .cloud:
+            CloudCell(song: song, app: app)
         case .duration:
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
@@ -248,6 +352,8 @@ private struct SongColumnCell: View {
             Text(song.genre ?? "")
                 .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
                 .lineLimit(1)
+        case .favorite:
+            FavoriteCell(song: song, app: app, hover: hover)
         case .plays:
             Text(song.playCount.map(String.init) ?? "")
                 .monospacedDigit()
@@ -260,12 +366,6 @@ private struct SongColumnCell: View {
             Text(song.composer ?? "")
                 .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
                 .lineLimit(1)
-        case .favorite:
-            if app.isStarred(song) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(AMColor.accent)
-            }
         case .bitrate:
             Text(song.bitRate.map { "\($0) kbps" } ?? "")
                 .monospacedDigit()
@@ -277,6 +377,76 @@ private struct SongColumnCell: View {
         case .added:
             Text(SongTable.addedDateText(song.created))
                 .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+        }
+    }
+}
+
+/// Isolated favorite button cell so only this small view re-renders on hover changes.
+private struct FavoriteCell: View {
+    let song: SubsonicSong
+    let app: AppState
+    let hover: RowHover
+
+    private var isStarred: Bool {
+        app.isStarred(song)
+    }
+
+    var body: some View {
+        Button {
+            app.toggleStar(song)
+        } label: {
+            Image(systemName: isStarred ? "star.fill" : "star")
+                .font(.system(size: 11))
+                .foregroundStyle(AMColor.accent)
+                .opacity(isStarred || hover.id == song.id ? 1 : 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+    }
+}
+
+/// Isolated cloud/download status cell so caching and downloading state changes
+/// only re-render this cell rather than the entire row.
+private struct CloudCell: View {
+    let song: SubsonicSong
+    let app: AppState
+
+    private var isDownloading: Bool {
+        app.downloadingSongIDs.contains(song.id)
+    }
+
+    private var isCachedLocally: Bool {
+        app.isCached(song)
+    }
+
+    var body: some View {
+        HStack {
+            Spacer()
+            if isDownloading {
+                ProgressView()
+                    .controlSize(.mini)
+                    .frame(width: 14, height: 14)
+                    .help("Загрузка…".localized)
+            } else if isCachedLocally {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+                    .help("Загружено".localized)
+            } else if !app.isOfflineSession {
+                Button {
+                    app.cacheSong(song)
+                } label: {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Загрузить".localized)
+            }
+            Spacer()
         }
     }
 }

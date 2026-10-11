@@ -221,9 +221,11 @@ struct RatingStars: View {
 
     private var rating: Int { app.effectiveRating(for: song) }
     private var displayRating: Int { hoveredStar ?? rating }
+    private var estimatedWidth: CGFloat { (size + spacing) * 5 }
+    private var effectiveTrackWidth: CGFloat { trackWidth > 0 ? trackWidth : estimatedWidth }
 
     var body: some View {
-        HStack(spacing: 0) {
+        let content = HStack(spacing: 0) {
             ForEach(1...5, id: \.self) { star in
                 Button {
                     let target = star == rating ? 0 : star
@@ -243,7 +245,7 @@ struct RatingStars: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let point):
-                let slot = trackWidth / 5
+                let slot = effectiveTrackWidth / 5
                 let newStar = slot > 0 ? min(5, max(1, Int(point.x / slot) + 1)) : nil
                 // Write ONLY on an actual star change: onContinuousHover
                 // fires per mouse-move event (60–120 Hz even inside one
@@ -257,13 +259,18 @@ struct RatingStars: View {
                 break
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
-            trackWidth = $0
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Рейтинг")
         .accessibilityValue(L10n.format("format.rating.outOfFive", rating))
         .contentShape(Rectangle())
+
+        if size > 10 {
+            content.onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                trackWidth = $0
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -331,39 +338,48 @@ struct SongEllipsisMenu: View {
     var app: AppState?
     var extraMenuItems: (() -> AnyView)?
     var compact: Bool = false
+    var side: CGFloat?
 
-    @Environment(AppState.self) private var envApp
+    @Environment(AppState.self) private var envApp: AppState?
 
-    private var resolvedApp: AppState {
+    private var resolvedApp: AppState? {
         app ?? envApp
     }
 
-    private var side: CGFloat {
-        compact ? 22 : 28
+    private var resolvedSide: CGFloat {
+        if let side { return side }
+        return compact ? 22 : 28
     }
 
     var body: some View {
-        ZStack {
+        let menuContent = ZStack {
             Image(systemName: "ellipsis")
-                .font(.system(size: compact ? 12 : 14, weight: .medium))
+                .font(.system(size: (resolvedSide <= 16) ? 10 : (compact ? 12 : 14), weight: .semibold))
                 .foregroundStyle(foregroundStyle)
 
             Menu {
                 if let extraMenuItems { extraMenuItems() }
-                SongActionItems(app: resolvedApp, song: song, selection: [song])
+                if let resolvedApp {
+                    SongActionItems(app: resolvedApp, song: song, selection: [song])
+                }
             } label: {
-                Image(nsImage: EllipsisMenuIcon.transparentImage(size: side))
-                    .frame(width: side, height: side)
+                Image(nsImage: EllipsisMenuIcon.transparentImage(size: resolvedSide))
+                    .frame(width: resolvedSide, height: resolvedSide)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .frame(width: side, height: side)
+            .frame(width: resolvedSide, height: resolvedSide)
         }
-        .frame(width: side, height: side)
+        .frame(width: resolvedSide, height: resolvedSide)
         .contentShape(Rectangle())
-        .hoverBrighten()
         .help("Ещё".localized)
         .accessibilityLabel("Действия для песни".localized)
+
+        if compact {
+            menuContent
+        } else {
+            menuContent.hoverBrighten()
+        }
     }
 }
 

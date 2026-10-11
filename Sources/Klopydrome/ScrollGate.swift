@@ -8,6 +8,7 @@ import Foundation
 final class ScrollGate {
     static let shared = ScrollGate()
 
+    static let scrollDidStart = Notification.Name("ScrollGateDidStart")
     static let scrollDidEnd = Notification.Name("ScrollGateDidEnd")
 
     private(set) var isScrolling = false
@@ -33,7 +34,11 @@ final class ScrollGate {
             return
         }
 
+        let wasScrolling = isScrolling
         isScrolling = true
+        if !wasScrolling {
+            NotificationCenter.default.post(name: Self.scrollDidStart, object: nil)
+        }
         resetTask?.cancel()
 
         let delayNanos: UInt64

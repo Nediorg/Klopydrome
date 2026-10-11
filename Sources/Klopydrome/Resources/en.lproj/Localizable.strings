@@ -981,3 +981,6 @@
 "Похожие исполнители" = "Similar Artists";
 "Подробнее" = "More";
 "Меньше" = "Less";
+
+/* Songs table */
+"Загрузка в облако" = "Cloud Download";
