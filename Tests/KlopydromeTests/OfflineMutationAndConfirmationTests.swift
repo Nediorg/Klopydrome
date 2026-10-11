@@ -268,7 +268,9 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
         app.serverConfig.effectiveSuppressOfflinePrompts = false
         app.serverConfig.url = "http://localhost:4533"
 
-        let playlist = PlaylistSummary(id: "pl-test-1", name: "Favorites Playlist")
+        let testPlaylistID = "pl-test-\(UUID().uuidString)"
+        app.followedPlaylistIDs.remove(testPlaylistID)
+        let playlist = PlaylistSummary(id: testPlaylistID, name: "Favorites Playlist")
         XCTAssertFalse(app.isFollowed(playlist))
 
         // Follow playlist offline
@@ -279,8 +281,8 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
 
         if let store = app.ensureOfflineMutationStore() {
             let mutations = await store.currentMutations()
-            XCTAssertEqual(mutations.stars["pl-test-1"]?.isStarred, true)
-            XCTAssertEqual(mutations.stars["pl-test-1"]?.kind, .playlist)
+            XCTAssertEqual(mutations.stars[testPlaylistID]?.isStarred, true)
+            XCTAssertEqual(mutations.stars[testPlaylistID]?.kind, .playlist)
 
             // Simulate app restart / clear local state
             app.followedPlaylistIDs.removeAll()
@@ -292,6 +294,7 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
 
             // Cleanup
             await store.clear()
+            app.followedPlaylistIDs.remove(testPlaylistID)
         }
     }
 }

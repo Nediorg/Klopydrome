@@ -144,7 +144,6 @@ extension AppState {
     enum PendingMutationsChoice {
         case apply
         case discard
-        case cancel
     }
 
     enum PendingMutationsContext {
@@ -192,9 +191,8 @@ extension AppState {
         alert.informativeText = "\(intro)\n\n\(bulletList)\n\n\(question)"
 
         alert.addButton(withTitle: "Применить".localized)
-        alert.addButton(withTitle: "Не применять".localized)
-        let cancelButton = alert.addButton(withTitle: "Отмена".localized)
-        cancelButton.keyEquivalent = "\u{1b}"
+        let discardButton = alert.addButton(withTitle: "Не применять".localized)
+        discardButton.keyEquivalent = "\u{1b}"
 
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = "Больше не спрашивать".localized
@@ -208,10 +206,8 @@ extension AppState {
         switch response {
         case .alertFirstButtonReturn:
             return .apply
-        case .alertSecondButtonReturn:
-            return .discard
         default:
-            return .cancel
+            return .discard
         }
     }
 
@@ -231,8 +227,6 @@ extension AppState {
                 break
             case .discard:
                 await discardPendingMutations(store: store, mutations: mutations)
-                return
-            case .cancel:
                 return
             }
         }

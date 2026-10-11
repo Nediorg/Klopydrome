@@ -257,23 +257,17 @@ final class AppState {
         guard serverConfig.url.isEmpty == false else { return }
         guard let password = passwordForLoginPrefill() else {
             if await beginOfflineSession() {
-                connectionError = "Нет сети. Доступны сохранённые песни."
+                connectionError = "Нет сети. Доступны сохранённые песни.".localized
             }
             return
         }
         do {
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    try await self.connect(url: self.serverConfig.url, username: self.serverConfig.username,
-                                           password: password, authMode: self.serverConfig.authMode)
-                }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: 8_000_000_000)
-                    throw CancellationError()
-                }
-                try await group.next()
-                group.cancelAll()
-            }
+            try await self.connect(
+                url: self.serverConfig.url,
+                username: self.serverConfig.username,
+                password: password,
+                authMode: self.serverConfig.authMode
+            )
             await self.flushOfflineMutations(promptUser: true, context: .previousSession)
         } catch is CancellationError {
             connectionError = "Нет соединения с сервером.".localized
@@ -299,7 +293,17 @@ final class AppState {
             let config = SubsonicConfig(baseURL: base, username: username,
                                         password: password, authMode: authMode)
             let client = SubsonicClient(config: config)
-            try await client.ping()
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await client.ping()
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: 12_000_000_000)
+                    throw URLError(.timedOut)
+                }
+                try await group.next()
+                group.cancelAll()
+            }
 
             var updatedConfig = serverConfig
             updatedConfig.url = url

@@ -20,22 +20,12 @@ extension AppState {
         defer { isReconnecting = false }
 
         do {
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    try await self.connect(
-                        url: self.serverConfig.url,
-                        username: self.serverConfig.username,
-                        password: password,
-                        authMode: self.serverConfig.authMode
-                    )
-                }
-                group.addTask {
-                    try await Task.sleep(for: .seconds(8))
-                    throw URLError(.timedOut)
-                }
-                try await group.next()
-                group.cancelAll()
-            }
+            try await self.connect(
+                url: self.serverConfig.url,
+                username: self.serverConfig.username,
+                password: password,
+                authMode: self.serverConfig.authMode
+            )
             connectionError = nil
             isOfflineSession = false
             if promptMutations {
@@ -98,9 +88,6 @@ extension AppState {
                     serverConfig.forceOfflineMode = false
                     saveSettings()
                     _ = await reconnect(silent: false, promptMutations: false)
-                case .cancel:
-                    withMutation(keyPath: \.serverConfig) {}
-                    return
                 }
             } else {
                 serverConfig.forceOfflineMode = false
