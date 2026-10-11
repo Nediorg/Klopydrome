@@ -139,6 +139,7 @@ struct GenresView: View {
             let genres = try await client.getGenres()
             app.availableGenres = genres
             loadError = nil
+            await app.persistGenresToDisk()
         } catch {
             if app.availableGenres.isEmpty {
                 loadError = error.localizedDescription

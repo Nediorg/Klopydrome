@@ -114,6 +114,7 @@ struct ArtistsView: View {
             loadError = nil
             app.library.artistIndexes = fresh
             app.library.artistIndexesLoaded = true
+            await app.persistArtistsToDisk()
         } catch {
             if app.library.artistIndexes.isEmpty {
                 loadError = error.localizedDescription

@@ -334,6 +334,7 @@ struct SongsView: View {
                 // skip the fetch. Failure and cancellation exit through their
                 // own `break`s and leave it unset (empty ≠ error).
                 app.library.songsLoaded = true
+                await app.persistSongsToDisk()
                 break
             }
             offset += batch.count
