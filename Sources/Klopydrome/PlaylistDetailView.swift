@@ -190,6 +190,22 @@ struct PlaylistDetailView: View {
         return rows
     }
 
+    private struct IdentifiedSong: Identifiable {
+        let index: Int
+        let song: SubsonicSong
+        let id: String
+    }
+
+    private var identifiedSongs: [IdentifiedSong] {
+        var counts: [String: Int] = [:]
+        return displayedSongs.enumerated().map { index, song in
+            let occ = counts[song.id, default: 0]
+            counts[song.id] = occ + 1
+            let id = occ == 0 ? song.id : "\(song.id)_\(occ)"
+            return IdentifiedSong(index: index, song: song, id: id)
+        }
+    }
+
     @ViewBuilder
     private func songList(_ detail: PlaylistDetail) -> some View {
         let currentID = app.player.currentSong?.id
@@ -207,13 +223,13 @@ struct PlaylistDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 32)
         } else {
-            ForEach(Array(displayedSongs.enumerated()), id: \.offset) { index, song in
+            ForEach(identifiedSongs) { item in
                 SongRow(
-                    song: song,
-                    index: index,
+                    song: item.song,
+                    index: item.index,
                     showAlbum: true,
-                    isCurrentOverride: currentID == song.id,
-                    extraActions: rowExtraActions(index: index, detail: detail),
+                    isCurrentOverride: currentID == item.song.id,
+                    extraActions: rowExtraActions(index: item.index, detail: detail),
                     onPlay: { rowIndex in
                         if app.isOfflineSession {
                             let playable = playableSongs
@@ -225,9 +241,9 @@ struct PlaylistDetailView: View {
                             app.play(filteredRows, at: rowIndex)
                         }
                     },
-                    isSelected: selection.isSelected(song.id),
+                    isSelected: selection.isSelected(item.song.id),
                     resolveSelection: { selection.selectedSongs(from: allSongs) },
-                    onSelect: { selection.toggle(song.id, allSongs: allSongs) }
+                    onSelect: { selection.toggle(item.song.id, allSongs: allSongs) }
                 )
                 .equatable()
             }

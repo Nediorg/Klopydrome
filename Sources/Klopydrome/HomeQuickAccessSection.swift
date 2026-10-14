@@ -40,13 +40,21 @@ struct HomeQuickAccessSection: View {
             Text("Быстрый доступ".localized)
                 .font(.title3.bold())
 
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
-                spacing: 8
-            ) {
-                ForEach(0..<8, id: \.self) { _ in
-                    PillCardPlaceholder()
+            skeletonGrid(forMask: false)
+                .shimmering()
+                .mask {
+                    skeletonGrid(forMask: true)
                 }
+        }
+    }
+
+    private func skeletonGrid(forMask: Bool) -> some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+            spacing: 8
+        ) {
+            ForEach(0..<8, id: \.self) { _ in
+                PillCardPlaceholder(forMask: forMask)
             }
         }
     }
@@ -209,33 +217,42 @@ struct HomeQuickAccessSection: View {
     }
 }
 
-/// Shimmering placeholder card for Quick Access while library data loads.
+/// Placeholder card for Quick Access while library data loads.
 struct PillCardPlaceholder: View {
+    var forMask: Bool = false
+
     var body: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color.primary.opacity(0.08))
-                .frame(width: 40, height: 40)
-
-            VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
-                    .frame(width: 90, height: 11)
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.primary.opacity(0.05))
-                    .frame(width: 55, height: 9)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
-        .background(
+        if forMask {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .shimmering()
-        .accessibilityHidden(true)
+                .fill(Color.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+        } else {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 90, height: 11)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.primary.opacity(0.05))
+                        .frame(width: 55, height: 9)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .frame(height: 56)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityHidden(true)
+        }
     }
 }

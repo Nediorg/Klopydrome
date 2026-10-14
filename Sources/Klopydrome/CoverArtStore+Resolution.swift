@@ -116,8 +116,8 @@ extension CoverArtStore {
         let cacheKey = CacheManager.metadataKey(endpoint: "artistImage",
                                                 params: [URLQueryItem(name: "url", value: resolved.absoluteString)])
         if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
-           let image = NSImage(data: data) {
-            return .image(bounded(image, requestedSize: size))
+           let image = decodeImage(from: data, requestedSize: size) {
+            return .image(image)
         }
         guard client != nil else { return .dead }
         return await fetch(url: resolved, cacheKey: cacheKey, requestedSize: size)

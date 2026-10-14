@@ -129,20 +129,36 @@ struct SmartPlaylistDetailView: View {
         }
     }
 
+    private struct IdentifiedSong: Identifiable {
+        let index: Int
+        let song: SubsonicSong
+        let id: String
+    }
+
+    private var identifiedSongs: [IdentifiedSong] {
+        var counts: [String: Int] = [:]
+        return songs.enumerated().map { index, song in
+            let occ = counts[song.id, default: 0]
+            counts[song.id] = occ + 1
+            let id = occ == 0 ? song.id : "\(song.id)_\(occ)"
+            return IdentifiedSong(index: index, song: song, id: id)
+        }
+    }
+
     @ViewBuilder
     private var songList: some View {
         let currentID = app.player.currentSong?.id
         let allSongs = songs
-        ForEach(Array(songs.enumerated()), id: \.offset) { index, song in
+        ForEach(identifiedSongs) { item in
             SongRow(
-                song: song,
-                index: index,
+                song: item.song,
+                index: item.index,
                 showAlbum: true,
-                isCurrentOverride: currentID == song.id,
+                isCurrentOverride: currentID == item.song.id,
                 onPlay: { playIndex in app.play(songs, at: playIndex) },
-                isSelected: selection.isSelected(song.id),
+                isSelected: selection.isSelected(item.song.id),
                 resolveSelection: { selection.selectedSongs(from: allSongs) },
-                onSelect: { selection.toggle(song.id, allSongs: allSongs) }
+                onSelect: { selection.toggle(item.song.id, allSongs: allSongs) }
             )
             .equatable()
         }
