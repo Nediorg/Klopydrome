@@ -669,6 +669,7 @@ final class AppState {
     func isCached(_ song: SubsonicSong) -> Bool {
         guard cache != nil else { return false }
         if !cachedStreamKeysSeeded { Task { await seedCachedStreamKeys() } }
+        guard !cachedStreamKeys.isEmpty else { return false }
         for suffix in candidateSuffixes(for: song) {
             let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
             if let name = cacheFileName(for: key), cachedStreamKeys.contains(name) {

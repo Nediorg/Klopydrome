@@ -2,32 +2,66 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-/// Which row the pointer is over. A reference type on purpose: only the cells
-/// that *read* `id` (the ★ cells) are invalidated when it changes.
+/// Per-row hover state so only the specific row under the cursor invalidates.
 @Observable
-final class RowHover {
-    var id: SubsonicSong.ID?
+final class RowHoverState {
+    var isHovered: Bool = false
+}
+
+/// Coordinates native AppKit hover tracking and routes hover state to individual rows.
+@MainActor
+final class RowHoverManager {
+    private var states: [SubsonicSong.ID: RowHoverState] = [:]
+    private var currentHoveredID: SubsonicSong.ID?
+
+    func state(for id: SubsonicSong.ID) -> RowHoverState {
+        if let existing = states[id] {
+            return existing
+        }
+        let state = RowHoverState()
+        states[id] = state
+        return state
+    }
+
+    func setHovered(id: SubsonicSong.ID?) {
+        guard currentHoveredID != id else { return }
+        if let prev = currentHoveredID, let state = states[prev] {
+            state.isHovered = false
+        }
+        currentHoveredID = id
+        if let next = id, let state = states[next] {
+            state.isHovered = true
+        }
+    }
+
+    func clearHover() {
+        setHovered(id: nil)
+    }
 }
 
 /// Backing NSTableView configuration: full-width rows, row height, and native
 /// AppKit mouse tracking for instantaneous row-accurate hover across the entire row height
 /// without per-cell SwiftUI overhead.
 struct TableTweaks: NSViewRepresentable {
-    let displayedSongs: [SubsonicSong]
-    let hover: RowHover
+    let songCount: Int
+    let hoverManager: RowHoverManager
     var rowHeight: CGFloat = 22
     var onPrefetch: (() -> Void)?
+    var songIDAtRow: ((Int) -> SubsonicSong.ID?)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(hover: hover)
+        Coordinator(hoverManager: hoverManager)
     }
 
     func makeNSView(context: Context) -> NSView { NSView() }
 
     func updateNSView(_ view: NSView, context: Context) {
-        context.coordinator.displayedSongs = displayedSongs
+        context.coordinator.songCount = songCount
         context.coordinator.rowHeight = rowHeight
         context.coordinator.onPrefetch = onPrefetch
+        context.coordinator.songIDAtRow = songIDAtRow
+
+        guard !context.coordinator.isAttached else { return }
 
         let applyTweaks = {
             var root: NSView? = view
@@ -58,21 +92,24 @@ struct TableTweaks: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSResponder {
-        var displayedSongs: [SubsonicSong] = []
+        var songCount: Int = 0
         var rowHeight: CGFloat = 22
         var onPrefetch: (() -> Void)?
-        let hover: RowHover
+        var songIDAtRow: ((Int) -> SubsonicSong.ID?)?
+        let hoverManager: RowHoverManager
+        var isAttached: Bool { tableView != nil }
+
         private weak var tableView: NSTableView?
         private weak var clipView: NSClipView?
         private var trackingArea: NSTrackingArea?
         private var scrollStartObserver: Any?
         private var scrollEndObserver: Any?
         private var clipViewBoundsObserver: Any?
-        private var scrollDebounceTask: Task<Void, Never>?
+        private var scrollDebounceWorkItem: DispatchWorkItem?
         private var isTableScrolling = false
 
-        init(hover: RowHover) {
-            self.hover = hover
+        init(hoverManager: RowHoverManager) {
+            self.hoverManager = hoverManager
             super.init()
 
             scrollStartObserver = NotificationCenter.default.addObserver(
@@ -97,7 +134,7 @@ struct TableTweaks: NSViewRepresentable {
         }
 
         deinit {
-            scrollDebounceTask?.cancel()
+            scrollDebounceWorkItem?.cancel()
             if let scrollStartObserver {
                 NotificationCenter.default.removeObserver(scrollStartObserver)
             }
@@ -140,8 +177,8 @@ struct TableTweaks: NSViewRepresentable {
         }
 
         func detach() {
-            scrollDebounceTask?.cancel()
-            scrollDebounceTask = nil
+            scrollDebounceWorkItem?.cancel()
+            scrollDebounceWorkItem = nil
             if let trackingArea, let tableView {
                 tableView.removeTrackingArea(trackingArea)
             }
@@ -160,7 +197,7 @@ struct TableTweaks: NSViewRepresentable {
                 window.acceptsMouseMovedEvents = true
             }
             guard !isTableScrolling, !ScrollGate.shared.isScrolling else {
-                if hover.id != nil { hover.id = nil }
+                hoverManager.clearHover()
                 return
             }
             let point = tableView.convert(event.locationInWindow, from: nil)
@@ -172,48 +209,40 @@ struct TableTweaks: NSViewRepresentable {
         }
 
         override func mouseExited(with event: NSEvent) {
-            if hover.id != nil {
-                hover.id = nil
-            }
+            hoverManager.clearHover()
         }
 
         private func updateHover(at point: NSPoint) {
             guard let tableView else { return }
             let row = tableView.row(at: point)
-            let newId = (row >= 0 && row < displayedSongs.count) ? displayedSongs[row].id : nil
-            if hover.id != newId {
-                hover.id = newId
-            }
+            let newId = (row >= 0 && row < songCount) ? songIDAtRow?(row) : nil
+            hoverManager.setHovered(id: newId)
         }
 
         private func handleClipViewBoundsDidChange() {
             isTableScrolling = true
-            if hover.id != nil {
-                hover.id = nil
-            }
+            hoverManager.clearHover()
             if let tableView, let clipView {
                 let visible = tableView.rows(in: clipView.bounds)
                 let maxVisible = visible.location + visible.length
-                if maxVisible >= displayedSongs.count - 150 {
+                if maxVisible >= songCount - 150 {
                     onPrefetch?()
                 }
             }
-            scrollDebounceTask?.cancel()
-            scrollDebounceTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 150_000_000)
-                guard !Task.isCancelled else { return }
+            scrollDebounceWorkItem?.cancel()
+            let item = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 self.isTableScrolling = false
                 self.handleScrollDidEnd()
             }
+            scrollDebounceWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120), execute: item)
         }
 
         private func handleScrollDidStart() {
             isTableScrolling = true
-            scrollDebounceTask?.cancel()
-            if hover.id != nil {
-                hover.id = nil
-            }
+            scrollDebounceWorkItem?.cancel()
+            hoverManager.clearHover()
         }
 
         private func handleScrollDidEnd() {
@@ -222,7 +251,7 @@ struct TableTweaks: NSViewRepresentable {
             let mouseLoc = window.mouseLocationOutsideOfEventStream
             let point = tableView.convert(mouseLoc, from: nil)
             guard tableView.bounds.contains(point) else {
-                if hover.id != nil { hover.id = nil }
+                hoverManager.clearHover()
                 return
             }
             updateHover(at: point)

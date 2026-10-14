@@ -25,6 +25,8 @@ enum SubsonicDate {
         return formatter
     }()
 
+    private static let formattedCache = NSCache<NSString, NSString>()
+
     /// Parses a Subsonic ISO8601 timestamp into a Date.
     static func parse(_ iso: String?) -> Date? {
         guard let iso else { return nil }
@@ -34,7 +36,14 @@ enum SubsonicDate {
     /// Parses a Subsonic ISO8601 timestamp and returns it as a localized long
     /// date string, or nil if it can't be decoded.
     static func longDate(_ iso: String?) -> String? {
+        guard let iso, !iso.isEmpty else { return nil }
+        let nsKey = iso as NSString
+        if let cached = formattedCache.object(forKey: nsKey) {
+            return cached as String
+        }
         guard let date = parse(iso) else { return nil }
-        return Self.display.string(from: date)
+        let formatted = Self.display.string(from: date)
+        formattedCache.setObject(formatted as NSString, forKey: nsKey)
+        return formatted
     }
 }

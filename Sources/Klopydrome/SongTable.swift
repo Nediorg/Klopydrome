@@ -161,7 +161,7 @@ struct SongTable: View {
 
     /// Tracks the selected rows so left-click selects and multi-select works.
     @State private var selection = Set<SubsonicSong.ID>()
-    @State private var hover = RowHover()
+    @State private var hoverManager = RowHoverManager()
 
     private func prefetchMoreIfNeeded() {
         guard displayedCount > 0, displayedCount < songs.count else { return }
@@ -169,33 +169,20 @@ struct SongTable: View {
         updateDisplayedSongs()
     }
 
-    private func checkTailAndPrefetch(song: SubsonicSong) {
-        guard displayedCount > 0, displayedCount < songs.count else { return }
-        let prefetchIndex = max(0, displayedCount - 150)
-        if songs.indices.contains(prefetchIndex), songs[prefetchIndex].id == song.id {
-            prefetchMoreIfNeeded()
-        }
-    }
-
     var body: some View {
+        let currentSongID = app.player.currentSong?.id
+
         Table(displayedSongs, selection: $selection, sortOrder: $sortOrder,
               columnCustomization: $columnCustomization) {
             TableColumnForEach(SongColumn.allCases) { (column: SongColumn) in
                 TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
-                    let cell = SongColumnCell(
+                    SongColumnCell(
                         column: column,
                         song: song,
                         app: app,
-                        hover: hover
+                        hoverState: hoverManager.state(for: song.id),
+                        isCurrent: song.id == currentSongID
                     )
-
-                    if column == .title {
-                        cell.onAppear {
-                            checkTailAndPrefetch(song: song)
-                        }
-                    } else {
-                        cell
-                    }
                 }
                 .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
                 .alignment(column.alignment)
@@ -208,9 +195,6 @@ struct SongTable: View {
             displayedCount = min(pageSize, songs.count)
             updateDisplayedSongs()
         }
-        .onChange(of: displayedCount) {
-            updateDisplayedSongs()
-        }
         .onChange(of: songs) {
             displayedCount = max(displayedCount, min(pageSize, songs.count))
             updateDisplayedSongs()
@@ -221,6 +205,7 @@ struct SongTable: View {
             // library that would re-materialize every row on the main thread —
             // the exact freeze we're avoiding. `SongsView` re-sorts the full
             // library off-main and lands a fresh page.
+            hoverManager.clearHover()
             displayedCount = min(pageSize, songs.count)
             updateDisplayedSongs()
         }
@@ -231,10 +216,14 @@ struct SongTable: View {
         // over the backing NSTableView.
         .background(
             TableTweaks(
-                displayedSongs: displayedSongs,
-                hover: hover,
+                songCount: displayedSongs.count,
+                hoverManager: hoverManager,
                 rowHeight: 22,
-                onPrefetch: { prefetchMoreIfNeeded() }
+                onPrefetch: { prefetchMoreIfNeeded() },
+                songIDAtRow: { [displayedSongs] row in
+                    guard row >= 0 && row < displayedSongs.count else { return nil }
+                    return displayedSongs[row].id
+                }
             )
         )
         // `contextMenu(forSelectionType:)` auto-selects the clicked row (and lets
@@ -302,11 +291,8 @@ private struct SongColumnCell: View {
     let column: SongColumn
     let song: SubsonicSong
     let app: AppState
-    let hover: RowHover
-
-    private var isCurrent: Bool {
-        app.player.currentSong?.id == song.id
-    }
+    let hoverState: RowHoverState
+    let isCurrent: Bool
 
     var body: some View {
         cellContent
@@ -327,13 +313,7 @@ private struct SongColumnCell: View {
                     .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                SongEllipsisMenu(
-                    song: song,
-                    foregroundStyle: AMColor.accent,
-                    app: app,
-                    compact: true,
-                    side: 16
-                )
+                TitleEllipsisButton(song: song, app: app, hoverState: hoverState)
             }
             .padding(.leading, 8)
         case .cloud:
@@ -342,49 +322,71 @@ private struct SongColumnCell: View {
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
                     .monospacedDigit()
-                    .foregroundStyle(isCurrent ? AMColor.accent : .secondary)
+                    .foregroundStyle(.secondary)
             }
         case .artist:
             Text(song.artist ?? "")
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .album:
             Text(song.album ?? "")
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .albumArtist:
             Text(song.albumArtist ?? "")
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .genre:
             Text(song.genre ?? "")
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .favorite:
-            FavoriteCell(song: song, app: app, hover: hover)
+            FavoriteCell(song: song, app: app, hoverState: hoverState)
         case .plays:
             Text(song.playCount.map(String.init) ?? "")
                 .monospacedDigit()
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
         case .year:
             Text(song.year.map(String.init) ?? "")
                 .monospacedDigit()
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
         case .composer:
             Text(song.composer ?? "")
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .bitrate:
             Text(song.bitRate.map { "\($0) kbps" } ?? "")
                 .monospacedDigit()
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
         case .rating:
             if app.effectiveRating(for: song) > 0 {
                 RatingStars(song: song, app: app, size: 10, spacing: 2)
             }
         case .added:
             Text(SongTable.addedDateText(song.created))
-                .foregroundStyle(isCurrent ? AMColor.accent.opacity(0.85) : .secondary)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Ellipsis actions button, gated by row hover to avoid building thousands of
+/// menus during fast scroll.
+private struct TitleEllipsisButton: View {
+    let song: SubsonicSong
+    let app: AppState
+    let hoverState: RowHoverState
+
+    var body: some View {
+        if hoverState.isHovered {
+            SongEllipsisMenu(
+                song: song,
+                foregroundStyle: AMColor.accent,
+                app: app,
+                compact: true,
+                side: 16
+            )
+        } else {
+            Color.clear.frame(width: 16, height: 16)
         }
     }
 }
@@ -393,7 +395,7 @@ private struct SongColumnCell: View {
 private struct FavoriteCell: View {
     let song: SubsonicSong
     let app: AppState
-    let hover: RowHover
+    let hoverState: RowHoverState
 
     private var isStarred: Bool {
         app.isStarred(song)
@@ -406,7 +408,7 @@ private struct FavoriteCell: View {
             Image(systemName: isStarred ? "star.fill" : "star")
                 .font(.system(size: 11))
                 .foregroundStyle(AMColor.accent)
-                .opacity(isStarred || hover.id == song.id ? 1 : 0)
+                .opacity(isStarred || hoverState.isHovered ? 1 : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
         }
