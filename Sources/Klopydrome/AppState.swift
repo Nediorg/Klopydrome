@@ -360,16 +360,13 @@ final class AppState {
             await restoreOfflineCatalog()
             self.connectionError = nil
             persist()
-            if !didReadKeychainPassword || cachedKeychainPassword != password {
-                try? KeychainStore.save(password: password, account: username)
-            }
-            cachedKeychainPassword = password
-            didReadKeychainPassword = true
+            persistSessionCredentials(username: username, password: password)
             CoverArtStore.shared.configure(client: client, cache: self.cache,
                                            coverResolution: serverConfig.coverResolution ?? .high)
             if queuePersistenceEnabled {
                 await restoreQueueFromServer()
             }
+            await restoreLibraryFromDiskCache()
             Task(priority: .utility) { [weak self] in
                 await self?.warmupLibrary()
             }
@@ -379,6 +376,14 @@ final class AppState {
             self.client = nil
             throw error
         }
+    }
+
+    private func persistSessionCredentials(username: String, password: String) {
+        if !didReadKeychainPassword || cachedKeychainPassword != password {
+            try? KeychainStore.save(password: password, account: username)
+        }
+        cachedKeychainPassword = password
+        didReadKeychainPassword = true
     }
 
     func disconnect() {

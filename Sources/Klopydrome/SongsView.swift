@@ -23,7 +23,8 @@ struct SongsView: View {
             return processedSongs
         }
         if searchText.isEmpty && !favoritesOnly {
-            return songs
+            var seen = Set<String>()
+            return songs.filter { seen.insert($0.id).inserted }
         }
         return []
     }
@@ -227,7 +228,8 @@ struct SongsView: View {
         _ source: [SubsonicSong], favoritesOnly: Bool, starredIDs: Set<String>?,
         query: String, sortOrder: [KeyPathComparator<SubsonicSong>]
     ) -> (processed: [SubsonicSong], searchable: [String: String]) {
-        var list = source
+        var seenIDs = Set<String>()
+        var list = source.filter { seenIDs.insert($0.id).inserted }
         if favoritesOnly, let starred = starredIDs {
             list = list.filter { starred.contains($0.id) }
         }
@@ -278,18 +280,14 @@ struct SongsView: View {
     private func load(isRefresh: Bool = false) async {
         guard let client = app.client else { return }
         loadError = nil
-        // During a pull-to-refresh keep the already-loaded table visible; the
-        // spinner only replaces content on the initial empty load.
         if isRefresh {
             app.library.songs = []
-            // An interrupted refresh (tab switched mid-paging) must not leave the
-            // store marked loaded with zero songs — the next visit would skip the
-            // fetch and render a false "Нет песен" empty page.
             app.library.songsLoaded = false
             searchable.removeAll(keepingCapacity: true)
             loading = true
+        } else {
+            loading = songs.isEmpty
         }
-        if songs.isEmpty { loading = true } else { loading = false }
         isLoadingMore = true
         defer {
             loading = false
@@ -297,42 +295,19 @@ struct SongsView: View {
         }
         var seen = Set(songs.map(\.id))
         var offset = songs.count
-        while true {
-            if Task.isCancelled { break }
+        while !Task.isCancelled {
             let batch: [SubsonicSong]
             do {
                 batch = try await client.search3(query: "*", songCount: chunkSize, songOffset: offset).songs
             } catch {
-                // A failed page is an error, not an empty library: surface
-                // retry instead of the "Нет песен" empty state. Only the
-                // view decides it's worth showing (no songs loaded yet).
                 loadError = error.localizedDescription
                 break
             }
-            // Collect the chunk into an intermediate array then append once, so
-            // the whole page lands as a single observation event instead of one
-            // per song row (13k-row libraries made the per-append invalidation
-            // cost visible).
-            var newSongs: [SubsonicSong] = []
-            newSongs.reserveCapacity(batch.count)
-            var added = false
-            for song in batch where seen.insert(song.id).inserted {
-                newSongs.append(song)
-                added = true
-            }
-            if added {
-                app.library.songs.append(contentsOf: newSongs)
-            }
-            // Make each chunk visible as soon as it lands, without waiting for
-            // the rest of the library.
-            if added {
+            if appendBatch(batch, seen: &seen) {
                 searchable.removeAll(keepingCapacity: true)
                 reprocess()
             }
             if batch.isEmpty || batch.count < chunkSize {
-                // Natural end of the library: mark the store loaded so revisits
-                // skip the fetch. Failure and cancellation exit through their
-                // own `break`s and leave it unset (empty ≠ error).
                 app.library.songsLoaded = true
                 await app.persistSongsToDisk()
                 break
@@ -340,5 +315,23 @@ struct SongsView: View {
             offset += batch.count
             await Task.yield()
         }
+    }
+
+    private func appendBatch(_ batch: [SubsonicSong], seen: inout Set<String>) -> Bool {
+        var newSongs: [SubsonicSong] = []
+        newSongs.reserveCapacity(batch.count)
+        var added = false
+        for song in batch where seen.insert(song.id).inserted {
+            newSongs.append(song)
+            added = true
+        }
+        if added {
+            let existing = Set(app.library.songs.map(\.id))
+            let strictlyNew = newSongs.filter { !existing.contains($0.id) }
+            if !strictlyNew.isEmpty {
+                app.library.songs.append(contentsOf: strictlyNew)
+            }
+        }
+        return added
     }
 }
