@@ -15,6 +15,9 @@ struct SmartPlaylistDetailView: View {
     @State private var state: LoadState = .loading
     @State private var confirmingDelete = false
     @State private var selection = SongRowSelection()
+    @State private var showingCommentModal = false
+    @State private var summaryHovered = false
+    @State private var editRulesHovered = false
 
     private var songs: [SubsonicSong] {
         if case .loaded(let songs) = state { return songs }
@@ -62,10 +65,18 @@ struct SmartPlaylistDetailView: View {
         } message: {
             Text(L10n.format("format.smartPlaylist.delete.warning", playlist.name))
         }
+        .inWindowModal(isPresented: $showingCommentModal) {
+            PlaylistCommentModal(
+                title: playlist.name,
+                comment: playlist.ruleSummary,
+                onDismiss: { showingCommentModal = false }
+            )
+        }
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 24) {
+        let hasSummary = !playlist.ruleSummary.isEmpty
+        return HStack(alignment: .top, spacing: 24) {
             Image(systemName: "gearshape")
                 .font(.system(size: 72))
                 .foregroundStyle(.secondary)
@@ -76,27 +87,47 @@ struct SmartPlaylistDetailView: View {
                 )
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(playlist.name)
-                        .font(.largeTitle.bold())
-                    Text("Умный плейлист".localized)
-                        .font(.title2.weight(.regular))
-                        .foregroundStyle(.secondary)
-                    if !playlist.ruleSummary.isEmpty {
-                        Text(playlist.ruleSummary)
-                            .font(.callout)
-                            .foregroundStyle(AMColor.secondaryText)
-                            .lineLimit(2)
-                            .truncationMode(.tail)
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(playlist.name)
+                            .font(.largeTitle.bold())
+                        Text("Умный плейлист".localized)
+                            .font(.title2.weight(.regular))
+                            .foregroundStyle(.secondary)
+                        Button {
+                            app.openSmartPlaylistEditor(playlist: playlist)
+                        } label: {
+                            HStack(spacing: 2) {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 8.5, weight: .semibold))
+                                Text("Редактировать правила".localized)
+                                    .font(.callout.bold())
+                            }
+                            .foregroundStyle(AMColor.accent)
+                            .brightness(editRulesHovered ? 0.15 : 0)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { editRulesHovered = $0 }
                     }
-                    Button {
-                        app.openSmartPlaylistEditor(playlist: playlist)
-                    } label: {
-                        Label("Редактировать правила".localized, systemImage: "slider.horizontal.3")
-                            .font(.callout)
+                    if hasSummary {
+                        Button {
+                            showingCommentModal = true
+                        } label: {
+                            Text(playlist.ruleSummary)
+                                .font(.callout)
+                                .foregroundStyle(summaryHovered ? Color.primary : AMColor.secondaryText)
+                                .lineLimit(3)
+                                .truncationMode(.tail)
+                                .multilineTextAlignment(.leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { summaryHovered = $0 }
+                        .help("Показать описание полностью".localized)
                     }
-                    .buttonStyle(.link)
                 }
+                .offset(y: -6)
                 Spacer(minLength: 0)
                 actionRow
             }

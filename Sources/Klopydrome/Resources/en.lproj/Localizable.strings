@@ -497,6 +497,7 @@
 "Пока нет песен, подходящих под правила этого умного плейлиста." = "There are no songs matching the rules for this smart playlist yet.";
 "Показать" = "Show";
 "Показать альбом в медиатеке" = "Show album in Library";
+"Показать описание полностью" = "Show full description";
 "Показывать артиста" = "Show artist";
 "Показывать исполнителя" = "Show Artist";
 "Показывать текущий трек в Discord" = "Show current track in Discord";
@@ -546,6 +547,7 @@
 "Раскрыть" = "Expand";
 "Рассвет" = "Dawn";
 "Расширенные" = "Advanced";
+"Редактировать правила" = "Edit Rules";
 "Редактировать правила…" = "Edit Rules…";
 "Редактор правил" = "Rules Editor";
 "Режим" = "Mode";

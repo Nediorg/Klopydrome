@@ -16,6 +16,9 @@ struct PlaylistDetailView: View {
     @State private var filterText = ""
     @State private var isScrolled = false
     @State private var isSearchExpanded = false
+    @State private var showingCommentModal = false
+    @State private var commentHovered = false
+    @State private var editRulesHovered = false
     private let pageSize = 100
 
     private struct ScrollOffsetKey: PreferenceKey {
@@ -148,6 +151,13 @@ struct PlaylistDetailView: View {
             }
             Button("Отмена", role: .cancel) {}
         }
+        .inWindowModal(isPresented: $showingCommentModal) {
+            PlaylistCommentModal(
+                title: currentDetail.displayName,
+                comment: currentDetail.comment ?? "",
+                onDismiss: { showingCommentModal = false }
+            )
+        }
     }
 
     /// Header data is available immediately from the summary that opened this
@@ -170,32 +180,72 @@ struct PlaylistDetailView: View {
     }
 
     private func header(_ detail: PlaylistDetail) -> some View {
-        HStack(alignment: .top, spacing: 24) {
+        let trimmedComment = detail.comment?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasComment = !trimmedComment.isEmpty
+
+        return HStack(alignment: .top, spacing: 24) {
             QuickLookCover(coverArt: detail.coverArt, title: detail.displayName)
                 .frame(width: 220, height: 220)
                 .help("Быстрый просмотр обложки".localized)
                 .accessibilityLabel("Предпросмотр обложки".localized)
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(detail.displayName)
-                        .font(.largeTitle.bold())
-                    kindLine(detail)
-                    if let comment = detail.comment, !comment.isEmpty {
-                        Text(comment)
-                            .font(.callout)
-                            .foregroundStyle(AMColor.secondaryText)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(detail.displayName)
+                            .font(.largeTitle.bold())
+                        kindLine(detail)
+                        if detail.isSmart {
+                            editRulesButton(detail)
+                        }
+                        metaRow(detail)
                     }
-                    metaRow(detail)
+                    if hasComment {
+                        commentButton(title: detail.displayName, comment: trimmedComment)
+                    }
                 }
+                .offset(y: -6)
                 Spacer(minLength: 0)
                 actionRow(detail)
             }
             .frame(minHeight: 220)
             Spacer()
         }
+    }
+
+    private func editRulesButton(_ detail: PlaylistDetail) -> some View {
+        Button {
+            app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: detail.summary))
+        } label: {
+            HStack(spacing: 2) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 8.5, weight: .semibold))
+                Text("Редактировать правила".localized)
+                    .font(.callout.bold())
+            }
+            .foregroundStyle(AMColor.accent)
+            .brightness(editRulesHovered ? 0.15 : 0)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { editRulesHovered = $0 }
+    }
+
+    private func commentButton(title: String, comment: String) -> some View {
+        Button {
+            showingCommentModal = true
+        } label: {
+            Text(comment)
+                .font(.callout)
+                .foregroundStyle(commentHovered ? Color.primary : AMColor.secondaryText)
+                .lineLimit(3)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { commentHovered = $0 }
+        .help("Показать описание полностью".localized)
     }
 
     var playableSongs: [SubsonicSong] {

@@ -296,7 +296,7 @@ struct CreatePlaylistModal: View {
             MultilineTextEditor(text: $description)
                 .padding(8)
         }
-        .frame(minHeight: 72)
+        .frame(height: 72)
         .background(fieldBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {

@@ -107,6 +107,7 @@ struct AlbumDetailView: View {
                     artistLink(detail)
                     metaRow(detail)
                 }
+                .offset(y: -6)
                 Spacer(minLength: 0)
                 actionRow
             }
