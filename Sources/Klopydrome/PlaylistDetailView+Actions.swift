@@ -152,49 +152,6 @@ extension PlaylistDetailView {
     /// Placeholder song rows shown while the playlist's songs stream in.
     /// Matches the exact layout, margins, and row height (46pt) of `SongRow(showAlbum: true)`.
     var skeletonRows: some View {
-        skeletonRowsList(forMask: false)
-            .shimmering()
-            .mask {
-                skeletonRowsList(forMask: true)
-            }
-    }
-
-    private func skeletonRowsList(forMask: Bool) -> some View {
-        VStack(spacing: 0) {
-            ForEach(0..<10, id: \.self) { _ in
-                skeletonRow(forMask: forMask)
-            }
-        }
-    }
-
-    private func skeletonRow(forMask: Bool) -> some View {
-        HStack(spacing: 6) {
-            Color.clear
-                .frame(width: 16, height: 16)
-
-            HStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(forMask ? Color.black : Color.primary.opacity(0.05))
-                        .frame(width: 36, height: 36)
-                    VStack(alignment: .leading, spacing: 4) {
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(forMask ? Color.black : Color.primary.opacity(0.06))
-                            .frame(width: 180, height: 12)
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(forMask ? Color.black : Color.primary.opacity(0.05))
-                            .frame(width: 120, height: 10)
-                    }
-                }
-                Spacer(minLength: 8)
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(forMask ? Color.black : Color.primary.opacity(0.04))
-                    .frame(width: 36, height: 10)
-            }
-            .padding(.leading, 5)
-            .padding(.trailing, 8)
-            .padding(.vertical, 5)
-        }
-        .frame(height: 46)
+        SkeletonSongList(count: 10, showAlbum: true)
     }
 }

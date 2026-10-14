@@ -81,27 +81,7 @@ struct AlbumDetailView: View {
 
     /// Placeholder track rows shown while the album's songs stream in.
     private var skeletonRows: some View {
-        VStack(spacing: 0) {
-            ForEach(0..<10, id: \.self) { _ in
-                HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(width: 36, height: 36)
-                    VStack(alignment: .leading, spacing: 4) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.primary.opacity(0.06))
-                            .frame(width: 180, height: 12)
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.primary.opacity(0.05))
-                            .frame(width: 120, height: 10)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                Divider().opacity(0.3)
-            }
-        }
+        SkeletonSongList(count: 10, showAlbum: false)
     }
 
     // MARK: Header

@@ -209,62 +209,7 @@ struct ArtistHeroRow: View {
             .offset(x: dockOffset)
             .zIndex(1)
 
-            ZStack(alignment: .topLeading) {
-                // Background dividers matching CompactSongColumn
-                VStack(spacing: 0) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Color.clear.frame(height: 48)
-                        if index < 2 {
-                            Divider()
-                                .padding(.leading, 50)
-                                .padding(.trailing, 6)
-                                .opacity(0.4)
-                        }
-                    }
-                }
-
-                // Shimmering skeleton pills strictly masked to shapes
-                skeletonList(forMask: false)
-                    .shimmering()
-                    .mask {
-                        skeletonList(forMask: true)
-                    }
-            }
-            .frame(width: 280)
+            SkeletonCompactSongColumn(count: 3, width: 280)
         }
-    }
-
-    private func skeletonList(forMask: Bool) -> some View {
-        VStack(spacing: 0) {
-            ForEach(0..<3, id: \.self) { index in
-                skeletonRow(forMask: forMask)
-                if index < 2 {
-                    Color.clear.frame(height: 1)
-                }
-            }
-        }
-        .frame(width: 280)
-    }
-
-    private func skeletonRow(forMask: Bool) -> some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(forMask ? Color.black : Color.primary.opacity(0.08))
-                .frame(width: 36, height: 36)
-
-            VStack(alignment: .leading, spacing: 3) {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(forMask ? Color.black : Color.primary.opacity(0.10))
-                    .frame(width: 130, height: 12)
-
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(forMask ? Color.black : Color.primary.opacity(0.06))
-                    .frame(width: 80, height: 9)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 6)
     }
 }
