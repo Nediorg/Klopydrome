@@ -432,31 +432,42 @@ private struct CloudCell: View {
     }
 
     var body: some View {
-        HStack {
-            Spacer()
-            if isDownloading {
+        if isDownloading {
+            Button {
+                app.cancelSongDownload(song)
+            } label: {
                 ProgressView()
                     .controlSize(.mini)
-                    .frame(width: 14, height: 14)
-                    .help("Загрузка…".localized)
-            } else if isCachedLocally {
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Отменить загрузку".localized)
+        } else if isCachedLocally {
+            Button {
+                Task { await app.removeFromCache(song) }
+            } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.secondary)
-                    .help("Загружено".localized)
-            } else if !app.isOfflineSession {
-                Button {
-                    app.cacheSong(song)
-                } label: {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .symbolRenderingMode(.hierarchical)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Загрузить".localized)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .help("Удалить загрузку".localized)
+        } else if !app.isOfflineSession {
+            Button {
+                app.cacheSong(song)
+            } label: {
+                Image(systemName: "arrow.down.circle.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Загрузить".localized)
         }
     }
 }

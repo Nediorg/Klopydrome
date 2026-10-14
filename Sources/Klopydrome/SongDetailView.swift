@@ -42,8 +42,13 @@ struct SongDetailView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     if isDownloading {
-                        ProgressView().controlSize(.small).frame(width: 24, height: 24)
-                            .help("Загрузка…")
+                        Button {
+                            app.cancelSongDownload(song)
+                        } label: {
+                            ProgressView().controlSize(.small).frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Отменить загрузку".localized)
                     } else {
                         Button {
                             if app.isCached(song) {

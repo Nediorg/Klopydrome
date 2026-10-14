@@ -219,11 +219,17 @@ struct SongRow: View {
     private var trailingContent: some View {
         HStack(spacing: 10) {
             if isDownloading {
-                ProgressView()
-                    .controlSize(.mini)
-                    .frame(width: 16, height: 16)
-                    .help("Загрузка…".localized)
-                    .accessibilityLabel("Загрузка".localized)
+                Button {
+                    app.cancelSongDownload(song)
+                } label: {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Отменить загрузку".localized)
+                .accessibilityLabel("Отменить загрузку".localized)
             } else if hovering || isCachedLocally {
                 Button {
                     if isCachedLocally {
