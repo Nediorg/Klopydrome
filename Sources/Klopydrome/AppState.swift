@@ -345,12 +345,15 @@ final class AppState {
             withMutation(keyPath: \.ratingOverrides) { ratingOverrides = [:] }
             availableGenres = []
 
+            let newCache = CacheManager(rootURL: CacheManager.root(forServer: base.host ?? "default"))
+            self.cache = newCache
+            await restoreLibraryFromDiskCache()
+
             self.client = client
             self.navidrome = NavidromeAPI(baseURL: base, username: username, password: password)
-            self.cache = CacheManager(rootURL: CacheManager.root(forServer: base.host ?? "default"))
             // Disk-persist the smart-playlist pool so a new session's first
             // compute can load it instead of re-crawling the whole library.
-            self.smartPlaylistEngine = SmartPlaylistEngine(repo: CachedLibraryRepo(client: client, cache: self.cache))
+            self.smartPlaylistEngine = SmartPlaylistEngine(repo: CachedLibraryRepo(client: client, cache: newCache))
             resetCacheState()
             Task { await self.seedCachedStreamKeys() }
             serverConfig = updatedConfig
@@ -361,12 +364,11 @@ final class AppState {
             self.connectionError = nil
             persist()
             persistSessionCredentials(username: username, password: password)
-            CoverArtStore.shared.configure(client: client, cache: self.cache,
+            CoverArtStore.shared.configure(client: client, cache: newCache,
                                            coverResolution: serverConfig.coverResolution ?? .high)
             if queuePersistenceEnabled {
                 await restoreQueueFromServer()
             }
-            await restoreLibraryFromDiskCache()
             Task(priority: .utility) { [weak self] in
                 await self?.warmupLibrary()
             }

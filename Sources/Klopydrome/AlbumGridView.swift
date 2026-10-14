@@ -61,6 +61,20 @@ struct AlbumGridView: View {
     @State private var favoritesOnly = false
     @State private var searchText = ""
     @State private var processedAlbums: [SubsonicAlbum] = []
+    @State private var reprocessing = false
+
+    /// Filtered + sorted result to display. Falls back to raw `albums` on first
+    /// appearance while background sort/filter computation is running, avoiding
+    /// a flash of empty state or "Ничего не найдено".
+    private var displayAlbums: [SubsonicAlbum] {
+        if !processedAlbums.isEmpty {
+            return processedAlbums
+        }
+        if searchText.isEmpty && !favoritesOnly {
+            return albums
+        }
+        return []
+    }
 
     private var currentType: AlbumListType? { sort.asAlbumListType }
     private var isLocalSort: Bool { currentType == nil }
@@ -117,12 +131,16 @@ struct AlbumGridView: View {
                                            systemImage: config.emptySystemImage,
                                            message: config.emptyMessage)
                         .emptyStatePinnedToTop()
-                } else if processedAlbums.isEmpty {
-                    ContentUnavailableView("Ничего не найдено",
-                                           systemImage: "magnifyingglass",
-                                           // swiftlint:disable:next line_length
-                                            description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))
-                        .emptyStatePinnedToTop()
+                } else if displayAlbums.isEmpty {
+                    if reprocessing || (!app.library[keyPath: config.loaded] && loading) {
+                        initialLoadingGrid
+                    } else {
+                        ContentUnavailableView("Ничего не найдено",
+                                               systemImage: "magnifyingglass",
+                                               // swiftlint:disable:next line_length
+                                                description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))
+                            .emptyStatePinnedToTop()
+                    }
                 } else {
                     GeometryReader { geo in
                         let available = geo.size.width - 48
@@ -132,7 +150,7 @@ struct AlbumGridView: View {
                         let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
                         ScrollView {
                             LazyVGrid(columns: cols, spacing: gap) {
-                                ForEach(processedAlbums) { album in
+                                ForEach(displayAlbums) { album in
                                     Button {
                                         app.openAlbumInLibrary(album)
                                     } label: {
@@ -176,58 +194,6 @@ struct AlbumGridView: View {
     private var albums: [SubsonicAlbum] { app.library[keyPath: config.albums] }
     private var allLoaded: Bool { app.library[keyPath: config.allLoaded] }
 
-    @ViewBuilder
-    private var paginationFooter: some View {
-        if let pageLoadError {
-            VStack(spacing: 8) {
-                Divider().opacity(0.4)
-                Button { Task { await loadMore() } } label: {
-                    Label("Повторить загрузку".localized, systemImage: "arrow.clockwise")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .opacity(0.5)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(pageLoadError)
-                .accessibilityLabel("Повторить загрузку".localized)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, 24)
-        } else {
-            ProgressView()
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 16)
-                .onAppear { Task { await loadMore() } }
-        }
-    }
-
-    /// The first network response has not arrived yet, but the grid dimensions
-    /// are already useful feedback and avoid a visually empty tab.
-    private var initialLoadingGrid: some View {
-        GeometryReader { geo in
-            let available = geo.size.width - 48
-            let count = max(1, Int((available + gap) / (minCard + gap)))
-            let rawWidth = (available - CGFloat(count - 1) * gap) / CGFloat(count)
-            let cardWidth = floor(rawWidth)
-            let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
-            ScrollView {
-                LazyVGrid(columns: cols, spacing: gap) {
-                    ForEach(0..<12, id: \.self) { _ in
-                        AlbumCardPlaceholder(width: cardWidth)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 20)
-            }
-            .scrollClipDisabled()
-        }
-        .accessibilityLabel("Загрузка альбомов")
-    }
-
     /// Fetches the first page only when the store has never been loaded, so a
     /// revisit to the tab is instant and keeps scroll position. Pull-to-refresh
     /// still forces a full reload via `refresh()`.
@@ -265,6 +231,12 @@ struct AlbumGridView: View {
 
         // Snapshot all inputs synchronously on the main actor.
         let base = albums
+        if base.isEmpty {
+            processedAlbums = []
+            reprocessing = false
+            return
+        }
+        reprocessing = true
         let onlyFav = favoritesOnly
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let sortKind = sort
@@ -280,34 +252,9 @@ struct AlbumGridView: View {
             await MainActor.run {
                 guard !Task.isCancelled, reprocessGeneration == generation else { return }
                 processedAlbums = result
+                reprocessing = false
             }
         }
-    }
-
-    nonisolated private static func compute(_ source: [SubsonicAlbum], favoritesOnly: Bool,
-                                            starredIDs: Set<String>?, query: String,
-                                            sort: LibrarySort) -> [SubsonicAlbum] {
-        var list = source
-        if favoritesOnly, let starred = starredIDs {
-            list = list.filter { starred.contains($0.id) }
-        }
-        guard !Task.isCancelled else { return [] }
-        if !query.isEmpty {
-            list = list.filter {
-                ($0.displayName + " " + ($0.artist ?? "")).lowercased().contains(query)
-            }
-        }
-        guard !Task.isCancelled else { return [] }
-        if sort.asAlbumListType == nil {
-            let descending: Bool = {
-                switch sort {
-                case .name, .artist, .genre, .id: return false
-                default: return true
-                }
-            }()
-            return sortedAlbums(list, by: sort.asArtistAlbumSort, descending: descending)
-        }
-        return list
     }
 
     private func handleSortChange() async {
@@ -317,6 +264,7 @@ struct AlbumGridView: View {
         pageLoadError = nil
         loadError = nil
         loading = true
+        reprocessing = true
         reprocessGeneration += 1
         processedAlbums = []
         app.library[keyPath: config.albums] = []
@@ -383,5 +331,91 @@ struct AlbumGridView: View {
             }
         }
         pageLoadError = lastError
+    }
+}
+
+// MARK: - Subviews & Computations
+
+private extension AlbumGridView {
+    @ViewBuilder
+    var paginationFooter: some View {
+        if let pageLoadError {
+            VStack(spacing: 8) {
+                Divider().opacity(0.4)
+                Button { Task { await loadMore() } } label: {
+                    Label("Повторить загрузку".localized, systemImage: "arrow.clockwise")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .opacity(0.5)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(pageLoadError)
+                .accessibilityLabel("Повторить загрузку".localized)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 24)
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 16)
+                .onAppear { Task { await loadMore() } }
+        }
+    }
+
+    /// The first network response has not arrived yet, but the grid dimensions
+    /// are already useful feedback and avoid a visually empty tab.
+    var initialLoadingGrid: some View {
+        GeometryReader { geo in
+            let available = geo.size.width - 48
+            let count = max(1, Int((available + gap) / (minCard + gap)))
+            let rawWidth = (available - CGFloat(count - 1) * gap) / CGFloat(count)
+            let cardWidth = floor(rawWidth)
+            let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
+            ScrollView {
+                LazyVGrid(columns: cols, spacing: gap) {
+                    ForEach(0..<12, id: \.self) { _ in
+                        AlbumCardPlaceholder(width: cardWidth)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
+            }
+            .scrollClipDisabled()
+        }
+        .accessibilityLabel("Загрузка альбомов")
+    }
+
+    nonisolated static func compute(
+        _ source: [SubsonicAlbum],
+        favoritesOnly: Bool,
+        starredIDs: Set<String>?,
+        query: String,
+        sort: LibrarySort
+    ) -> [SubsonicAlbum] {
+        var list = source
+        if favoritesOnly, let starred = starredIDs {
+            list = list.filter { starred.contains($0.id) }
+        }
+        guard !Task.isCancelled else { return [] }
+        if !query.isEmpty {
+            list = list.filter {
+                ($0.displayName + " " + ($0.artist ?? "")).lowercased().contains(query)
+            }
+        }
+        guard !Task.isCancelled else { return [] }
+        if sort.asAlbumListType == nil {
+            let descending: Bool = {
+                switch sort {
+                case .name, .artist, .genre, .id: return false
+                default: return true
+                }
+            }()
+            return sortedAlbums(list, by: sort.asArtistAlbumSort, descending: descending)
+        }
+        return list
     }
 }

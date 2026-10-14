@@ -91,7 +91,7 @@ struct ArtistsView: View {
             return
         }
         guard app.client != nil else { return }
-        guard !app.library.artistIndexesLoaded else {
+        guard !app.library.artistIndexesLoaded || indexes.isEmpty else {
             loading = false
             return
         }
@@ -104,7 +104,6 @@ struct ArtistsView: View {
             return
         }
         guard let client = app.client else {
-            loading = false
             return
         }
         if app.library.artistIndexes.isEmpty { loading = true }
