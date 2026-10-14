@@ -12,6 +12,7 @@ struct PlaylistLoadState {
     var detail: PlaylistDetail?
     var songs: [SubsonicSong] = []
     var isLoading = false
+    var isSyncing = false
     var isComplete = false
     var error: String?
 
@@ -23,8 +24,6 @@ struct PlaylistLoadState {
     }
 
     func matches(_ summary: PlaylistSummary) -> Bool {
-        // As long as it's the same logical playlist state or in the middle of loading,
-        // match it so the view doesn't flicker or lose cached/loaded tracks.
-        (changed == summary.changed && songCount == summary.songCount) || !songs.isEmpty
+        isComplete && !songs.isEmpty && changed == summary.changed && songCount == summary.songCount
     }
 }

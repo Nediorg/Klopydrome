@@ -325,9 +325,16 @@ struct CreatePlaylistModal: View {
             }
             if let playlistId, let coverData = await selectedCoverPNG() {
                 try? await app.client?.uploadPlaylistCover(playlistId: playlistId, imageData: coverData)
+                CoverArtStore.shared.clearMemoryCache()
             }
-            // Editing must refresh the sidebar summaries too — create already does.
-            if isEditing { await app.refreshPlaylists() }
+            // Editing must refresh the sidebar summaries and reload the open playlist detail.
+            if isEditing, let existing {
+                app.invalidatePlaylistDetail(for: existing.id)
+                await app.refreshPlaylists()
+                let target = app.library.playlists.first(where: { $0.id == existing.id })
+                    ?? PlaylistSummary(id: existing.id, name: trimmedName, comment: description)
+                await app.reloadPlaylist(target)
+            }
             onSaved?()
             creating = false
             dismissSelf()

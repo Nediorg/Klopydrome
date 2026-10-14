@@ -31,6 +31,7 @@ struct PlaylistDetailView: View {
     private var state: PlaylistLoadState? { app.playlistLoadState(for: playlist) }
     var rows: [SubsonicSong] { state?.songs ?? [] }
     var loading: Bool { state?.isLoading ?? true }
+    var isSyncing: Bool { state?.isSyncing ?? false }
     private var loadError: String? { state?.error }
     private var filteredRows: [SubsonicSong] {
         guard !filterText.isEmpty else { return rows }
@@ -54,6 +55,7 @@ struct PlaylistDetailView: View {
         return LibraryHeader(
             title: isScrolled ? currentDetail.displayName : "",
             searchText: $filterText,
+            isLoading: isScrolled && isSyncing,
             filteredCount: filterText.isEmpty ? nil : filteredRows.count,
             totalCount: filterText.isEmpty ? nil : rows.count,
             isSearchExpanded: $isSearchExpanded
@@ -129,6 +131,10 @@ struct PlaylistDetailView: View {
             app.loadPlaylistIfNeeded(playlist)
             displayedCount = min(rows.count, pageSize)
         }
+        .id(playlist.id)
+        .onDisappear {
+            app.cancelPlaylistTask(for: playlist.id)
+        }
         .onChange(of: rows.count) { _, count in
             if displayedCount == 0, count > 0 {
                 displayedCount = min(count, pageSize)
@@ -136,6 +142,8 @@ struct PlaylistDetailView: View {
                 // Rows are still streaming in; grow the window so songs that
                 // arrived after the first page are visible without a scroll.
                 displayedCount = min(displayedCount + pageSize, count)
+            } else if displayedCount > count {
+                displayedCount = count
             }
         }
         .onChange(of: filterText) { _, _ in

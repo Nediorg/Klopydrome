@@ -73,7 +73,11 @@ extension AppState {
         guard let navidrome else { throw SmartPlaylistError.notConnected }
         _ = try await navidrome.updatePlaylist(id: id, name: name, comment: comment,
                                                isPublic: isPublic, rules: query.ndjsonValue)
+        invalidatePlaylistDetail(for: id)
         await refreshPlaylists()
+        if let updated = library.playlists.first(where: { $0.id == id }) {
+            await reloadPlaylist(updated)
+        }
     }
 
     /// Creates a server-side smart playlist from a rules document and returns

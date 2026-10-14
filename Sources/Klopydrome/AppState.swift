@@ -792,6 +792,10 @@ final class AppState {
             recordRecentPlaylist(playlistID)
             invalidatePlaylistDetail(for: playlistID)
             await refreshPlaylists()
+            let isCurrent = nav.selectedPlaylist?.id == playlistID || nav.history.last?.playlistID == playlistID
+            if let updated = library.playlists.first(where: { $0.id == playlistID }), isCurrent {
+                await reloadPlaylist(updated)
+            }
         } else {
             queueOfflineAddToPlaylist(playlistID: playlistID, songIDs: songs.map(\.id))
             recordRecentPlaylist(playlistID)
@@ -863,6 +867,9 @@ final class AppState {
     func invalidatePlaylistDetail(for playlistID: String) {
         cancelPlaylistLoad(for: playlistID)
         library.playlistDetails[playlistID] = nil
+        Task { [weak self] in
+            await self?.cache?.removeFile(for: .metadata, key: "detail_playlist_\(playlistID)")
+        }
     }
 
     /// Duplicates a playlist (content + comment) under a new name.

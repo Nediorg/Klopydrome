@@ -27,7 +27,12 @@ extension PlaylistDetailView {
         Task {
             try? await client.updatePlaylist(id: detail.id, removeIndexes: [index])
             app.invalidatePlaylistDetail(for: detail.id)
-            app.loadPlaylistIfNeeded(playlist, forceReload: true)
+            await app.refreshPlaylists()
+            if let updated = app.library.playlists.first(where: { $0.id == detail.id }) {
+                await app.reloadPlaylist(updated)
+            } else {
+                app.loadPlaylistIfNeeded(playlist, forceReload: true)
+            }
         }
     }
 
@@ -84,7 +89,7 @@ extension PlaylistDetailView {
 
             Spacer()
             HStack(spacing: 8) {
-                if loading {
+                if isSyncing {
                     ProgressView()
                         .controlSize(.small)
                         .help("Синхронизация с сервером…".localized)
@@ -111,7 +116,7 @@ extension PlaylistDetailView {
                 }
                 .help("Действия над плейлистом".localized)
             }
-            .animation(.easeInOut(duration: 0.2), value: loading)
+            .animation(.easeInOut(duration: 0.2), value: isSyncing)
         }
     }
 

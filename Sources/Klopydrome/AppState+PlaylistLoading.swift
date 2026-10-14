@@ -2,61 +2,75 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    /// Returns the current shared load snapshot only while it still matches the
-    /// manifest item that opened the detail page.
+    /// Returns the current shared load snapshot for the requested playlist.
     func playlistLoadState(for playlist: PlaylistSummary) -> PlaylistLoadState? {
-        guard let state = playlistLoadStates[playlist.id], state.matches(playlist) else {
-            return nil
-        }
-        return state
+        playlistLoadStates[playlist.id]
     }
 
     /// Starts the one shared request used by the playlist detail view and its
-    /// playback actions. Repeated callers join the existing request instead of
-    /// opening another `getPlaylist` connection.
+    /// playback actions. Revalidates from the server on entry while showing cached
+    /// data immediately without a layout jump or loading flicker.
     func loadPlaylistIfNeeded(_ playlist: PlaylistSummary, forceReload: Bool = false) {
         let existing = playlistLoadStates[playlist.id]
         if forceReload {
             playlistLoadTasks[playlist.id]?.cancel()
             playlistLoadTasks[playlist.id] = nil
             playlistLoadTokens[playlist.id] = nil
-        } else if let state = playlistLoadState(for: playlist), state.isLoading || state.isComplete {
+        } else if let task = playlistLoadTasks[playlist.id], !task.isCancelled {
+            return
+        } else if let state = existing, state.matches(playlist) {
             return
         }
-        if !forceReload, let cached = cachedPlaylistDetail(for: playlist) {
+
+        let hasNoSongs = existing?.songs.isEmpty ?? true
+        if hasNoSongs, !forceReload, let cached = cachedPlaylistDetail(for: playlist) {
             installCompletedPlaylist(cached, for: playlist)
             return
         }
+
         if isOfflineSession {
-            Task {
-                if let cached = await self.offlinePlaylistDetail(for: playlist.id) {
-                    await MainActor.run {
-                        self.installCompletedPlaylist(cached, for: playlist)
-                    }
-                } else {
-                    await MainActor.run {
-                        var state = PlaylistLoadState(summary: playlist, existing: existing)
-                        state.isLoading = false
-                        self.playlistLoadStates[playlist.id] = state
-                    }
-                }
-            }
+            loadOfflinePlaylistSession(for: playlist, existing: existing)
             return
         }
+
         guard let client else {
-            playlistLoadStates[playlist.id] = PlaylistLoadState(summary: playlist, existing: existing)
+            if playlistLoadStates[playlist.id] == nil {
+                playlistLoadStates[playlist.id] = PlaylistLoadState(summary: playlist, existing: existing)
+            }
             return
         }
 
         let id = playlist.id
         let token = UUID()
         playlistLoadTokens[id] = token
-        var state = PlaylistLoadState(summary: playlist, existing: existing)
-        state.isLoading = true
-        state.error = nil
+
+        let hasLoadedSongs = !(playlistLoadStates[id]?.songs.isEmpty ?? true)
+        var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist, existing: existing)
+        if !hasLoadedSongs {
+            state.isLoading = true
+            state.error = nil
+        }
+        state.isSyncing = true
         playlistLoadStates[id] = state
+
         playlistLoadTasks[id] = Task { [weak self, client] in
             await self?.streamPlaylist(playlist, client: client, token: token, forceReload: forceReload)
+        }
+    }
+
+    private func loadOfflinePlaylistSession(for playlist: PlaylistSummary, existing: PlaylistLoadState?) {
+        Task {
+            if let cached = await self.offlinePlaylistDetail(for: playlist.id) {
+                await MainActor.run {
+                    self.installCompletedPlaylist(cached, for: playlist)
+                }
+            } else if self.playlistLoadStates[playlist.id] == nil {
+                await MainActor.run {
+                    var state = PlaylistLoadState(summary: playlist, existing: existing)
+                    state.isLoading = false
+                    self.playlistLoadStates[playlist.id] = state
+                }
+            }
         }
     }
 
@@ -69,9 +83,13 @@ extension AppState {
     }
 
     /// Awaits the same request used by the detail UI, then returns its complete
-    /// song array for Player. No SwiftUI row needs to be materialized first.
+    /// song array for Player. If cached songs are already present in memory,
+    /// returns them immediately so playback starts with zero delay.
     func playlistSongs(for playlist: PlaylistSummary) async -> [SubsonicSong] {
         loadPlaylistIfNeeded(playlist)
+        if let state = playlistLoadState(for: playlist), !state.songs.isEmpty {
+            return state.songs
+        }
         if let task = playlistLoadTasks[playlist.id] {
             await task.value
         }
@@ -144,17 +162,27 @@ extension AppState {
         playlistLoadStates[playlistID] = nil
     }
 
+    /// Cancels in-flight network streaming for the playlist without wiping its
+    /// loaded in-memory state or songs.
+    func cancelPlaylistTask(for playlistID: String) {
+        playlistLoadTasks[playlistID]?.cancel()
+        playlistLoadTasks[playlistID] = nil
+        playlistLoadTokens[playlistID] = nil
+        if var state = playlistLoadStates[playlistID] {
+            state.isSyncing = false
+            playlistLoadStates[playlistID] = state
+        }
+    }
+
     private func hydratePlaylistFromDiskCache(
         playlist: PlaylistSummary,
         id: String,
-        token: UUID,
-        forceReload: Bool
+        token: UUID
     ) async -> Bool {
         guard let diskCached = await cachedPlaylistDetailFromDisk(for: id) else { return false }
-        guard playlistLoadTokens[id] == token, !Task.isCancelled else { return true }
+        guard playlistLoadTokens[id] == token, !Task.isCancelled else { return false }
 
-        if !forceReload,
-           diskCached.changed == playlist.changed,
+        if diskCached.changed == playlist.changed,
            diskCached.songCount == playlist.songCount {
             installCompletedPlaylist(diskCached, for: playlist)
             cachePlaylistDetail(diskCached)
@@ -165,6 +193,7 @@ extension AppState {
         if state.songs.isEmpty {
             state.detail = diskCached
             state.songs = diskCached.entry ?? []
+            state.isLoading = false
             playlistLoadStates[id] = state
             cachePlaylistDetail(diskCached)
         }
@@ -178,7 +207,7 @@ extension AppState {
         forceReload: Bool = false
     ) async {
         let id = playlist.id
-        if await hydratePlaylistFromDiskCache(playlist: playlist, id: id, token: token, forceReload: forceReload) {
+        if !forceReload, await hydratePlaylistFromDiskCache(playlist: playlist, id: id, token: token) {
             playlistLoadTasks[id] = nil
             playlistLoadTokens[id] = nil
             return
@@ -194,7 +223,10 @@ extension AppState {
                 state.songs = offline.entry ?? []
             }
             state.isLoading = false
-            state.error = error.localizedDescription
+            state.isSyncing = false
+            if state.songs.isEmpty {
+                state.error = error.localizedDescription
+            }
             playlistLoadStates[id] = state
         }
         guard playlistLoadTokens[id] == token else { return }
@@ -229,14 +261,40 @@ extension AppState {
         var state = playlistLoadStates[id] ?? PlaylistLoadState(summary: playlist)
         let songs = didReplaceStaleSongs ? state.songs : []
         let detail = playlistDetail(from: state.detail, playlist: playlist, songs: songs)
+        let previousDetail = library.playlistDetails[id]
+        let isUnchanged = previousDetail == detail
+
         state.detail = detail
         state.songs = songs
         state.isLoading = false
+        state.isSyncing = false
         state.isComplete = true
+        state.error = nil
         playlistLoadStates[id] = state
+
+        guard !isUnchanged else { return }
+
         cachePlaylistDetail(detail)
         await persistPlaylistDetailToDisk(detail)
         await persistOfflinePlaylistDetail(detail)
+        syncPlaylistSummaryWithDetail(detail)
+    }
+
+    /// Keeps sidebar summaries and navigation history in sync with fresh detail metadata.
+    func syncPlaylistSummaryWithDetail(_ detail: PlaylistDetail) {
+        let id = detail.id
+        let fresh = detail.summary
+        if let idx = library.playlists.firstIndex(where: { $0.id == id }) {
+            library.playlists[idx] = fresh
+            if nav.selectedPlaylist?.id == id {
+                nav.selectedPlaylist = fresh
+            }
+        }
+        for (index, destination) in nav.history.enumerated() {
+            if case .playlist(let summary) = destination, summary.id == id {
+                nav.history[index] = .playlist(fresh)
+            }
+        }
     }
 
     private func installCompletedPlaylist(_ detail: PlaylistDetail, for playlist: PlaylistSummary) {
@@ -244,6 +302,8 @@ extension AppState {
         state.detail = detail
         state.songs = detail.entry ?? []
         state.isComplete = true
+        state.isLoading = false
+        state.isSyncing = false
         playlistLoadStates[playlist.id] = state
     }
 

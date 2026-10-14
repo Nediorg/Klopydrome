@@ -52,9 +52,11 @@ extension AppState {
     /// Persists PlaylistDetail to disk metadata store.
     func persistPlaylistDetailToDisk(_ detail: PlaylistDetail) async {
         guard let cache else { return }
-        if let data = try? JSONEncoder().encode(detail) {
-            _ = try? await cache.write(data: data, to: .metadata, key: Self.playlistDetailMetadataKey(for: detail.id))
-        }
+        let key = Self.playlistDetailMetadataKey(for: detail.id)
+        await Task.detached(priority: .utility) {
+            guard let data = try? JSONEncoder().encode(detail) else { return }
+            _ = try? await cache.write(data: data, to: .metadata, key: key)
+        }.value
     }
 
     /// Reads cached ArtistDetail from in-memory LibraryCache or disk metadata store.

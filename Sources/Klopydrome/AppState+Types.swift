@@ -173,6 +173,12 @@ struct NavigationState {
         case artist(Artist)
         case song(SubsonicSong)
         case genre(String)
+
+        var playlistID: String? {
+            if case .playlist(let summary) = self { return summary.id }
+            if case .smartPlaylist(let smart) = self { return smart.id }
+            return nil
+        }
     }
 
     var selected: Section = .home

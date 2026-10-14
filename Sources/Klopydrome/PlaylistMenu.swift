@@ -104,7 +104,11 @@ extension AppState {
     func togglePlaylistVisibility(_ playlist: PlaylistSummary) async {
         guard let client else { return }
         try? await client.updatePlaylist(id: playlist.id, isPublic: !(playlist.isPublic ?? false))
+        invalidatePlaylistDetail(for: playlist.id)
         await refreshPlaylists()
+        if let updated = library.playlists.first(where: { $0.id == playlist.id }) {
+            await reloadPlaylist(updated)
+        }
     }
 }
 

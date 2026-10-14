@@ -201,4 +201,51 @@ final class PlaylistCacheTests: XCTestCase {
 
         try? FileManager.default.removeItem(at: tempDir)
     }
+
+    func testCancelPlaylistTaskPreservesLoadedSongs() {
+        let app = AppState()
+        app.cachePlaylistDetail(detail())
+        app.loadPlaylistIfNeeded(summary())
+
+        XCTAssertEqual(app.playlistLoadState(for: summary())?.songs.count, 2)
+
+        app.cancelPlaylistTask(for: "playlist")
+
+        XCTAssertEqual(app.playlistLoadState(for: summary())?.songs.count, 2)
+        XCTAssertNil(app.playlistLoadTasks["playlist"])
+    }
+
+    func testMatchingManifestSkipsTaskSpawn() {
+        let app = AppState()
+        app.cachePlaylistDetail(detail())
+        app.loadPlaylistIfNeeded(summary())
+
+        let taskBefore = app.playlistLoadTasks["playlist"]
+        app.loadPlaylistIfNeeded(summary())
+        let taskAfter = app.playlistLoadTasks["playlist"]
+
+        XCTAssertNil(taskBefore)
+        XCTAssertNil(taskAfter)
+    }
+
+    func testManifestMismatchDoesNotMatchCompletedState() {
+        let app = AppState()
+        app.cachePlaylistDetail(detail())
+        app.loadPlaylistIfNeeded(summary())
+
+        let updated = summary(changed: "2026-08-18T15:00:00Z")
+        let matches = app.playlistLoadState(for: updated)?.matches(updated) ?? false
+        XCTAssertFalse(matches)
+    }
+
+    func testCancelPlaylistTaskResetsIsSyncing() {
+        let app = AppState()
+        var state = PlaylistLoadState(summary: summary())
+        state.isSyncing = true
+        app.playlistLoadStates["playlist"] = state
+
+        app.cancelPlaylistTask(for: "playlist")
+
+        XCTAssertFalse(app.playlistLoadStates["playlist"]?.isSyncing ?? true)
+    }
 }
