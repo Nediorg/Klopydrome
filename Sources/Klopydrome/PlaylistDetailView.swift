@@ -86,7 +86,20 @@ struct PlaylistDetailView: View {
                         inlineErrorNotice(loadError)
                             .padding(.bottom, 16)
                     }
-                    songList(currentDetail)
+                    PlaylistSongListSection(
+                        detail: currentDetail,
+                        displayedSongs: displayedSongs,
+                        filteredRows: filteredRows,
+                        playableSongs: playableSongs,
+                        loading: loading,
+                        loadError: loadError,
+                        canEditTracks: canEditTracks,
+                        displayedCount: $displayedCount,
+                        pageSize: pageSize,
+                        selection: $selection,
+                        app: app,
+                        onRemove: { index in remove(at: index, from: currentDetail) }
+                    )
                 }
                 .padding(.horizontal, 28)
                 .padding(.vertical, 24)
@@ -190,6 +203,24 @@ struct PlaylistDetailView: View {
         return rows
     }
 
+}
+
+// MARK: - Playlist Song List Section
+
+private struct PlaylistSongListSection: View {
+    let detail: PlaylistDetail
+    let displayedSongs: [SubsonicSong]
+    let filteredRows: [SubsonicSong]
+    let playableSongs: [SubsonicSong]
+    let loading: Bool
+    let loadError: String?
+    let canEditTracks: Bool
+    @Binding var displayedCount: Int
+    let pageSize: Int
+    @Binding var selection: SongRowSelection
+    let app: AppState
+    let onRemove: (Int) -> Void
+
     private struct IdentifiedSong: Identifiable {
         let index: Int
         let song: SubsonicSong
@@ -206,15 +237,16 @@ struct PlaylistDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func songList(_ detail: PlaylistDetail) -> some View {
+    var body: some View {
         let currentID = app.player.currentSong?.id
         let allSongs = filteredRows
-        if rows.isEmpty && loading {
-            skeletonRows
-        } else if rows.isEmpty, let loadError {
-            emptyErrorState(loadError)
-        } else if filteredRows.isEmpty && !rows.isEmpty {
+        if displayedSongs.isEmpty && loading {
+            SkeletonSongList(count: 10, showAlbum: true)
+        } else if displayedSongs.isEmpty, let loadError {
+            DetailUnavailableView(message: loadError) {
+                app.loadPlaylistIfNeeded(detail.summary, forceReload: true)
+            }
+        } else if filteredRows.isEmpty && !displayedSongs.isEmpty {
             ContentUnavailableView(
                 "Ничего не найдено".localized,
                 systemImage: "magnifyingglass",
@@ -229,14 +261,13 @@ struct PlaylistDetailView: View {
                     index: item.index,
                     showAlbum: true,
                     isCurrentOverride: currentID == item.song.id,
-                    extraActions: rowExtraActions(index: item.index, detail: detail),
+                    extraActions: rowExtraActions(index: item.index),
                     onPlay: { rowIndex in
                         if app.isOfflineSession {
-                            let playable = playableSongs
                             guard rowIndex < displayedSongs.count else { return }
                             let clickedSong = displayedSongs[rowIndex]
-                            let playIndex = playable.firstIndex(where: { $0.id == clickedSong.id }) ?? 0
-                            app.play(playable, at: playIndex)
+                            let playIndex = playableSongs.firstIndex(where: { $0.id == clickedSong.id }) ?? 0
+                            app.play(playableSongs, at: playIndex)
                         } else {
                             app.play(filteredRows, at: rowIndex)
                         }
@@ -247,8 +278,6 @@ struct PlaylistDetailView: View {
                 )
                 .equatable()
             }
-            // Sentinel: appears when the user scrolls near the bottom of the
-            // current page window. Grows the window by one page.
             if displayedCount < filteredRows.count {
                 Color.clear.frame(height: 80)
                     .onAppear {
@@ -258,13 +287,12 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func rowExtraActions(index: Int, detail: PlaylistDetail) -> [SongMenuExtraAction] {
+    private func rowExtraActions(index: Int) -> [SongMenuExtraAction] {
         guard canEditTracks else { return [] }
         return [SongMenuExtraAction(
             title: "Убрать из плейлиста".localized,
             systemImage: "trash",
-            action: { remove(at: index, from: detail) }
+            action: { onRemove(index) }
         )]
     }
-
 }

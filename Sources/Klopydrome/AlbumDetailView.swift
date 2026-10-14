@@ -38,7 +38,13 @@ struct AlbumDetailView: View {
                     if let loadError {
                         inlineErrorNotice(loadError)
                     }
-                    trackList(displayedDetail)
+                    AlbumTrackListSection(
+                        detail: displayedDetail,
+                        songs: songs,
+                        app: app,
+                        selection: $selection,
+                        createdDate: createdDate
+                    )
                 }
                 if let notes = albumInfo?.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     albumNotesSection(notes)
@@ -163,6 +169,13 @@ struct AlbumDetailView: View {
 
     // MARK: Action row
 
+    private var orderedSongs: [SubsonicSong] {
+        let grouped = Dictionary(grouping: songs, by: { $0.discNumber ?? 1 })
+        return grouped.keys.sorted().flatMap { disc in
+            grouped[disc]!.sorted { ($0.track ?? 0) < ($1.track ?? 0) }
+        }
+    }
+
     private var playableSongs: [SubsonicSong] {
         if app.isOfflineSession {
             return orderedSongs.filter { app.isCached($0) }
@@ -200,7 +213,16 @@ struct AlbumDetailView: View {
         }
     }
 
-    // MARK: Track list + footer
+}
+
+// MARK: - Album Track List Section
+
+private struct AlbumTrackListSection: View {
+    let detail: AlbumDetail
+    let songs: [SubsonicSong]
+    let app: AppState
+    @Binding var selection: SongRowSelection
+    let createdDate: String?
 
     private var groupedSongs: [(disc: Int, songs: [SubsonicSong])] {
         let grouped = Dictionary(grouping: songs, by: { $0.discNumber ?? 1 })
@@ -228,7 +250,7 @@ struct AlbumDetailView: View {
 
     private func playTrack(_ song: SubsonicSong, globalIndex: Int, ordered: [SubsonicSong]) {
         if app.isOfflineSession {
-            let playable = playableSongs
+            let playable = songs.filter { app.isCached($0) }
             let playIndex = playable.firstIndex(where: { $0.id == song.id }) ?? 0
             app.play(playable, at: playIndex)
         } else {
@@ -236,17 +258,17 @@ struct AlbumDetailView: View {
         }
     }
 
-    private func trackList(_ detail: AlbumDetail) -> some View {
+    var body: some View {
         let currentID = app.player.currentSong?.id
         let groups = groupedSongs
         let ordered = orderedSongs
         let isCompilation = isCompilationAlbum(detail)
-        // O(1) lookup for global index instead of O(n) firstIndex per song.
         let indexByID: [String: Int] = Dictionary(
             uniqueKeysWithValues: ordered.enumerated().map { ($0.element.id, $0.offset) }
         )
         let showDiscHeaders = groups.count > 1
-        return VStack(alignment: .leading, spacing: 16) {
+
+        VStack(alignment: .leading, spacing: 16) {
             VStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.element.disc) { _, group in
                     if showDiscHeaders {
@@ -282,7 +304,17 @@ struct AlbumDetailView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            footer(detail)
+
+            VStack(alignment: .leading, spacing: 2) {
+                let total = songs.reduce(0) { $0 + ($1.duration ?? 0) }
+                Text("\(songs.count) \(Pluralized.song(songs.count)) · \(Player.format(seconds: Double(total)))")
+                if let created = createdDate {
+                    Text(created)
+                }
+            }
+            .font(.callout)
+            .foregroundStyle(AMColor.secondaryText)
+            .padding(.top, 4)
         }
     }
 }
@@ -291,57 +323,15 @@ struct AlbumDetailView: View {
 
 extension AlbumDetailView {
     func emptyErrorState(_ error: String) -> some View {
-        ContentUnavailableView {
-            Label("Не удалось загрузить треки".localized, systemImage: "exclamationmark.triangle")
-        } description: {
-            Text(error)
-        } actions: {
-            Button("Повторить".localized) {
-                Task { await load() }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
+        DetailUnavailableView(message: error) {
+            Task { await load() }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 40)
-        .padding(.bottom, 60)
     }
 
     func inlineErrorNotice(_ error: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.orange)
-            Text(error)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
-            Button("Повторить".localized) {
-                Task { await load() }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+        DetailInlineErrorBanner(message: error) {
+            Task { await load() }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    func footer(_ detail: AlbumDetail) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            let total = songs.reduce(0) { $0 + ($1.duration ?? 0) }
-            Text("\(songs.count) \(Pluralized.song(songs.count)) · \(Player.format(seconds: Double(total)))")
-            if let created = createdDate {
-                Text(created)
-            }
-        }
-        .font(.callout)
-        .foregroundStyle(AMColor.secondaryText)
-        .padding(.top, 4)
     }
 
     var createdDate: String? {

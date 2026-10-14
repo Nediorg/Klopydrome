@@ -31,11 +31,8 @@ struct SongRow: View {
     private var isCurrent: Bool { isCurrentOverride ?? (app.player.currentSong?.id == song.id) }
     private var fgPrimary: Color { isCurrent ? .white : .primary }
     private var fgSecondary: Color { isCurrent ? .white.opacity(0.8) : .secondary }
-    private var isDownloading: Bool { app.downloadingSongIDs.contains(song.id) }
     private var isCachedLocally: Bool { app.isCached(song) }
-    private var isStarred: Bool { app.isStarred(song) }
     private var isCurrentPlaying: Bool { isCurrent && app.player.isPlaying }
-    private var starForeground: Color { AMColor.accent }
     private var isPlayableLocally: Bool { !app.isOfflineSession || isCachedLocally }
     private var isNarrow: Bool { !showAlbum && !showsArtist }
     private var rowCornerRadius: CGFloat { isNarrow ? 4 : 6 }
@@ -49,22 +46,7 @@ struct SongRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if isStarred || hovering {
-                Button {
-                    app.toggleStar(song)
-                } label: {
-                    Image(systemName: isStarred ? "star.fill" : "star")
-                        .font(.system(size: 11))
-                        .foregroundStyle(starForeground)
-                }
-                .buttonStyle(.plain)
-                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
-                .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
-            } else {
-                Color.clear
-                    .frame(width: 16, height: 16)
-            }
+            TrackFavoriteButton(song: song, app: app, isHovered: hovering, size: 16)
 
             HStack(spacing: 10) {
                 leadingContent
@@ -222,44 +204,13 @@ struct SongRow: View {
     @ViewBuilder
     private var trailingContent: some View {
         HStack(spacing: 10) {
-            if isDownloading {
-                Button {
-                    app.cancelSongDownload(song)
-                } label: {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Отменить загрузку".localized)
-                .accessibilityLabel("Отменить загрузку".localized)
-            } else if hovering || isCachedLocally {
-                Button {
-                    if isCachedLocally {
-                        Task { await app.removeFromCache(song) }
-                    } else if !app.isOfflineSession {
-                        app.cacheSong(song)
-                    }
-                } label: {
-                    Image(systemName: isCachedLocally ? "checkmark.circle.fill" : "arrow.down.circle")
-                        .font(.system(size: isNarrow ? 12 : 14))
-                        .foregroundStyle(isCachedLocally ? AMColor.accent : Color.secondary)
-                        .symbolEffect(.bounce, value: isCachedLocally)
-                }
-                .buttonStyle(.plain)
-                .disabled(app.isOfflineSession && !isCachedLocally)
-                .help(isCachedLocally ? "Удалить загрузку".localized : "Загрузить".localized)
-                .accessibilityLabel(isCachedLocally ? "Удалить загрузку".localized
-                                                    : (isDownloading ? "Загрузка".localized : "Загрузить".localized))
-                .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
-                .contentShape(Rectangle())
-                .transition(.opacity)
-                .accessibilityHidden(false)
-            } else {
-                Color.clear
-                    .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
-            }
+            TrackDownloadButton(
+                song: song,
+                app: app,
+                isHovered: hovering,
+                style: .roundedCircle,
+                size: isNarrow ? 16 : 18
+            )
             if let duration = song.duration {
                 Text(Player.format(seconds: Double(duration)))
                     .font((isNarrow ? Font.caption2 : Font.caption).monospacedDigit())

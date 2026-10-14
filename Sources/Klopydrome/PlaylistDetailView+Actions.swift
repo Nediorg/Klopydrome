@@ -4,45 +4,11 @@ import NavidromeClient
 // MARK: - PlaylistDetailView Error & Action Helpers
 
 extension PlaylistDetailView {
-    func emptyErrorState(_ error: String) -> some View {
-        ContentUnavailableView {
-            Label("Не удалось загрузить треки".localized, systemImage: "exclamationmark.triangle")
-        } description: {
-            Text(error)
-        } actions: {
-            Button("Повторить".localized) {
-                app.loadPlaylistIfNeeded(playlist, forceReload: true)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 40)
-        .padding(.bottom, 60)
-    }
 
     func inlineErrorNotice(_ error: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.orange)
-            Text(error)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
-            Button("Повторить".localized) {
-                app.loadPlaylistIfNeeded(playlist, forceReload: true)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+        DetailInlineErrorBanner(message: error) {
+            app.loadPlaylistIfNeeded(playlist, forceReload: true)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
     }
 
     func startPlayback(shuffled: Bool) async {
@@ -149,9 +115,4 @@ extension PlaylistDetailView {
         }
     }
 
-    /// Placeholder song rows shown while the playlist's songs stream in.
-    /// Matches the exact layout, margins, and row height (46pt) of `SongRow(showAlbum: true)`.
-    var skeletonRows: some View {
-        SkeletonSongList(count: 10, showAlbum: true)
-    }
 }

@@ -391,23 +391,8 @@ private struct FavoriteCell: View {
     let app: AppState
     let hoverState: RowHoverState
 
-    private var isStarred: Bool {
-        app.isStarred(song)
-    }
-
     var body: some View {
-        Button {
-            app.toggleStar(song)
-        } label: {
-            Image(systemName: isStarred ? "star.fill" : "star")
-                .font(.system(size: 11))
-                .foregroundStyle(AMColor.accent)
-                .opacity(isStarred || hoverState.isHovered ? 1 : 0)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+        TrackFavoriteButton(song: song, app: app, isHovered: hoverState.isHovered, size: 16)
     }
 }
 
@@ -417,51 +402,7 @@ private struct CloudCell: View {
     let song: SubsonicSong
     let app: AppState
 
-    private var isDownloading: Bool {
-        app.downloadingSongIDs.contains(song.id)
-    }
-
-    private var isCachedLocally: Bool {
-        app.isCached(song)
-    }
-
     var body: some View {
-        if isDownloading {
-            Button {
-                app.cancelSongDownload(song)
-            } label: {
-                ProgressView()
-                    .controlSize(.mini)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Отменить загрузку".localized)
-        } else if isCachedLocally {
-            Button {
-                Task { await app.removeFromCache(song) }
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Удалить загрузку".localized)
-        } else if !app.isOfflineSession {
-            Button {
-                app.cacheSong(song)
-            } label: {
-                Image(systemName: "arrow.down.circle.fill")
-                    .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Загрузить".localized)
-        }
+        TrackDownloadButton(song: song, app: app, style: .tableCell, size: 16)
     }
 }
