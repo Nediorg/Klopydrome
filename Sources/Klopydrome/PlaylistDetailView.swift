@@ -213,9 +213,7 @@ struct PlaylistDetailView: View {
                     index: index,
                     showAlbum: true,
                     isCurrentOverride: currentID == song.id,
-                    extraMenuItems: canEditTracks
-                        ? { AnyView(Button("Убрать из плейлиста".localized) { remove(at: index, from: detail) }) }
-                        : nil,
+                    extraActions: rowExtraActions(index: index, detail: detail),
                     onPlay: { rowIndex in
                         if app.isOfflineSession {
                             let playable = playableSongs
@@ -242,6 +240,15 @@ struct PlaylistDetailView: View {
                     }
             }
         }
+    }
+
+    private func rowExtraActions(index: Int, detail: PlaylistDetail) -> [SongMenuExtraAction] {
+        guard canEditTracks else { return [] }
+        return [SongMenuExtraAction(
+            title: "Убрать из плейлиста".localized,
+            systemImage: "trash",
+            action: { remove(at: index, from: detail) }
+        )]
     }
 
 }

@@ -313,7 +313,7 @@ private struct SongColumnCell: View {
                     .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                TitleEllipsisButton(song: song, app: app, hoverState: hoverState)
+                TitleEllipsisButton(song: song, app: app)
             }
             .padding(.leading, 8)
         case .cloud:
@@ -369,25 +369,19 @@ private struct SongColumnCell: View {
     }
 }
 
-/// Ellipsis actions button, gated by row hover to avoid building thousands of
-/// menus during fast scroll.
+/// Ellipsis actions button, always visible, initialized only on click.
 private struct TitleEllipsisButton: View {
     let song: SubsonicSong
     let app: AppState
-    let hoverState: RowHoverState
 
     var body: some View {
-        if hoverState.isHovered {
-            SongEllipsisMenu(
-                song: song,
-                foregroundStyle: AMColor.accent,
-                app: app,
-                compact: true,
-                side: 16
-            )
-        } else {
-            Color.clear.frame(width: 16, height: 16)
-        }
+        SongEllipsisMenu(
+            song: song,
+            foregroundStyle: AMColor.accent,
+            app: app,
+            compact: true,
+            side: 16
+        )
     }
 }
 

@@ -337,6 +337,7 @@ struct SongEllipsisMenu: View {
     var foregroundStyle: Color = .secondary
     var app: AppState?
     var extraMenuItems: (() -> AnyView)?
+    var extraActions: [SongMenuExtraAction] = []
     var compact: Bool = false
     var side: CGFloat?
 
@@ -352,33 +353,32 @@ struct SongEllipsisMenu: View {
     }
 
     var body: some View {
-        let menuContent = ZStack {
+        let button = Button {
+            if let resolvedApp {
+                showSongActionMenu(
+                    for: song,
+                    app: resolvedApp,
+                    selection: [song],
+                    extraActions: extraActions
+                )
+            }
+        } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: (resolvedSide <= 16) ? 10 : (compact ? 12 : 14), weight: .semibold))
                 .foregroundStyle(foregroundStyle)
-
-            Menu {
-                if let extraMenuItems { extraMenuItems() }
-                if let resolvedApp {
-                    SongActionItems(app: resolvedApp, song: song, selection: [song])
-                }
-            } label: {
-                Image(nsImage: EllipsisMenuIcon.transparentImage(size: resolvedSide))
-                    .frame(width: resolvedSide, height: resolvedSide)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: resolvedSide, height: resolvedSide)
+                .frame(width: resolvedSide, height: resolvedSide)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .frame(width: resolvedSide, height: resolvedSide)
         .contentShape(Rectangle())
         .help("Ещё".localized)
         .accessibilityLabel("Действия для песни".localized)
 
         if compact {
-            menuContent
+            button
         } else {
-            menuContent.hoverBrighten()
+            button.hoverBrighten()
         }
     }
 }

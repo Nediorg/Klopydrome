@@ -14,6 +14,7 @@ struct SongRow: View {
     /// Surface-specific prefix items for the row's context menu (e.g. «Убрать
     /// из плейлиста»); the canonical `SongActionItems` always follow.
     var extraMenuItems: (() -> AnyView)?
+    var extraActions: [SongMenuExtraAction] = []
     var onPlay: ((Int) -> Void)?
     /// Whether this row is part of the current selection.
     var isSelected: Bool = false
@@ -93,6 +94,9 @@ struct SongRow: View {
             }
             .simultaneousGesture(TapGesture().onEnded { onSelect?() })
             .contextMenu {
+                ForEach(extraActions, id: \.title) { extra in
+                    Button(extra.title) { extra.action() }
+                }
                 if let extraMenuItems { extraMenuItems() }
                 SongActionItems(
                     app: app,
@@ -263,17 +267,13 @@ struct SongRow: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            if hovering {
-                SongEllipsisMenu(song: song,
-                                 foregroundStyle: isCurrent ? .white : .secondary,
-                                 app: app,
-                                 extraMenuItems: extraMenuItems,
-                                 compact: isNarrow)
-                    .transition(.opacity)
-            } else {
-                Color.clear
-                    .frame(width: isNarrow ? 22 : 28, height: isNarrow ? 22 : 28)
-            }
+            SongEllipsisMenu(
+                song: song,
+                foregroundStyle: isCurrent ? .white : .secondary,
+                app: app,
+                extraActions: extraActions,
+                compact: isNarrow
+            )
         }
     }
 }
