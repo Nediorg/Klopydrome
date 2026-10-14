@@ -428,28 +428,35 @@ private extension ArtistDetailView {
             Text("Альбомы".localized)
                 .font(.title2.bold())
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(0..<4, id: \.self) { _ in
-                        VStack(alignment: .leading, spacing: 6) {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(width: 150, height: 150)
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(width: 100, height: 11)
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
-                                .frame(width: 60, height: 9)
-                        }
+                albumSkeletonCards(forMask: false)
+                    .shimmering()
+                    .mask {
+                        albumSkeletonCards(forMask: true)
                     }
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 4)
             }
             .scrollClipDisabled()
             .fixedSize(horizontal: false, vertical: true)
-            .shimmering()
         }
+    }
+
+    private func albumSkeletonCards(forMask: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ForEach(0..<4, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 6) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 150, height: 150)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 100, height: 11)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.05))
+                        .frame(width: 60, height: 9)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
     }
 
     /// The discography as a compact adaptive grid (150pt cards), shown when the

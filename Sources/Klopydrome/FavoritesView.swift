@@ -203,80 +203,101 @@ struct FavoritesView: View {
                 // 1. Songs section skeleton (3 rows)
                 VStack(alignment: .leading, spacing: 10) {
                     sectionHeader("Песни".localized)
-                    VStack(spacing: 8) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(Color.primary.opacity(0.08))
-                                    .frame(width: 48, height: 48)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Color.primary.opacity(0.08))
-                                        .frame(width: 140, height: 12)
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Color.primary.opacity(0.05))
-                                        .frame(width: 90, height: 10)
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                    songSkeletonRows(forMask: false)
+                        .shimmering()
+                        .mask {
+                            songSkeletonRows(forMask: true)
                         }
-                    }
-                    .shimmering()
                 }
 
                 // 2. Albums section skeleton
                 VStack(alignment: .leading, spacing: 10) {
                     sectionHeader("Альбомы".localized)
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(0..<4, id: \.self) { _ in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.primary.opacity(0.08))
-                                        .frame(width: 150, height: 150)
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Color.primary.opacity(0.08))
-                                        .frame(width: 110, height: 12)
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Color.primary.opacity(0.05))
-                                        .frame(width: 70, height: 10)
-                                }
+                        albumSkeletonCards(forMask: false)
+                            .shimmering()
+                            .mask {
+                                albumSkeletonCards(forMask: true)
                             }
-                        }
-                        .padding(.vertical, 4)
                     }
                     .scrollClipDisabled()
-                    .shimmering()
                 }
 
                 // 3. Artists section skeleton
                 VStack(alignment: .leading, spacing: 10) {
                     sectionHeader("Исполнители".localized)
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(0..<5, id: \.self) { _ in
-                                VStack(spacing: 8) {
-                                    Circle()
-                                        .fill(Color.primary.opacity(0.08))
-                                        .frame(width: 90, height: 90)
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Color.primary.opacity(0.08))
-                                        .frame(width: 70, height: 11)
-                                }
+                        artistSkeletonCards(forMask: false)
+                            .shimmering()
+                            .mask {
+                                artistSkeletonCards(forMask: true)
                             }
-                        }
-                        .padding(.vertical, 4)
                     }
                     .scrollClipDisabled()
-                    .shimmering()
                 }
             }
             .padding(.horizontal, 28)
             .padding(.vertical, 24)
         }
         .scrollClipDisabled()
+    }
+
+    private func songSkeletonRows(forMask: Bool) -> some View {
+        VStack(spacing: 8) {
+            ForEach(0..<3, id: \.self) { _ in
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 48, height: 48)
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                            .frame(width: 140, height: 12)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(forMask ? Color.black : Color.primary.opacity(0.05))
+                            .frame(width: 90, height: 10)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func albumSkeletonCards(forMask: Bool) -> some View {
+        HStack(spacing: 16) {
+            ForEach(0..<4, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 8) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 150, height: 150)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 110, height: 12)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.05))
+                        .frame(width: 70, height: 10)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func artistSkeletonCards(forMask: Bool) -> some View {
+        HStack(spacing: 16) {
+            ForEach(0..<5, id: \.self) { _ in
+                VStack(spacing: 8) {
+                    Circle()
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 90, height: 90)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(forMask ? Color.black : Color.primary.opacity(0.08))
+                        .frame(width: 70, height: 11)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func load() async {
