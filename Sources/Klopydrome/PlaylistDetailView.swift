@@ -175,23 +175,25 @@ struct PlaylistDetailView: View {
                 .frame(width: 220, height: 220)
                 .help("Быстрый просмотр обложки".localized)
                 .accessibilityLabel("Предпросмотр обложки".localized)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(detail.displayName)
-                    .font(.largeTitle.bold())
-                kindLine(detail)
-                if let comment = detail.comment, !comment.isEmpty {
-                    Text(comment)
-                        .font(.callout)
-                        .foregroundStyle(AMColor.secondaryText)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(detail.displayName)
+                        .font(.largeTitle.bold())
+                    kindLine(detail)
+                    if let comment = detail.comment, !comment.isEmpty {
+                        Text(comment)
+                            .font(.callout)
+                            .foregroundStyle(AMColor.secondaryText)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    metaRow(detail)
                 }
-                metaRow(detail)
                 Spacer(minLength: 0)
                 actionRow(detail)
             }
-            .frame(minHeight: 200)
-            .alignmentGuide(.top) { $0[.top] + 6 }
+            .frame(minHeight: 220)
             Spacer()
         }
     }

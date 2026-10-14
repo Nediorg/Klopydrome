@@ -46,7 +46,7 @@ extension PlaylistDetailView {
         parts.append(detail.isSmart ? "Умный плейлист".localized : "Плейлист".localized)
         if detail.isPublic == true { parts.append("Открытый".localized) }
         return Text(parts.joined(separator: " · "))
-            .font(.title3.weight(.medium))
+            .font(.title2.weight(.regular))
             .foregroundStyle(.secondary)
     }
 
@@ -58,7 +58,7 @@ extension PlaylistDetailView {
             parts.append(Player.format(seconds: Double(duration)))
         }
         return Text(parts.joined(separator: " · "))
-            .font(.callout)
+            .font(.callout.bold())
             .foregroundStyle(AMColor.secondaryText)
     }
 

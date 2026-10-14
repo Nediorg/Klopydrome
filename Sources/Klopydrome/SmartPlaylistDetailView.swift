@@ -74,31 +74,33 @@ struct SmartPlaylistDetailView: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Color.gray.opacity(0.15))
                 )
-            VStack(alignment: .leading, spacing: 10) {
-                Text(playlist.name)
-                    .font(.largeTitle.bold())
-                Text("Умный плейлист".localized)
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.secondary)
-                if !playlist.ruleSummary.isEmpty {
-                    Text(playlist.ruleSummary)
-                        .font(.callout)
-                        .foregroundStyle(AMColor.secondaryText)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(playlist.name)
+                        .font(.largeTitle.bold())
+                    Text("Умный плейлист".localized)
+                        .font(.title2.weight(.regular))
+                        .foregroundStyle(.secondary)
+                    if !playlist.ruleSummary.isEmpty {
+                        Text(playlist.ruleSummary)
+                            .font(.callout)
+                            .foregroundStyle(AMColor.secondaryText)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                    }
+                    Button {
+                        app.openSmartPlaylistEditor(playlist: playlist)
+                    } label: {
+                        Label("Редактировать правила".localized, systemImage: "slider.horizontal.3")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.link)
                 }
-                Button {
-                    app.openSmartPlaylistEditor(playlist: playlist)
-                } label: {
-                    Label("Редактировать правила".localized, systemImage: "slider.horizontal.3")
-                        .font(.callout)
-                }
-                .buttonStyle(.link)
                 Spacer(minLength: 0)
                 actionRow
             }
-            .frame(minHeight: 200)
-            .padding(.top, 4)
+            .frame(minHeight: 220)
             Spacer()
         }
     }

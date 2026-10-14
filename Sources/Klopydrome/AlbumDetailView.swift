@@ -99,16 +99,18 @@ struct AlbumDetailView: View {
                 .frame(width: 220, height: 220)
                 .help("Быстрый просмотр обложки".localized)
                 .accessibilityLabel("Предпросмотр обложки".localized)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(detail.displayName)
-                    .font(.largeTitle.bold())
-                artistLink(detail)
-                metaRow(detail)
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(detail.displayName)
+                        .font(.largeTitle.bold())
+                    artistLink(detail)
+                    metaRow(detail)
+                }
                 Spacer(minLength: 0)
                 actionRow
             }
-            .frame(minHeight: 200)
-            .alignmentGuide(.top) { $0[.top] + 6 }
+            .frame(minHeight: 220)
             Spacer()
         }
     }
@@ -122,16 +124,15 @@ struct AlbumDetailView: View {
                 app.openArtistInLibrary(Artist(id: artistId, name: artist))
             } label: {
                 Text(artist)
-                    .font(.title3.weight(.medium))
+                    .font(.title2.weight(.regular))
                     .foregroundStyle(AMColor.accent)
                     .brightness(artistHovered ? 0.15 : 0)
-                    .animation(.snappy(duration: 0.15), value: artistHovered)
             }
             .buttonStyle(.plain)
             .onHover { artistHovered = $0 }
         } else if !artist.isEmpty {
             Text(artist)
-                .font(.title3.weight(.medium))
+                .font(.title2.weight(.regular))
         }
     }
 
@@ -147,7 +148,7 @@ struct AlbumDetailView: View {
         }
         return HStack(spacing: 8) {
             Text(parts.joined(separator: " · "))
-                .font(.callout)
+                .font(.callout.bold())
                 .foregroundStyle(AMColor.secondaryText)
             if isLossless {
                 HStack(spacing: 4) {
