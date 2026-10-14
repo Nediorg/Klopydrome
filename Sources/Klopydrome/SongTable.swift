@@ -146,8 +146,9 @@ struct SongTable: View {
 
     @Environment(AppState.self) private var app
 
-    /// Rows per render-window step (matches `PlaylistDetailView.pageSize`).
-    private let pageSize = 100
+    /// Rows per render-window step. 500 rows provides 11,000pt of scroll runway,
+    /// preventing hitches during fast trackpad flings.
+    private let pageSize = 500
 
     /// Render window size; first `displayedCount` rows of `songs` are shown.
     @State private var displayedCount: Int = 0
@@ -162,11 +163,17 @@ struct SongTable: View {
     @State private var selection = Set<SubsonicSong.ID>()
     @State private var hover = RowHover()
 
+    private func prefetchMoreIfNeeded() {
+        guard displayedCount > 0, displayedCount < songs.count else { return }
+        displayedCount = min(displayedCount + pageSize, songs.count)
+        updateDisplayedSongs()
+    }
+
     private func checkTailAndPrefetch(song: SubsonicSong) {
         guard displayedCount > 0, displayedCount < songs.count else { return }
-        let prefetchIndex = max(0, displayedCount - 15)
+        let prefetchIndex = max(0, displayedCount - 150)
         if songs.indices.contains(prefetchIndex), songs[prefetchIndex].id == song.id {
-            displayedCount = min(displayedCount + pageSize, songs.count)
+            prefetchMoreIfNeeded()
         }
     }
 
@@ -226,7 +233,8 @@ struct SongTable: View {
             TableTweaks(
                 displayedSongs: displayedSongs,
                 hover: hover,
-                rowHeight: 22
+                rowHeight: 22,
+                onPrefetch: { prefetchMoreIfNeeded() }
             )
         )
         // `contextMenu(forSelectionType:)` auto-selects the clicked row (and lets

@@ -16,6 +16,7 @@ struct TableTweaks: NSViewRepresentable {
     let displayedSongs: [SubsonicSong]
     let hover: RowHover
     var rowHeight: CGFloat = 22
+    var onPrefetch: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(hover: hover)
@@ -26,6 +27,7 @@ struct TableTweaks: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         context.coordinator.displayedSongs = displayedSongs
         context.coordinator.rowHeight = rowHeight
+        context.coordinator.onPrefetch = onPrefetch
 
         let applyTweaks = {
             var root: NSView? = view
@@ -58,6 +60,7 @@ struct TableTweaks: NSViewRepresentable {
     final class Coordinator: NSResponder {
         var displayedSongs: [SubsonicSong] = []
         var rowHeight: CGFloat = 22
+        var onPrefetch: (() -> Void)?
         let hover: RowHover
         private weak var tableView: NSTableView?
         private weak var clipView: NSClipView?
@@ -187,6 +190,13 @@ struct TableTweaks: NSViewRepresentable {
             isTableScrolling = true
             if hover.id != nil {
                 hover.id = nil
+            }
+            if let tableView, let clipView {
+                let visible = tableView.rows(in: clipView.bounds)
+                let maxVisible = visible.location + visible.length
+                if maxVisible >= displayedSongs.count - 150 {
+                    onPrefetch?()
+                }
             }
             scrollDebounceTask?.cancel()
             scrollDebounceTask = Task { @MainActor [weak self] in

@@ -12,7 +12,7 @@ struct SongsView: View {
     @Environment(AppState.self) private var app
 
     /// Songs fetched per `search3` page.
-    private let chunkSize = 300
+    private let chunkSize = 500
 
     private var songs: [SubsonicSong] { app.library.songs }
     /// Filtered + sorted result to display. Falls back to raw `songs` on first
