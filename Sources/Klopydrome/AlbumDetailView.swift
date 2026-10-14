@@ -86,8 +86,9 @@ struct AlbumDetailView: View {
     }
 
     /// Placeholder track rows shown while the album's songs stream in.
+    /// Standard album tracks are narrow (32pt, single line) without artwork.
     private var skeletonRows: some View {
-        SkeletonSongList(count: 10, showAlbum: false)
+        SkeletonSongList(count: 10, showAlbum: false, showsArtist: false)
     }
 
     // MARK: Header
@@ -237,15 +238,7 @@ private struct AlbumTrackListSection: View {
     }
 
     private func isCompilationAlbum(_ detail: AlbumDetail) -> Bool {
-        if let recordType = detail.recordType?.lowercased(), recordType == "compilation" {
-            return true
-        }
-        if let artist = detail.artist?.lowercased(),
-           artist == "various artists" || artist == "разные артисты" || artist == "soundtrack" {
-            return true
-        }
-        let artists = Set(songs.compactMap { $0.artist })
-        return artists.count > 1
+        Set(songs.compactMap(\.artist)).count > 1
     }
 
     private func playTrack(_ song: SubsonicSong, globalIndex: Int, ordered: [SubsonicSong]) {

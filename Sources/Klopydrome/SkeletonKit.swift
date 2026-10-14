@@ -6,10 +6,16 @@ import SwiftUI
 /// Guarantees exact layout metrics, unified visual tokens, and strict masking
 /// so shimmering light bands never bleed onto transparent margins or spacing.
 
-/// A single skeleton row matching the exact layout and 46pt height of `SongRow`.
+/// A single skeleton row matching the exact layout and height of `SongRow`:
+/// - 46pt when `showAlbum: true` (cover + 2 lines)
+/// - 40pt when `!showAlbum && showsArtist` (index + 2 lines for collaborations/compilations)
+/// - 32pt when `!showAlbum && !showsArtist` (index + single line for standard album tracks)
 struct SkeletonSongRow: View {
     var showAlbum: Bool = true
+    var showsArtist: Bool = true
     var forMask: Bool = false
+
+    private var isNarrow: Bool { !showAlbum && !showsArtist }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -17,20 +23,28 @@ struct SkeletonSongRow: View {
                 .frame(width: 16, height: 16)
 
             HStack(spacing: 10) {
-                HStack(spacing: 8) {
+                HStack(spacing: showAlbum ? 8 : 10) {
                     if showAlbum {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(forMask ? Color.black : Color.primary.opacity(0.06))
                             .frame(width: 36, height: 36)
+                    } else {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(forMask ? Color.black : Color.primary.opacity(0.05))
+                            .frame(width: 14, height: 10)
+                            .frame(width: 22, height: isNarrow ? 20 : nil, alignment: .trailing)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: isNarrow ? 0 : 3) {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(forMask ? Color.black : Color.primary.opacity(0.07))
                             .frame(width: 160, height: 12)
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(forMask ? Color.black : Color.primary.opacity(0.05))
-                            .frame(width: 110, height: 10)
+
+                        if showAlbum || showsArtist {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(forMask ? Color.black : Color.primary.opacity(0.05))
+                                .frame(width: 110, height: 10)
+                        }
                     }
                 }
 
@@ -40,11 +54,12 @@ struct SkeletonSongRow: View {
                     .fill(forMask ? Color.black : Color.primary.opacity(0.04))
                     .frame(width: 36, height: 10)
             }
-            .padding(.leading, 5)
+            .padding(.leading, showAlbum ? 5 : 8)
             .padding(.trailing, 8)
-            .padding(.vertical, 5)
+            .padding(.vertical, isNarrow ? 2 : 5)
+            .frame(height: isNarrow ? 26 : nil)
         }
-        .frame(height: 46)
+        .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
     }
 }
 
@@ -52,6 +67,7 @@ struct SkeletonSongRow: View {
 struct SkeletonSongList: View {
     var count: Int = 10
     var showAlbum: Bool = true
+    var showsArtist: Bool = true
 
     var body: some View {
         rows(forMask: false)
@@ -64,7 +80,7 @@ struct SkeletonSongList: View {
     private func rows(forMask: Bool) -> some View {
         VStack(spacing: 0) {
             ForEach(0..<count, id: \.self) { _ in
-                SkeletonSongRow(showAlbum: showAlbum, forMask: forMask)
+                SkeletonSongRow(showAlbum: showAlbum, showsArtist: showsArtist, forMask: forMask)
             }
         }
     }
