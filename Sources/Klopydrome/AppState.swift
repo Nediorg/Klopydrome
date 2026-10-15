@@ -803,21 +803,49 @@ final class AppState {
     }
 
     @discardableResult
-    func createPlaylist(name: String, songs: [SubsonicSong], comment: String? = nil) async -> PlaylistDetail? {
+    func createPlaylist(
+        name: String,
+        songs: [SubsonicSong],
+        comment: String? = nil,
+        isPublic: Bool = false
+    ) async -> PlaylistDetail? {
         guard confirmOfflineAction() else { return nil }
         if let client {
             let created = try? await client.createPlaylist(name: name, songIds: songs.map(\.id))
             guard let id = created?.id else { return nil }
             recordRecentPlaylist(id)
-            if let comment, !comment.isEmpty {
-                try? await client.updatePlaylist(id: id, comment: comment)
+            if (comment != nil && !comment!.isEmpty) || isPublic {
+                try? await client.updatePlaylist(id: id, comment: comment, isPublic: isPublic)
             }
             // The new playlist must appear in the sidebar immediately; reload the
             // summary list so the "All Playlists" row reflects creation.
             await refreshPlaylists()
             return created
         } else {
-            queueOfflineCreatePlaylist(name: name, songIDs: songs.map(\.id), comment: comment)
+            queueOfflineCreatePlaylist(name: name, songIDs: songs.map(\.id), comment: comment, isPublic: isPublic)
+            let tempID = "offline_\(UUID().uuidString)"
+            let localSummary = PlaylistSummary(
+                id: tempID,
+                name: name,
+                comment: comment,
+                songCount: songs.count,
+                duration: songs.reduce(0) { $0 + ($1.duration ?? 0) },
+                isPublic: isPublic
+            )
+            library.playlists.insert(localSummary, at: 0)
+            recordRecentPlaylist(tempID)
+            if let offlineRepository {
+                let detail = PlaylistDetail(
+                    id: tempID,
+                    name: name,
+                    comment: comment,
+                    songCount: songs.count,
+                    duration: songs.reduce(0) { $0 + ($1.duration ?? 0) },
+                    isPublic: isPublic,
+                    entry: songs
+                )
+                try? await offlineRepository.savePlaylistDetail(detail)
+            }
             return nil
         }
     }

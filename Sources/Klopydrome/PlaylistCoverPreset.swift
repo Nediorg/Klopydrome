@@ -153,4 +153,33 @@ extension NSImage {
               let rep = NSBitmapImageRep(data: tiff) else { return nil }
         return rep.representation(using: .png, properties: [:])
     }
+
+    /// Crops the image to a center-aligned 1:1 square.
+    func squareCropped() -> NSImage {
+        if let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let width = cgImage.width
+            let height = cgImage.height
+            if width > 0, height > 0 {
+                let side = min(width, height)
+                let cropX = (width - side) / 2
+                let cropY = (height - side) / 2
+                let cropRect = CGRect(x: cropX, y: cropY, width: side, height: side)
+                if let croppedCG = cgImage.cropping(to: cropRect) {
+                    return NSImage(cgImage: croppedCG, size: NSSize(width: side, height: side))
+                }
+            }
+        }
+        let originalSize = self.size
+        guard originalSize.width > 0, originalSize.height > 0 else { return self }
+        let side = min(originalSize.width, originalSize.height)
+        let cropX = (originalSize.width - side) / 2
+        let cropY = (originalSize.height - side) / 2
+        let cropRect = NSRect(x: cropX, y: cropY, width: side, height: side)
+        let targetSize = NSSize(width: side, height: side)
+        let cropped = NSImage(size: targetSize)
+        cropped.lockFocus()
+        self.draw(in: NSRect(origin: .zero, size: targetSize), from: cropRect, operation: .copy, fraction: 1.0)
+        cropped.unlockFocus()
+        return cropped
+    }
 }

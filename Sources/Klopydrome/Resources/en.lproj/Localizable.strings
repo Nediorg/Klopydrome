@@ -986,3 +986,8 @@
 
 /* Songs table */
 "Загрузка в облако" = "Cloud Download";
+
+/* Create and Edit Playlist */
+"Публичный плейлист" = "Public Playlist";
+"Выбрать файл…" = "Choose a file…";
+"Выбрать из медиатеки Фото…" = "Choose from Photo Library…";

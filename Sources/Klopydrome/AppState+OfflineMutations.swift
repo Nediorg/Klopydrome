@@ -119,10 +119,15 @@ extension AppState {
     }
 
     @discardableResult
-    func queueOfflineCreatePlaylist(name: String, songIDs: [String], comment: String?) -> Task<Void, Never>? {
+    func queueOfflineCreatePlaylist(
+        name: String,
+        songIDs: [String],
+        comment: String?,
+        isPublic: Bool = false
+    ) -> Task<Void, Never>? {
         guard let store = ensureOfflineMutationStore() else { return nil }
         return Task {
-            await store.recordPlaylistCreate(name: name, songIDs: songIDs, comment: comment)
+            await store.recordPlaylistCreate(name: name, songIDs: songIDs, comment: comment, isPublic: isPublic)
         }
     }
 
@@ -279,8 +284,14 @@ extension AppState {
                 case .create:
                     if let name = action.playlistName {
                         let created = try await client.createPlaylist(name: name, songIds: action.songIDs)
-                        if let comment = action.comment, !comment.isEmpty {
-                            try? await client.updatePlaylist(id: created.id, comment: comment)
+                        let hasComment = (action.comment != nil && !action.comment!.isEmpty)
+                        let isPublic = (action.isPublic == true)
+                        if hasComment || isPublic {
+                            try? await client.updatePlaylist(
+                                id: created.id,
+                                comment: action.comment,
+                                isPublic: isPublic
+                            )
                         }
                         appliedIDs.insert(action.id)
                     }

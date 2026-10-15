@@ -26,7 +26,28 @@ struct QueuedPlaylistAction: Codable, Equatable, Sendable {
     let playlistName: String?
     let songIDs: [String]
     let comment: String?
+    let isPublic: Bool?
     let timestamp: Date
+
+    init(
+        id: String,
+        type: QueuedPlaylistActionType,
+        playlistID: String? = nil,
+        playlistName: String? = nil,
+        songIDs: [String] = [],
+        comment: String? = nil,
+        isPublic: Bool? = nil,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.type = type
+        self.playlistID = playlistID
+        self.playlistName = playlistName
+        self.songIDs = songIDs
+        self.comment = comment
+        self.isPublic = isPublic
+        self.timestamp = timestamp
+    }
 }
 
 struct OfflineMutations: Codable, Equatable, Sendable {
@@ -139,7 +160,7 @@ actor OfflineMutationStore {
         persist()
     }
 
-    func recordPlaylistCreate(name: String, songIDs: [String], comment: String?) {
+    func recordPlaylistCreate(name: String, songIDs: [String], comment: String?, isPublic: Bool? = nil) {
         let action = QueuedPlaylistAction(
             id: UUID().uuidString,
             type: .create,
@@ -147,6 +168,7 @@ actor OfflineMutationStore {
             playlistName: name,
             songIDs: songIDs,
             comment: comment,
+            isPublic: isPublic,
             timestamp: Date()
         )
         mutations.playlists.append(action)
