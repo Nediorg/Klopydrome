@@ -16,30 +16,32 @@
   - **Navigation & Shell**: `MainView`, `SidebarView`, `DetailColumn`. History routes through in-memory `app.nav.history: [Destination]`.
   - **Key Screens**:
     - Home & Shelves: `HomeView.swift`, `HomeQuickAccessSection.swift`, `OfflineHomeView.swift`.
-    - Detail views: `AlbumDetailView.swift`, `ArtistDetailView.swift`, `PlaylistDetailView.swift`.
-    - Browsers: `SongsView.swift`, `SongTable.swift`, `PlaylistsView.swift`, `ArtistsView.swift`.
+    - Detail views: `AlbumDetailView.swift`, `ArtistDetailView.swift`, `PlaylistDetailView.swift`, `GenreDetailView.swift`, `SmartPlaylistDetailView.swift`.
+    - Browsers: `SongsView.swift`, `SongTable.swift`, `PlaylistsView.swift`, `ArtistsView.swift`, `GenresView.swift`.
     - Playback UI & Lyrics: `MiniPlayerView.swift`, `PlayerLCDView.swift`, `LyricsView.swift`, `KaraokeLineView.swift`.
-    - Settings: `AppSettingsView.swift` (`PlaybackSettingsView`, `CacheSettingsView`, `AppearanceSettingsView`).
+    - Settings: `AppSettingsView.swift` (`GeneralSettingsView`, `PlaybackSettingsView`, `CacheSettingsView`, `AppearanceSettingsView`).
   - **Smart Playlists**: `SmartQuery.swift`, `SmartFields.swift`, `SmartPlaylistEngine.swift`, `SmartPlaylistEditorView.swift`.
   - **Offline & Persistence**: `OfflineRepository.swift`, `SwiftDataOfflineRepository.swift`, `OfflineMutationQueue.swift`, `KeychainStore.swift`, `ServerConfig.swift`.
-  - **Design System & Artwork**: `CoverArtView.swift`, `CoverArtStore.swift`, `SongTable.swift`, `AlbumGridView.swift`, `CompactSongsGrid.swift`, `ContentPillCard.swift`, `Components.swift`, `Theme.swift`.
+  - **Design System & Artwork**: `CoverArtView.swift`, `CoverArtStore.swift`, `SongTable.swift`, `SongRow.swift`, `AlbumGridView.swift`, `CompactSongsGrid.swift`, `ContentPillCard.swift`, `SkeletonKit.swift`, `DetailScaffoldKit.swift`, `Components.swift`, `Theme.swift`.
 - **`Tests/`**: `NavidromeClientTests/` (API and URL building tests) and `KlopydromeTests/` (player, offline, cache, UI logic tests).
 - **`scripts/`**: Toolchain for Libmpv build (`build-mpvkit-audio.sh`), app packaging (`build-app.sh`), linting (`lint.sh`), and releases (`package-release.sh`).
 
 ## Setup & Toolchain
 - Run `./scripts/build-mpvkit-audio.sh` once on checkout to build the Libmpv framework for the audio engine fork in `vendor/MPVKit-Audio`.
 - `swift test` needs **full Xcode** (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`). `build-app.sh` and `lint.sh` handle this automatically.
+- Note on sandboxed CLI: SwiftPM module caching in `/var/folders` and `.git/index.lock` creation may require bypassing the sandbox (`BypassSandbox: true`) when building, testing, or committing via tool commands.
 
 ## Delegate research to subagents
-- Delegate self-contained research and analysis to subagents (`explore`, `general`, `swift-expert`, `swiftui-expert`) instead of doing it in the main thread: file hunts, cross-file impact analysis, and evaluating options/tradeoffs.
+- Delegate self-contained research and analysis to subagents instead of doing it in the main thread: file hunts, cross-file impact analysis, and evaluating options/tradeoffs.
 - Keep work in the main thread only when the full context matters (editing, deciding the final shape of a change, synthesizing results).
 - Ask a subagent to return a concise, actionable summary — then verify its key claims yourself before acting.
 
 ## Surgical diffs & codebase footprint (No refactor sprawl)
-- **Fix strictly the reported defect**: Make the smallest possible surgical intervention. Target the 1–3 files directly responsible for the symptom.
+- **Fix strictly the reported defect**: Make the smallest possible surgical intervention. Target the 1–3 files directly responsible for the symptom. Never patch symptoms in multiple caller files when fixing a bug.
 - **Zero opportunistic refactoring**: Never rewrite neighboring methods, change unrelated architecture, add unprompted background tasks/prefetchers, or "clean up" adjacent code while fixing a bug.
 - **Do not alter cross-module contracts unless unavoidable**: If a defect is reported in the app UI, solve it in `Klopydrome`. Do not touch `NavidromeClient` (changing public APIs, actor isolation, or model protocols) unless the client library itself is demonstrably broken.
 - **Question expanding diffs immediately**: If a bugfix starts touching 4+ files or cascading across layers, stop: you are likely addressing symptoms in multiple downstream places instead of fixing the root cause locally.
+- **Distinguish bug fixes from system unification**: While bug fixes must remain strictly localized to 1–3 files at the root cause, systemic improvements and architectural unifications must be applied cohesively across all consumer screens at the shared-entity level (see Deep system unification below).
 
 ## Root cause first, workarounds last
 - Diagnose the root cause first and fix the cause. Never layer a behavior-changing wrapper over the UI to mask a bug.
@@ -57,6 +59,7 @@
 
 ## Version control & release
 - **All changes to the working tree must be committed.** When completing any unit of work, commit it before moving on. There should be no uncommitted changes left behind.
+- **Commit hygiene**: Intermediate commits exist for local rollback during active exploration. Before completing a task or submitting for review, squash and rebase unpushed fixup/revert commits into clean, logical conventional commits.
 - Write concise, conventional commit messages. Do not push unless explicitly asked.
 - Release flow: Makefile `make package` / `make dist` (`scripts/package-release.sh`). Releases are cut by bumping `VERSION`, committing, tagging `vX.Y.Z`, and pushing branch + tag to trigger CI.
 - Pre-release commit hygiene: audit commit history since last tag, clean up throwaway fixups/reverts, and get explicit user approval before shipping.
@@ -68,22 +71,27 @@
 ## Language / architecture
 - Package uses `swiftLanguageModes: [.v5]`. Shared state uses `@Observable` + `@MainActor` (macOS 14), view-local state uses `@State`/`@Bindable`. Do not introduce strict-concurrency-only APIs.
 - `AppState` is injected via `.environment()`. `ServerConfig` is persisted; passwords live in Keychain via `KeychainStore`.
-- Caching has two layers: `CacheManager` (disk, `~/Library/Caches/NavidromeSwift`) and `CoverArtStore` (in-memory).
+- Caching has two layers: `CacheManager` (disk, `~/Library/Caches/NavidromeSwift` legacy root) and `CoverArtStore` (in-memory).
 - **NavigationSplitView detail navigation must use in-memory history**: Never nest a `NavigationStack` inside the `NavigationSplitView` detail column. All detail sub-pages route through `app.nav.history: [Destination]` and `app.navigateBack()`.
 - **Detail views must fill all space**: Every detail view inside `DetailColumn` must specify `.frame(maxWidth: .infinity, maxHeight: .infinity)` before `.safeAreaInset` is applied.
 - Automix transitions are analysis-only (`Player+TransitionAnalysis.swift`); rendering stays on the established MPV crossfade.
 
 ## UI conventions & Design System
 - **Mandatory reuse of core UI assets — never invent custom duplicates:**
-  - `SongTable`: full tabular song list with sorting and columns.
+  - `SongTable`: full tabular song list with sorting and columns (used in Songs browser).
+  - `SongRow`: standard track row for detail lists (Album, Playlist, Artist, Favorites, Downloads).
   - `CompactSongsSection` / `CompactSongsGrid`: 3-row Apple Music-style compact song blocks/shelves.
   - `AlbumGridView` / `AlbumCard`: standard square album artwork tiles with hover play/actions.
   - Content pills (`TopResultSongCard`, `TopResultArtistCard`, `ContentPillCard`): 8pt continuous radius, 40pt artwork thumbnail.
+  - `SkeletonKit`: unified shimmer loading skeletons (`SkeletonSongRow`, `SkeletonSongList`, `SkeletonCardGrid`).
 - **Context actions have ONE source of truth:**
   - Playlist actions: `PlaylistContextMenuItems` in `PlaylistMenu.swift`.
   - Song actions: `SongActionItems` in `SongMenu.swift`.
+  - Album actions: `AlbumContextMenuItems` in `AlbumMenu.swift`.
+  - Artist actions: `ArtistContextMenuItems` in `ArtistMenu.swift`.
 - **Hit targets are larger than visual glyphs:** Keep padding inside the label and add `.contentShape(Rectangle())`. Action buttons and ellipsis menus must have square, generous hit targets (24–28pt), never restricted to the tiny glyph bounds.
-- **No verbose text clutter & accurate terminology:** Use standard macOS nouns over verbs ("Офлайн-режим", "Сеть"). No explanatory text walls or redundant counters in persistent chrome.
+- **No verbose text clutter (self-sufficient, concise UI copy):** Feature names, buttons, menu items, and toggles must be strictly concise and explain their intent on their own. Longer wording is only acceptable when it directly removes ambiguity. Avoid explanatory subtitles under checkboxes/toggles, prose descriptions, and gratuitous hover text (`.help(...)`) on labeled controls — they create visual noise that degrades interface readability. Use standard macOS nouns over verbs ("Offline Mode", "Network"). Standard, concise tooltips remain appropriate only for icon-only controls where meaning is not self-evident.
+- **Deep system unification (component coherence):** Ensure components operate collectively through shared sources of truth. Architectural and visual improvements must apply across all related screens at the shared-entity level, rather than being patched ad-hoc in isolated views. Fragmented logic, duplicate components, and divergent user flows are unacceptable.
 - `Build`/`lint` gate: `./scripts/lint.sh` uses a baseline. If an edit nears a size limit, extract new code into an extension file rather than raising thresholds.
 
 ## Localization & Branding
