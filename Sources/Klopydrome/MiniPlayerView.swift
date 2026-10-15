@@ -257,20 +257,18 @@ private struct MiniPlayerControlsLayer: View {
     private var trackActions: some View {
         HStack(spacing: 10) {
             Button {
-                app.toggleStar(song)
+                withAnimation(.snappy(duration: 0.15)) {
+                    app.toggleStar(song)
+                }
             } label: {
                 Image(systemName: app.isStarred(song) ? "star.fill" : "star")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(
-                        app.isStarred(song)
-                            ? AMColor.accent
-                            : (isHoveringStar ? Color.black.opacity(0.85) : Color.white)
-                    )
+                    .foregroundStyle(isHoveringStar ? Color.black.opacity(0.85) : Color.white)
                     .frame(width: Self.trackActionSide, height: Self.trackActionSide)
                     .miniPlayerMatteCircle(fill: isHoveringStar ? .white.opacity(0.75) : .white.opacity(0.30))
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(MiniPlayerActionButtonStyle())
             .onHover { isHoveringStar = $0 }
             .help(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
             .accessibilityLabel(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
@@ -349,5 +347,13 @@ extension View {
                 Circle().strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
             }
             .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+    }
+}
+
+private struct MiniPlayerActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.90 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
