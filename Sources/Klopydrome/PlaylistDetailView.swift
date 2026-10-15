@@ -201,7 +201,7 @@ struct PlaylistDetailView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(detail.displayName)
-                            .font(.largeTitle.bold())
+                            .font(.largeTitle.weight(.semibold))
                         kindLine(detail)
                         if detail.isSmart {
                             editRulesButton(detail)

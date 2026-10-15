@@ -103,7 +103,7 @@ struct AlbumDetailView: View {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(detail.displayName)
-                        .font(.largeTitle.bold())
+                        .font(.largeTitle.weight(.semibold))
                     artistLink(detail)
                     metaRow(detail)
                 }

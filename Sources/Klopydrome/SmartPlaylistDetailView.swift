@@ -90,7 +90,7 @@ struct SmartPlaylistDetailView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(playlist.name)
-                            .font(.largeTitle.bold())
+                            .font(.largeTitle.weight(.semibold))
                         Text("Умный плейлист".localized)
                             .font(.title2.weight(.regular))
                             .foregroundStyle(.secondary)
