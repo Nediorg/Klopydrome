@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 import SwiftUI
+import NavidromeClient
 @testable import Klopydrome
 
 /// Renders the preset covers the same way the app does and asserts the output
@@ -127,5 +128,90 @@ final class PlaylistCoverPresetTests: XCTestCase {
             }
         }
         return count
+    }
+
+    @MainActor
+    func testModalCarouselCentersSlot1ByDefault() {
+        let app = AppState()
+        let modal = CreatePlaylistModal(songs: [])
+            .environment(app)
+        let hosting = NSHostingView(rootView: modal)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 800),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        hosting.layoutSubtreeIfNeeded()
+
+        for _ in 0..<10 {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+
+        func findCarouselScrollView(in view: NSView) -> NSScrollView? {
+            if let scrollView = view as? NSScrollView, scrollView.frame.width == 370 {
+                return scrollView
+            }
+            for sub in view.subviews {
+                if let found = findCarouselScrollView(in: sub) { return found }
+            }
+            return nil
+        }
+
+        guard let scrollView = findCarouselScrollView(in: hosting) else {
+            XCTFail("Carousel NSScrollView not found")
+            return
+        }
+
+        let originX = scrollView.contentView.bounds.origin.x
+        let screenX = 174.0 - originX
+        XCTAssertEqual(screenX, 105.0, accuracy: 1.0, "Slot 1 must be centered with 105pt horizontal margin")
+    }
+
+    @MainActor
+    func testModalCarouselCentersSlot0WhenEditingCoverArt() {
+        let app = AppState()
+        let existing = PlaylistSummary(
+            id: "1", name: "Test", comment: nil, owner: nil, coverArt: "art",
+            songCount: nil, duration: nil, created: nil, changed: nil,
+            isPublic: nil, isReadonly: nil, validUntil: nil
+        )
+        let modal = CreatePlaylistModal(songs: [], existing: existing)
+            .environment(app)
+        let hosting = NSHostingView(rootView: modal)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 800),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        hosting.layoutSubtreeIfNeeded()
+
+        for _ in 0..<10 {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+
+        func findCarouselScrollView(in view: NSView) -> NSScrollView? {
+            if let scrollView = view as? NSScrollView, scrollView.frame.width == 370 {
+                return scrollView
+            }
+            for sub in view.subviews {
+                if let found = findCarouselScrollView(in: sub) { return found }
+            }
+            return nil
+        }
+
+        guard let scrollView = findCarouselScrollView(in: hosting) else {
+            XCTFail("Carousel NSScrollView not found")
+            return
+        }
+
+        let originX = scrollView.contentView.bounds.origin.x
+        let screenX = 0.0 - originX
+        XCTAssertEqual(screenX, 105.0, accuracy: 1.0, "Slot 0 must be centered with 105pt horizontal margin")
     }
 }

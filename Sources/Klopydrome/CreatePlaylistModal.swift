@@ -19,6 +19,8 @@ struct CreatePlaylistModal: View {
     @State var description = ""
     @State var isPublic = false
     @State var selectedCover = 1
+    @State var visibleIndex: Int? = 1
+    var activeVisibleIndex: Int { visibleIndex ?? selectedIndex }
     @State var creating = false
     @State var customImage: NSImage?
     @State var showFilePicker = false
@@ -48,6 +50,7 @@ struct CreatePlaylistModal: View {
         _isPublic = State(initialValue: existing?.isPublic ?? false)
         let initialCover = (existing?.coverArt != nil) ? 0 : 1
         _selectedCover = State(initialValue: initialCover)
+        _visibleIndex = State(initialValue: initialCover)
     }
 
     /// Gallery options: slot 0 is the custom photo (or current cover when editing),
@@ -91,6 +94,7 @@ struct CreatePlaylistModal: View {
                 Text(isEditing ? "Изменить плейлист".localized : "Новый плейлист".localized)
                     .font(.headline.weight(.semibold))
                     .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, 20)
 
                 coverCarousel
 
@@ -99,8 +103,8 @@ struct CreatePlaylistModal: View {
                     descriptionField
                     publicToggle
                 }
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 20)
             .padding(.top, 20)
             .padding(.bottom, 16)
 
@@ -177,6 +181,7 @@ struct CreatePlaylistModal: View {
             if description.isEmpty {
                 Text("Описание (необязательно)".localized)
                     .font(.body)
+                    .kerning(-0.5)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 14)
                     .padding(.top, 12)
@@ -219,6 +224,7 @@ struct CreatePlaylistModal: View {
         withAnimation(.easeInOut(duration: 0.25)) {
             customImage = cropped
             selectedCover = 0
+            visibleIndex = 0
         }
     }
 
@@ -232,6 +238,7 @@ struct CreatePlaylistModal: View {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         customImage = cropped
                         selectedCover = 0
+                        visibleIndex = 0
                     }
                     selectedPhotoItem = nil
                 }

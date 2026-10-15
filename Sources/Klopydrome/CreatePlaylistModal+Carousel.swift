@@ -16,31 +16,46 @@ extension CreatePlaylistModal {
                                     .id(index)
                             }
                         }
-                        .padding(.horizontal, (modalWidth - coverSize) / 2)
+                        .scrollTargetLayout()
                     }
+                    .scrollTargetBehavior(.viewAligned)
+                    .safeAreaPadding(.horizontal, (modalWidth - coverSize) / 2)
+                    .scrollPosition(id: $visibleIndex)
                     .frame(width: modalWidth, height: coverSize)
 
-                    HStack {
-                        CarouselChevronButton(direction: .left) {
-                            let newIndex = max(0, selectedIndex - 1)
-                            selectCover(newIndex, proxy: proxy)
+                    HStack(spacing: 0) {
+                        if activeVisibleIndex > 0 {
+                            CarouselChevronButton(direction: .left) {
+                                stepCover(by: -1, proxy: proxy)
+                            }
                         }
                         Spacer()
-                        CarouselChevronButton(direction: .right) {
-                            let newIndex = min(pageCount - 1, selectedIndex + 1)
-                            selectCover(newIndex, proxy: proxy)
+                        if activeVisibleIndex < pageCount - 1 {
+                            CarouselChevronButton(direction: .right) {
+                                stepCover(by: 1, proxy: proxy)
+                            }
                         }
                     }
-                    .padding(.horizontal, 10)
+                    .frame(width: modalWidth, height: coverSize)
                     .opacity(isCarouselHovered ? 1 : 0)
                     .animation(.easeInOut(duration: 0.15), value: isCarouselHovered)
                     .allowsHitTesting(isCarouselHovered)
                 }
                 .frame(width: modalWidth, height: coverSize)
                 .clipped()
+                .contentShape(Rectangle())
                 .onHover { isCarouselHovered = $0 }
                 .onAppear {
+                    visibleIndex = selectedIndex
                     proxy.scrollTo(selectedIndex, anchor: .center)
+                }
+                .onChange(of: selectedCover) { _, newIndex in
+                    if activeVisibleIndex != newIndex {
+                        visibleIndex = newIndex
+                        withAnimation(.snappy(duration: 0.15)) {
+                            proxy.scrollTo(newIndex, anchor: .center)
+                        }
+                    }
                 }
 
                 pageIndicator(proxy: proxy)
@@ -48,18 +63,31 @@ extension CreatePlaylistModal {
         }
     }
 
+    func stepCover(by delta: Int, proxy: ScrollViewProxy) {
+        let current = activeVisibleIndex
+        let next = max(0, min(pageCount - 1, current + delta))
+        guard next != current || next != selectedCover else { return }
+        visibleIndex = next
+        selectedCover = next
+        withAnimation(.snappy(duration: 0.15)) {
+            proxy.scrollTo(next, anchor: .center)
+        }
+    }
+
     func selectCover(_ index: Int, proxy: ScrollViewProxy) {
-        withAnimation(.snappy(duration: 0.25)) {
-            selectedCover = index
+        visibleIndex = index
+        selectedCover = index
+        withAnimation(.snappy(duration: 0.15)) {
             proxy.scrollTo(index, anchor: .center)
         }
     }
 
     func coverTile(_ index: Int, isActive: Bool, proxy: ScrollViewProxy) -> some View {
+        let isSlot0 = (index == 0)
         let hasNoArtwork = (existing?.coverArt == nil || existing?.coverArt?.isEmpty == true)
-        let isSlot0Empty = (index == 0 && customImage == nil && hasNoArtwork)
-        let isHovered = (hoveredCoverIndex == index)
-        let showPlus = isActive && (isHovered || isSlot0Empty)
+        let isSlot0Empty = (isSlot0 && customImage == nil && hasNoArtwork)
+        let isHovered = (hoveredCoverIndex == 0)
+        let showPlus = isSlot0 && isActive && (isHovered || isSlot0Empty)
 
         return ZStack {
             AMColor.surface
@@ -89,9 +117,7 @@ extension CreatePlaylistModal {
             }
         }
         .onTapGesture {
-            if !isActive {
-                selectCover(index, proxy: proxy)
-            }
+            selectCover(index, proxy: proxy)
         }
     }
 
@@ -186,7 +212,7 @@ extension CreatePlaylistModal {
             } label: {
                 Image(systemName: "photo")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(selectedIndex == 0 ? Color.white : Color.secondary.opacity(0.45))
+                    .foregroundStyle(activeVisibleIndex == 0 ? Color.white : Color.secondary.opacity(0.45))
             }
             .buttonStyle(.plain)
 
@@ -195,13 +221,13 @@ extension CreatePlaylistModal {
                     selectCover(index, proxy: proxy)
                 } label: {
                     Circle()
-                        .fill(index == selectedIndex ? Color.white : Color.secondary.opacity(0.35))
+                        .fill(index == activeVisibleIndex ? Color.white : Color.secondary.opacity(0.35))
                         .frame(width: 6, height: 6)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .animation(.snappy(duration: 0.2), value: selectedIndex)
+        .animation(.snappy(duration: 0.2), value: activeVisibleIndex)
     }
 }
 
@@ -231,7 +257,7 @@ struct TallChevronShape: Shape {
     }
 }
 
-/// Translucent rounded-rectangle chevron button matching Apple Music macOS hover arrows.
+/// Translucent edge-pinned chevron button matching Apple Music macOS hover arrows.
 struct CarouselChevronButton: View {
     let direction: TallChevronShape.Direction
     let action: () -> Void
@@ -241,9 +267,8 @@ struct CarouselChevronButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color(white: 0.35).opacity(isHovering ? 0.85 : 0.6))
-                    .frame(width: 36, height: 92)
+                chevronBackground
+                    .fill(Color(white: 0.28).opacity(isHovering ? 0.85 : 0.65))
 
                 TallChevronShape(direction: direction)
                     .stroke(
@@ -252,10 +277,34 @@ struct CarouselChevronButton: View {
                     )
                     .frame(width: 13, height: 44)
             }
+            .frame(width: 36, height: 92)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NoDimButtonStyle())
+        .frame(width: 36, height: 160)
+        .contentShape(Rectangle())
         .onHover { isHovering = $0 }
+    }
+
+    private var chevronBackground: UnevenRoundedRectangle {
+        switch direction {
+        case .left:
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 0,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 8,
+                topTrailingRadius: 8,
+                style: .continuous
+            )
+        case .right:
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 8,
+                bottomLeadingRadius: 8,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 0,
+                style: .continuous
+            )
+        }
     }
 }
 
