@@ -302,6 +302,7 @@ private struct PlaylistSongListSection: View {
         let allSongs = filteredRows
         if displayedSongs.isEmpty && loading {
             SkeletonSongList(count: 10, showAlbum: true)
+                .padding(.leading, -22)
         } else if displayedSongs.isEmpty, let loadError {
             DetailUnavailableView(message: loadError) {
                 app.loadPlaylistIfNeeded(detail.summary, forceReload: true)
@@ -338,6 +339,7 @@ private struct PlaylistSongListSection: View {
                 )
                 .equatable()
             }
+            .padding(.leading, -22)
             if displayedCount < filteredRows.count {
                 Color.clear.frame(height: 80)
                     .onAppear {

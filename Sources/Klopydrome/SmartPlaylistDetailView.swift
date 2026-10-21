@@ -195,6 +195,7 @@ struct SmartPlaylistDetailView: View {
             )
             .equatable()
         }
+        .padding(.leading, -22)
     }
 
     private func load() async {

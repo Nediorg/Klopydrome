@@ -32,6 +32,7 @@ struct AlbumDetailView: View {
                 header(displayedDetail)
                 if songs.isEmpty && loading {
                     skeletonRows
+                        .padding(.leading, -22)
                 } else if songs.isEmpty, let loadError {
                     emptyErrorState(loadError)
                 } else {
@@ -147,27 +148,12 @@ struct AlbumDetailView: View {
         } else if let count = detail.songCount {
             parts.append("\(count) \(Pluralized.song(count))")
         }
-        return HStack(spacing: 8) {
-            Text(parts.joined(separator: " · "))
-                .font(.callout.bold())
-                .foregroundStyle(AMColor.secondaryText)
-            if isLossless {
-                HStack(spacing: 4) {
-                    Image(systemName: "waveform.mid")
-                        .font(.system(size: 9, weight: .bold))
-                    Text("Lossless")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .foregroundStyle(Color.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule()
-                        .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 0.8)
-                )
-                .help("Аудио без потерь".localized)
-            }
+        if isLossless {
+            parts.append("Lossless")
         }
+        return Text(parts.joined(separator: " · "))
+            .font(.callout.bold())
+            .foregroundStyle(AMColor.secondaryText)
     }
 
     // MARK: Action row
@@ -271,7 +257,8 @@ private struct AlbumTrackListSection: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 8)
+                            .padding(.leading, 30)
+                            .padding(.trailing, 8)
                             .padding(.vertical, 6)
                     }
                     ForEach(group.songs, id: \.id) { song in
@@ -299,6 +286,7 @@ private struct AlbumTrackListSection: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, -22)
 
             VStack(alignment: .leading, spacing: 2) {
                 let total = songs.reduce(0) { $0 + ($1.duration ?? 0) }
