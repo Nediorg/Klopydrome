@@ -152,12 +152,14 @@ struct CircularArtistArt: View {
                 Image(nsImage: img)
                     .resizable()
                     .scaledToFill()
+                    .transition(.opacity)
             } else if let cover = coverArt, !cover.isEmpty {
                 CoverArtView(coverArt: cover, size: size, cornerRadius: size / 2)
             } else {
                 Text(initial)
                     .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .transition(.opacity)
             }
         }
         .frame(width: size, height: size)
@@ -168,8 +170,13 @@ struct CircularArtistArt: View {
         .task(id: CoverArtRequest(art: imageURL, nonce: retryNonce)) {
             if displayImage != nil { return }
             let loaded = await CoverArtStore.shared.image(artistURL: imageURL, size: Int(size * 2))
+            guard !Task.isCancelled else { return }
             if let image = loaded.image {
-                self.image = image
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        self.image = image
+                    }
+                }
             }
         }
     }

@@ -314,6 +314,16 @@ final class AppState {
             return
         }
         serverConfig = config
+        if !config.url.isEmpty, let host = URL(string: config.url)?.host {
+            let initialCache = CacheManager(rootURL: CacheManager.root(forServer: host))
+            self.cache = initialCache
+            CoverArtStore.shared.configure(
+                client: nil,
+                cache: initialCache,
+                coverResolution: config.coverResolution ?? .high,
+                adaptiveCellularDataEnabled: config.effectiveAdaptiveCellularDataEnabled
+            )
+        }
         player.configureAutomix(
             enabled: config.effectiveAutomixEnabled,
             fadeDuration: config.effectiveAutomixFadeDuration,

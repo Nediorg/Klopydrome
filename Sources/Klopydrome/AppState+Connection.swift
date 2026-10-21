@@ -102,9 +102,18 @@ extension AppState {
 
         let host = config.baseURL.host ?? "default"
         let newCache = CacheManager(rootURL: CacheManager.root(forServer: host))
-        await resetLibraryForConnection(newCache: newCache)
 
         self.client = client
+        self.cache = newCache
+        CoverArtStore.shared.configure(
+            client: client,
+            cache: newCache,
+            coverResolution: serverConfig.coverResolution ?? .high,
+            adaptiveCellularDataEnabled: serverConfig.effectiveAdaptiveCellularDataEnabled
+        )
+
+        await resetLibraryForConnection(newCache: newCache)
+
         self.navidrome = NavidromeAPI(baseURL: config.baseURL, username: config.username, password: config.password)
         self.smartPlaylistEngine = SmartPlaylistEngine(
             repo: CachedLibraryRepo(
@@ -123,12 +132,6 @@ extension AppState {
         self.connectionError = nil
         persist()
         persistSessionCredentials(username: config.username, password: config.password)
-        CoverArtStore.shared.configure(
-            client: client,
-            cache: newCache,
-            coverResolution: serverConfig.coverResolution ?? .high,
-            adaptiveCellularDataEnabled: serverConfig.effectiveAdaptiveCellularDataEnabled
-        )
         if queuePersistenceEnabled {
             await restoreQueueFromServer()
         }

@@ -110,7 +110,7 @@ extension CoverArtStore {
         } else {
             resolved = nil
         }
-        guard let resolved else { return .dead }
+        guard let resolved else { return client == nil ? .transient : .dead }
         // Artist URLs are resolved absolute URLs; key the disk cache by it so
         // repeated visits don't re-download full-resolution artwork.
         let cacheKey = CacheManager.metadataKey(endpoint: "artistImage",
@@ -119,7 +119,7 @@ extension CoverArtStore {
            let image = decodeImage(from: data, requestedSize: size) {
             return .image(image)
         }
-        guard client != nil else { return .dead }
+        guard client != nil else { return .transient }
         return await fetch(url: resolved, cacheKey: cacheKey, requestedSize: size)
     }
 

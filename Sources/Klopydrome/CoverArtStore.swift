@@ -108,8 +108,9 @@ final class CoverArtStore: @unchecked Sendable {
         // (task(id:) never re-fires for an unchanged id), leaving it a placeholder.
         // Only a *different* client (a new server, or a reconnect with a fresh
         // client object) gets the reset.
-        let toCancel: [InflightTask]? = lock.withLock {
+        let (toCancel, shouldNotify): ([InflightTask]?, Bool) = lock.withLock {
             let identityChanged = self.client !== client
+            let clientBecameAvailable = self.client == nil && client != nil
             self.client = client
             self.cache = cache
             if let coverResolution {
@@ -118,18 +119,25 @@ final class CoverArtStore: @unchecked Sendable {
             if let adaptiveCellularDataEnabled {
                 self.adaptiveCellularDataEnabled = adaptiveCellularDataEnabled
             }
-            guard identityChanged else { return nil }
+            guard identityChanged else { return (nil, false) }
             // Cancelling the in-flight tasks guarantees no stale (previous-server)
             // result can later clobber the fresh registry or memory cache.
-            memory.removeAllObjects()
+            if !clientBecameAvailable {
+                memory.removeAllObjects()
+            }
             failedKeys.removeAll()
             cachedSizes.removeAll()
             let holders = Array(inflight.values)
             inflight.removeAll()
-            return holders
+            return (holders, true)
         }
         if let toCancel {
             for holder in toCancel { holder.task.cancel() }
+        }
+        if shouldNotify {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .foregroundRefreshRequested, object: nil)
+            }
         }
     }
 

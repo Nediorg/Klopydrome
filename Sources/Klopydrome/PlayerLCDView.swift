@@ -91,6 +91,7 @@ struct PlayerLCDView: View {
             textColumn
 
             coverButton
+                .frame(width: 42, height: 42, alignment: .leading)
         }
     }
 
@@ -104,6 +105,8 @@ struct PlayerLCDView: View {
             ZStack {
                 if let song = app.player.displaySong {
                     CoverArtView(coverArt: song.coverArt, size: 42, cornerRadius: 0, shadow: false)
+                        .frame(width: 42, height: 42)
+                        .clipped()
                         .allowsHitTesting(false)
                 } else {
                     ZStack {
@@ -111,6 +114,8 @@ struct PlayerLCDView: View {
                         Image(systemName: "music.note")
                             .foregroundStyle(.tertiary)
                     }
+                    .frame(width: 42, height: 42)
+                    .clipped()
                     .allowsHitTesting(false)
                 }
             }

@@ -22,10 +22,12 @@ struct CoverArtView: View {
     private var shadowY: CGFloat { shadow ? max(4, size * 0.03) : 0 }
 
     @State private var image: NSImage?
+    @State private var previousImage: NSImage?
     /// The identifier of the rendered artwork; changing it gives SwiftUI an
     /// insertion/removal pair for a short opacity transition without dropping
     /// the previous cover while the next one is loading.
     @State private var renderedCoverArt: String?
+    @State private var previousCoverArt: String?
     /// Set when the store reports the artwork doesn't exist (dead/empty cover,
     /// network failure): the placeholder stops shimmering and stays a static
     /// tile instead of animating indefinitely. Cleared when a new cover id
@@ -43,40 +45,34 @@ struct CoverArtView: View {
         self.cornerRadius = cornerRadius
         self.shadow = shadow
         self.placeholderBackground = placeholderBackground
-        let cached = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2))
-        _image = State(initialValue: cached)
-        _renderedCoverArt = State(initialValue: cached != nil ? coverArt : nil)
-    }
-
-    private var displayImage: NSImage? {
-        if let cached = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2)) {
-            return cached
+        if placeholderBackground == .clear {
+            _image = State(initialValue: nil)
+            _renderedCoverArt = State(initialValue: nil)
+        } else {
+            let cached = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2))
+            _image = State(initialValue: cached)
+            _renderedCoverArt = State(initialValue: cached != nil ? coverArt : nil)
         }
-        // Retain previous image while loading a new valid cover art:
-        if coverArt?.isEmpty == false, let image {
-            return image
-        }
-        return nil
-    }
-
-    private var currentCoverID: String {
-        if CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2)) != nil,
-           let art = coverArt, !art.isEmpty {
-            return art
-        }
-        if let renderedCoverArt, !renderedCoverArt.isEmpty {
-            return renderedCoverArt
-        }
-        return coverArt ?? "cover-placeholder"
     }
 
     var body: some View {
         ZStack {
-            if let displayImage {
-                Image(nsImage: displayImage)
+            if let previousImage, previousCoverArt != renderedCoverArt {
+                Image(nsImage: previousImage)
                     .resizable()
                     .scaledToFill()
-                    .id(currentCoverID)
+                    .frame(width: size, height: size)
+                    .clipped()
+                    .allowsHitTesting(false)
+            }
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipped()
+                    .id(renderedCoverArt)
                     .transition(.opacity)
             } else if placeholderBackground != .clear {
                 ZStack {
@@ -96,7 +92,7 @@ struct CoverArtView: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay {
-            if placeholderBackground != .clear || displayImage != nil {
+            if placeholderBackground != .clear || image != nil {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
             }
@@ -104,7 +100,7 @@ struct CoverArtView: View {
         .coverShadow(enabled: shadow, radius: shadowRadius, yOffset: shadowY)
         .accessibilityLabel(coverArt ?? String(localized: "Обложка"))
         .accessibilityAddTraits(.isImage)
-        .animation(.easeInOut(duration: 0.22), value: renderedCoverArt)
+        .animation(.easeInOut(duration: 0.28), value: renderedCoverArt)
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
             // Resume shimmer immediately; the re-fired task below fills the image.
             loadFailed = false
@@ -118,6 +114,8 @@ struct CoverArtView: View {
             // (The id above only restarts the task; values come from capture.)
             guard let art = coverArt, !art.isEmpty else {
                 withAnimation(.easeInOut(duration: 0.16)) {
+                    previousImage = nil
+                    previousCoverArt = nil
                     image = nil
                     renderedCoverArt = nil
                 }
@@ -129,11 +127,16 @@ struct CoverArtView: View {
             }
             // Fast cache hit avoiding placeholder flash and shimmer animation:
             if let cached = CoverArtStore.shared.cachedImage(coverArt: art, size: Int(size * 2)) {
-                withAnimation(.easeInOut(duration: 0.20)) {
+                if image != nil, renderedCoverArt != art {
+                    previousImage = image
+                    previousCoverArt = renderedCoverArt
+                }
+                withAnimation(.easeInOut(duration: 0.28)) {
                     image = cached
                     renderedCoverArt = art
                 }
                 loadFailed = false
+                schedulePreviousImageCleanup(for: art)
                 return
             }
 
@@ -167,28 +170,51 @@ struct CoverArtView: View {
                     guard !Task.isCancelled else { break }
                     switch result {
                     case .graceExpired:
-                        withAnimation(.easeInOut(duration: 0.20)) {
-                            image = nil
-                            renderedCoverArt = nil
-                        }
-                    case .image(let box):
-                        group.cancelAll()
-                        if let newImage = box.image {
-                            withAnimation(.easeInOut(duration: 0.22)) {
-                                image = newImage
-                                renderedCoverArt = art
-                            }
-                            loadFailed = false
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.18)) {
+                        await MainActor.run {
+                            withAnimation(.easeInOut(duration: 0.20)) {
+                                previousImage = nil
+                                previousCoverArt = nil
                                 image = nil
                                 renderedCoverArt = nil
                             }
-                            loadFailed = true
+                        }
+                    case .image(let box):
+                        group.cancelAll()
+                        await MainActor.run {
+                            if let newImage = box.image {
+                                if image != nil, renderedCoverArt != art {
+                                    previousImage = image
+                                    previousCoverArt = renderedCoverArt
+                                }
+                                withAnimation(.easeInOut(duration: 0.28)) {
+                                    image = newImage
+                                    renderedCoverArt = art
+                                }
+                                loadFailed = false
+                                schedulePreviousImageCleanup(for: art)
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    previousImage = nil
+                                    previousCoverArt = nil
+                                    image = nil
+                                    renderedCoverArt = nil
+                                }
+                                loadFailed = true
+                            }
                         }
                         return
                     }
                 }
+            }
+        }
+    }
+
+    private func schedulePreviousImageCleanup(for art: String) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            if renderedCoverArt == art {
+                previousImage = nil
+                previousCoverArt = nil
             }
         }
     }
