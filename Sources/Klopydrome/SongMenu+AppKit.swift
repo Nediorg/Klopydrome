@@ -108,8 +108,6 @@ enum SongActionMenuBuilder {
         let recents = playlists.filter { recentIDs.contains($0.id) }.sorted { firstPlaylist, secondPlaylist in
             (recentIDs.firstIndex(of: firstPlaylist.id) ?? .max) < (recentIDs.firstIndex(of: secondPlaylist.id) ?? .max)
         }
-        let others = playlists.filter { !recentIDs.contains($0.id) }
-
         if !recents.isEmpty {
             playlistMenu.addItem(.separator())
             let header = NSMenuItem(title: "Недавние".localized, action: nil, keyEquivalent: "")
@@ -123,14 +121,14 @@ enum SongActionMenuBuilder {
             }
         }
 
-        if !others.isEmpty {
+        if !playlists.isEmpty {
             playlistMenu.addItem(.separator())
             if !recents.isEmpty {
                 let header = NSMenuItem(title: "Все плейлисты".localized, action: nil, keyEquivalent: "")
                 header.isEnabled = false
                 playlistMenu.addItem(header)
             }
-            for playlist in others {
+            for playlist in playlists {
                 playlistMenu.addItem(SongMenuActionItem(title: playlist.displayName) {
                     guard app.confirmOfflineAction() else { return }
                     Task { await app.addSongsCheckingDuplicates(targets, to: playlist) }

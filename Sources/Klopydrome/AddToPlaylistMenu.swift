@@ -68,13 +68,17 @@ struct AddToPlaylistMenu: View {
                 }
             }
 
-            Divider()
-            Text("Все плейлисты".localized)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-            ForEach(others) { playlist in
-                Button(playlist.displayName) {
-                    Task { await targetSongs(playlist) }
+            if !playlists.isEmpty {
+                Divider()
+                if !recent.isEmpty {
+                    Text("Все плейлисты".localized)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                ForEach(playlists) { playlist in
+                    Button(playlist.displayName) {
+                        Task { await targetSongs(playlist) }
+                    }
                 }
             }
         } label: {
@@ -82,19 +86,10 @@ struct AddToPlaylistMenu: View {
         }
     }
 
-    private var recents: [PlaylistSummary] {
-        let ids = resolvedApp.recentPlaylistIDs
-        return playlists.filter { ids.contains($0.id) }
-    }
-
     private var recent: [PlaylistSummary] {
         let ids = resolvedApp.recentPlaylistIDs
-        return recents.sorted { a, b in
-            (ids.firstIndex(of: a.id) ?? .max) < (ids.firstIndex(of: b.id) ?? .max)
+        return playlists.filter { ids.contains($0.id) }.sorted { first, second in
+            (ids.firstIndex(of: first.id) ?? .max) < (ids.firstIndex(of: second.id) ?? .max)
         }
-    }
-
-    private var others: [PlaylistSummary] {
-        playlists.filter { !resolvedApp.recentPlaylistIDs.contains($0.id) }
     }
 }
