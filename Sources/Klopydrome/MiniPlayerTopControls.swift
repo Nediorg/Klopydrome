@@ -38,8 +38,11 @@ struct MiniPlayerTopControls: View {
         .padding(.trailing, 3)
         .padding(.vertical, 3)
         .matteTopControlSurface()
-        .animation(.easeOut(duration: 0.16), value: volumeBarExpanded)
-        .animation(.easeOut(duration: 0.08), value: volumeSliderVisible)
+        .animation(.easeOut(duration: 0.14), value: volumeBarExpanded)
+        .animation(.easeOut(duration: 0.09), value: volumeSliderVisible)
+        .onDisappear {
+            volumeTransitionTask?.cancel()
+        }
     }
 
     private var secondaryControls: some View {
@@ -72,26 +75,26 @@ struct MiniPlayerTopControls: View {
     private func presentVolumeSlider() {
         volumeTransitionTask?.cancel()
         showingVolume = true
-        withAnimation(.linear(duration: 0.1)) {
+        withAnimation(.easeOut(duration: 0.07)) {
             secondaryControlsVisible = false
         }
         volumeTransitionTask = Task { @MainActor in
             do {
-                try await Task.sleep(for: .milliseconds(100))
+                try await Task.sleep(for: .milliseconds(50))
             } catch {
                 return
             }
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.16)) {
+            withAnimation(.easeOut(duration: 0.14)) {
                 volumeBarExpanded = true
             }
             do {
-                try await Task.sleep(for: .milliseconds(160))
+                try await Task.sleep(for: .milliseconds(75))
             } catch {
                 return
             }
             guard !Task.isCancelled else { return }
-            withAnimation(.linear(duration: 0.08)) {
+            withAnimation(.easeOut(duration: 0.09)) {
                 volumeSliderVisible = true
             }
         }
@@ -99,26 +102,26 @@ struct MiniPlayerTopControls: View {
 
     private func dismissVolumeSlider() {
         volumeTransitionTask?.cancel()
-        withAnimation(.linear(duration: 0.08)) {
+        withAnimation(.easeOut(duration: 0.07)) {
             volumeSliderVisible = false
         }
         volumeTransitionTask = Task { @MainActor in
             do {
-                try await Task.sleep(for: .milliseconds(80))
+                try await Task.sleep(for: .milliseconds(50))
             } catch {
                 return
             }
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.16)) {
+            withAnimation(.easeOut(duration: 0.14)) {
                 volumeBarExpanded = false
             }
             do {
-                try await Task.sleep(for: .milliseconds(160))
+                try await Task.sleep(for: .milliseconds(75))
             } catch {
                 return
             }
             guard !Task.isCancelled else { return }
-            withAnimation(.linear(duration: 0.1)) {
+            withAnimation(.easeOut(duration: 0.08)) {
                 secondaryControlsVisible = true
             }
             showingVolume = false

@@ -15,6 +15,9 @@ final class MiniPlayerPanelController: NSObject {
     private var detailCollapsedHeightConstraint: NSLayoutConstraint?
     private var detailBottomConstraint: NSLayoutConstraint?
     private var configuredPanel: AppState.PlayerPanelTab?
+    var userCompactSide: CGFloat = MiniPlayerLayout.compactSide
+    private var isAnimatingDetailTransition = false
+    private var transitionGeneration = 0
     private weak var app: AppState?
     private weak var mainWindow: NSWindow?
 
@@ -23,6 +26,9 @@ final class MiniPlayerPanelController: NSObject {
 
     func show(app: AppState) {
         self.app = app
+        if let coverArt = app.player.displaySong?.coverArt {
+            MiniPlayerVariableBlurCache.shared.prewarmBlur(coverArt: coverArt, size: userCompactSide)
+        }
         let sourceWindow = NSApp.mainWindow === panel ? mainWindow : NSApp.mainWindow
         let shouldPositionPanel = panel == nil
         let panel = panel ?? makePanel(app: app)
@@ -52,8 +58,8 @@ final class MiniPlayerPanelController: NSObject {
 
     private func makePanel(app: AppState) -> NSPanel {
         let compactSize = NSSize(
-            width: MiniPlayerLayout.compactSide,
-            height: MiniPlayerLayout.compactSide
+            width: userCompactSide,
+            height: userCompactSide
         )
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: compactSize),
@@ -152,49 +158,47 @@ final class MiniPlayerPanelController: NSObject {
     }
 
     private func presentDetail(_ kind: AppState.PlayerPanelTab, in panel: NSPanel) {
-        let currentContentSize = panel.contentView?.bounds.size
-            ?? panel.contentRect(forFrameRect: panel.frame).size
         let side = min(
-            max(MiniPlayerLayout.minimumCompactSide, currentContentSize.width),
+            max(MiniPlayerLayout.minimumCompactSide, userCompactSide),
             MiniPlayerLayout.maximumCompactSide
         )
+        userCompactSide = side
         installDetailHost(for: kind)
         detailCollapsedHeightConstraint?.isActive = false
         detailBottomConstraint?.isActive = true
         detailClipHost?.isHidden = false
         let targetSize = NSSize(width: side, height: side + MiniPlayerLayout.panelHeight)
         let targetFrame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: targetSize))
-        let anchored = NSRect(
-            x: panel.frame.minX,
-            y: panel.frame.maxY - targetFrame.height,
-            width: targetFrame.width,
-            height: targetFrame.height
-        )
 
-        contentHost?.layoutSubtreeIfNeeded()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = MiniPlayerLayout.panelAnimationDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(anchored, display: true)
-            contentHost?.animator().layoutSubtreeIfNeeded()
+        var originX = panel.frame.minX
+        var originY = panel.frame.maxY - targetFrame.height
+
+        if let screen = panel.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            if originX + targetFrame.width > visible.maxX {
+                originX = visible.maxX - targetFrame.width
+            }
+            if originX < visible.minX {
+                originX = visible.minX
+            }
+            if originY < visible.minY {
+                originY = visible.minY
+            }
+            if originY + targetFrame.height > visible.maxY {
+                originY = visible.maxY - targetFrame.height
+            }
         }
-    }
 
-    private func dismissDetail(in panel: NSPanel) {
-        let currentContentSize = panel.contentView?.bounds.size
-            ?? panel.contentRect(forFrameRect: panel.frame).size
-        let side = min(
-            max(MiniPlayerLayout.minimumCompactSide, currentContentSize.width),
-            MiniPlayerLayout.maximumCompactSide
-        )
-        let targetSize = NSSize(width: side, height: side)
-        let targetFrame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: targetSize))
         let anchored = NSRect(
-            x: panel.frame.minX,
-            y: panel.frame.maxY - targetFrame.height,
+            x: originX,
+            y: originY,
             width: targetFrame.width,
             height: targetFrame.height
         )
+
+        transitionGeneration += 1
+        let currentGeneration = transitionGeneration
+        isAnimatingDetailTransition = true
 
         contentHost?.layoutSubtreeIfNeeded()
         NSAnimationContext.runAnimationGroup { context in
@@ -203,7 +207,62 @@ final class MiniPlayerPanelController: NSObject {
             panel.animator().setFrame(anchored, display: true)
             contentHost?.animator().layoutSubtreeIfNeeded()
         } completionHandler: { [weak self] in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
+                guard self?.transitionGeneration == currentGeneration else { return }
+                self?.isAnimatingDetailTransition = false
+            }
+        }
+    }
+
+    private func dismissDetail(in panel: NSPanel) {
+        let side = min(
+            max(MiniPlayerLayout.minimumCompactSide, userCompactSide),
+            MiniPlayerLayout.maximumCompactSide
+        )
+        userCompactSide = side
+        let targetSize = NSSize(width: side, height: side)
+        let targetFrame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: targetSize))
+
+        var originX = panel.frame.minX
+        var originY = panel.frame.maxY - targetFrame.height
+
+        if let screen = panel.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            if originX + targetFrame.width > visible.maxX {
+                originX = visible.maxX - targetFrame.width
+            }
+            if originX < visible.minX {
+                originX = visible.minX
+            }
+            if originY < visible.minY {
+                originY = visible.minY
+            }
+            if originY + targetFrame.height > visible.maxY {
+                originY = visible.maxY - targetFrame.height
+            }
+        }
+
+        let anchored = NSRect(
+            x: originX,
+            y: originY,
+            width: targetFrame.width,
+            height: targetFrame.height
+        )
+
+        transitionGeneration += 1
+        let currentGeneration = transitionGeneration
+        isAnimatingDetailTransition = true
+
+        contentHost?.layoutSubtreeIfNeeded()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = MiniPlayerLayout.panelAnimationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(anchored, display: true)
+            contentHost?.animator().layoutSubtreeIfNeeded()
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                guard self?.transitionGeneration == currentGeneration else { return }
+                self?.isAnimatingDetailTransition = false
                 guard self?.configuredPanel == nil else { return }
                 self?.detailBottomConstraint?.isActive = false
                 self?.detailCollapsedHeightConstraint?.isActive = true
@@ -262,17 +321,26 @@ final class MiniPlayerPanelController: NSObject {
         ].forEach { panel.standardWindowButton($0)?.isHidden = !visible }
     }
 
+    /// Whether the panel is currently in an interactive live resize gesture.
+    var isLiveResizing: Bool {
+        panel?.inLiveResize == true
+    }
+
     /// Whether the cursor is anywhere inside the panel, chrome included.
     /// Backs the hide decision in `MiniPlayerView.updateHover`.
     var isCursorInsidePanel: Bool {
         guard let panel, let content = panel.contentView else { return false }
+        if panel.inLiveResize { return true }
         let point = content.convert(panel.mouseLocationOutsideOfEventStream, from: nil)
-        return content.bounds.contains(point)
+        return content.bounds.insetBy(dx: -8, dy: -8).contains(point)
     }
 }
 
 extension MiniPlayerPanelController: NSWindowDelegate {
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        if isAnimatingDetailTransition {
+            return frameSize
+        }
         let requestedContentSize = sender.contentRect(
             forFrameRect: NSRect(origin: .zero, size: frameSize)
         ).size
@@ -289,11 +357,20 @@ extension MiniPlayerPanelController: NSWindowDelegate {
                 current: currentContentSize
             )
         }
+        userCompactSide = contentSize.width
         MiniPlayerResizeGeometry.lastDebugLine =
             "req \(Int(requestedContentSize.width))×\(Int(requestedContentSize.height)) "
             + "cur \(Int(currentContentSize.width))×\(Int(currentContentSize.height)) → "
             + "\(Int(contentSize.width))×\(Int(contentSize.height))"
         return sender.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard !isAnimatingDetailTransition, let panel else { return }
+        let contentWidth = panel.contentRect(forFrameRect: panel.frame).width
+        if contentWidth >= MiniPlayerLayout.minimumCompactSide && contentWidth <= MiniPlayerLayout.maximumCompactSide {
+            userCompactSide = contentWidth
+        }
     }
 
     func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame: NSRect) -> NSRect {
@@ -345,6 +422,8 @@ extension MiniPlayerPanelController: NSWindowDelegate {
         detailCollapsedHeightConstraint = nil
         detailBottomConstraint = nil
         configuredPanel = nil
+        isAnimatingDetailTransition = false
+        transitionGeneration += 1
         mainWindow?.makeKeyAndOrderFront(nil)
         mainWindow = nil
         NotificationCenter.default.post(name: .miniPlayerDidClose, object: nil)

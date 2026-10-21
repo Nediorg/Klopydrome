@@ -27,9 +27,11 @@ extension Player {
         nowPlayingArtworkTask?.cancel()
         guard let coverArt = song.coverArt, !coverArt.isEmpty else { return }
         let songID = song.id
+        let side = MiniPlayerPanelController.shared.userCompactSide
         nowPlayingArtworkTask = Task { [weak self] in
             guard let self else { return }
             let loaded = await CoverArtStore.shared.image(coverArt: coverArt, size: 600)
+            MiniPlayerVariableBlurCache.shared.prewarmBlur(coverArt: coverArt, size: side)
             guard !Task.isCancelled,
                   self.displaySong?.id == songID,
                   self.displaySong?.coverArt == coverArt,

@@ -97,22 +97,23 @@ struct MiniPlayerView: View {
                     shadow: false,
                     placeholderBackground: .clear
                 )
+                .transition(.opacity)
             }
 
             MiniPlayerWindowDragRegion()
                 .frame(width: side, height: side)
 
-            if controlsVisible {
-                MiniPlayerControlsLayer(
-                    song: song,
-                    showingVolume: $showingVolume,
-                    togglePanel: togglePanel
-                )
-                .environment(\.colorScheme, .dark)
-                .transition(.opacity)
-            }
+            MiniPlayerControlsLayer(
+                song: song,
+                side: side,
+                showingVolume: $showingVolume,
+                togglePanel: togglePanel
+            )
+            .environment(\.colorScheme, .dark)
+            .opacity(controlsVisible ? 1 : 0)
+            .animation(.easeOut(duration: 0.2), value: controlsVisible)
+            .allowsHitTesting(controlsVisible)
         }
-        .animation(.easeOut(duration: 0.18), value: controlsVisible)
     }
 
     private func miniPlayerPlaceholder(side: CGFloat) -> some View {
@@ -129,13 +130,15 @@ struct MiniPlayerView: View {
 
     private func updateHover(_ hovering: Bool) {
         hideControlsTask?.cancel()
-        isHovering = hovering
 
         guard !hovering else {
+            isHovering = true
             controlsRemainVisible = true
             updateWindowChrome(true, activePanel)
             return
         }
+
+        isHovering = false
 
         // The SwiftUI tracking rect ends where the AppKit window chrome
         // begins: stepping onto the traffic lights fires exit although the
@@ -143,9 +146,15 @@ struct MiniPlayerView: View {
         // lights hidden (no re-enter ever comes from AppKit territory), so
         // the hide applies only once the cursor is truly outside the panel.
         hideControlsTask = Task { @MainActor in
-            while MiniPlayerPanelController.shared.isCursorInsidePanel {
+            // Grace delay to avoid edge jitter and immediate dropoffs during interaction
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+
+            while MiniPlayerPanelController.shared.isCursorInsidePanel
+                || MiniPlayerPanelController.shared.isLiveResizing
+                || NSEvent.pressedMouseButtons != 0 {
                 do {
-                    try await Task.sleep(for: .seconds(2))
+                    try await Task.sleep(for: .seconds(1))
                 } catch {
                     return
                 }
@@ -153,7 +162,11 @@ struct MiniPlayerView: View {
             }
             showingVolume = false
             controlsRemainVisible = false
-            updateWindowChrome(false, activePanel)
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            if !controlsVisible {
+                updateWindowChrome(false, activePanel)
+            }
         }
     }
 
@@ -170,6 +183,7 @@ private struct MiniPlayerControlsLayer: View {
     @Environment(AppState.self) private var app
 
     let song: SubsonicSong
+    let side: CGFloat
     @Binding var showingVolume: Bool
     let togglePanel: (AppState.PlayerPanelTab) -> Void
 
@@ -177,25 +191,24 @@ private struct MiniPlayerControlsLayer: View {
     @State private var isHoveringEllipsis = false
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                VStack(spacing: 0) {
-                    header
-                    Spacer(minLength: 0)
-                    bottomControlShield
-                        .frame(height: proxy.size.height * 0.68)
-                }
+        ZStack {
+            MiniPlayerBlurredArtworkView(coverArt: song.coverArt, size: side)
 
-                trackDetails
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 14)
-                    .frame(
-                        maxWidth: .infinity,
-                        maxHeight: .infinity,
-                        alignment: .bottomLeading
-                    )
+            VStack(spacing: 0) {
+                header
+                Spacer(minLength: 0)
             }
+
+            trackDetails
+                .padding(.horizontal, 28)
+                .padding(.bottom, 14)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .bottomLeading
+                )
         }
+        .frame(width: side, height: side)
         .foregroundStyle(.white)
     }
 
@@ -220,9 +233,10 @@ private struct MiniPlayerControlsLayer: View {
                         .lineLimit(1)
                     Text(song.displaySubtitle)
                         .font(.title3)
-                        .foregroundStyle(.white.opacity(0.64))
+                        .foregroundStyle(.white.opacity(0.70))
                         .lineLimit(1)
                 }
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                 .contentShape(Rectangle())
                 .onTapGesture { showGoToMenu(for: song, app: app) }
 
@@ -239,7 +253,7 @@ private struct MiniPlayerControlsLayer: View {
                     .padding(.top, 8)
             }
 
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 PlaybackSlider(
                     trackOpacity: 0.18,
                     progressColor: .white,
@@ -247,10 +261,10 @@ private struct MiniPlayerControlsLayer: View {
                 )
                 MiniPlayerTimeRow()
             }
-            .padding(.top, 18)
+            .padding(.top, 12)
 
             MiniPlayerTransportControls()
-                .padding(.top, 9)
+                .padding(.top, 6)
         }
     }
 
@@ -296,29 +310,6 @@ private struct MiniPlayerControlsLayer: View {
             .help("Ещё".localized)
             .accessibilityLabel("Действия для песни".localized)
         }
-    }
-
-    private var bottomControlShield: some View {
-        ZStack {
-            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-            LinearGradient(
-                colors: [.black.opacity(0.02), .black.opacity(0.22)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black.opacity(0.8), location: 0.34),
-                    .init(color: .black, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        .allowsHitTesting(false)
     }
 }
 

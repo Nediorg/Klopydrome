@@ -146,7 +146,15 @@ struct PlayerLCDView: View {
         }
         .frame(width: 42, height: 42)
         .contentShape(Rectangle())
-        .onHover { coverHovered = $0 }
+        .onHover { hovered in
+            coverHovered = hovered
+            if hovered, let coverArt = app.player.displaySong?.coverArt {
+                MiniPlayerVariableBlurCache.shared.prewarmBlur(
+                    coverArt: coverArt,
+                    size: MiniPlayerPanelController.shared.userCompactSide
+                )
+            }
+        }
         // No song = nothing to show in the mini-player: an empty panel is
         // worse than no panel, so the placeholder cover is not actionable.
         .onTapGesture {

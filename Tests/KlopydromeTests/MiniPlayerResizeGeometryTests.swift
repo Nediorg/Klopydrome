@@ -144,4 +144,85 @@ final class MiniPlayerResizeGeometryTests: XCTestCase {
 
         XCTAssertEqual(size.width, MiniPlayerLayout.maximumCompactSide, accuracy: 0.001)
     }
+
+    @MainActor
+    func testPanelControllerTracksUserCompactSideOnResize() {
+        let controller = MiniPlayerPanelController()
+        let panel = NSPanel(
+            contentRect: NSRect(x: 100, y: 100, width: 480, height: 480),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let size = controller.windowWillResize(panel, to: NSSize(width: 480, height: 480))
+        XCTAssertEqual(size.width, 480, accuracy: 0.001)
+        XCTAssertEqual(size.height, 480, accuracy: 0.001)
+    }
+
+    func testBlurCoverageAnchorsToBottomControls() {
+        // At 320pt compact size: coverage is 250pt, ensuring title and controls (163pt)
+        // are covered with blur beginning ~70pt from the top (~0.22 fraction)
+        let minCoverage = MiniPlayerVariableBlurCache.blurCoverage(for: 320.0)
+        XCTAssertEqual(minCoverage, 250.0, accuracy: 0.001)
+        let minFraction = MiniPlayerVariableBlurCache.startFraction(for: 320.0)
+        XCTAssertEqual(minFraction, (320.0 - 250.0) / 320.0, accuracy: 0.001)
+        XCTAssertLessThan(minFraction, 0.25)
+
+        // At 600pt compact size: coverage is 320pt, leaving top 280pt of artwork sharp
+        let maxCoverage = MiniPlayerVariableBlurCache.blurCoverage(for: 600.0)
+        XCTAssertEqual(maxCoverage, 320.0, accuracy: 0.001)
+        let maxFraction = MiniPlayerVariableBlurCache.startFraction(for: 600.0)
+        XCTAssertEqual(maxFraction, (600.0 - 320.0) / 600.0, accuracy: 0.001)
+        XCTAssertLessThan(maxFraction, 0.50)
+
+        // Mid-size scales linearly: 250 + (460 - 320) * (70 / 280) = 285.0
+        let midCoverage = MiniPlayerVariableBlurCache.blurCoverage(for: 460.0)
+        XCTAssertEqual(midCoverage, 285.0, accuracy: 0.001)
+
+        // Clamping guards against unexpected bounds
+        let underflow = MiniPlayerVariableBlurCache.blurCoverage(for: 100.0)
+        XCTAssertEqual(underflow, 250.0, accuracy: 0.001)
+        let overflow = MiniPlayerVariableBlurCache.blurCoverage(for: 900.0)
+        XCTAssertEqual(overflow, 320.0, accuracy: 0.001)
+    }
+
+    func testBlurCacheIsStrictlyScopedToCoverArtKey() {
+        let cache = MiniPlayerVariableBlurCache.shared
+        let size = CGSize(width: 320, height: 320)
+
+        let unknownKey = "non-existent-art-\(UUID().uuidString)"
+        XCTAssertNil(cache.cached(coverArt: unknownKey, targetSize: size))
+
+        let keyA = "art-a-\(UUID().uuidString)"
+        let dummyImage = NSImage(size: NSSize(width: 320, height: 320))
+        dummyImage.lockFocus()
+        NSColor.red.drawSwatch(in: NSRect(x: 0, y: 0, width: 320, height: 320))
+        dummyImage.unlockFocus()
+
+        let renderedA = cache.renderBlur(coverArt: keyA, source: dummyImage, targetSize: size)
+        XCTAssertNotNil(renderedA)
+        XCTAssertNotNil(cache.cached(coverArt: keyA, targetSize: size))
+
+        let keyB = "art-b-\(UUID().uuidString)"
+        XCTAssertNil(cache.cached(coverArt: keyB, targetSize: size))
+    }
+
+    func testRenderBlurAspectFillsNonSquareSource() {
+        let cache = MiniPlayerVariableBlurCache.shared
+        let targetSize = CGSize(width: 320, height: 320)
+        let key = "landscape-art-\(UUID().uuidString)"
+
+        let landscapeImage = NSImage(size: NSSize(width: 800, height: 450))
+        landscapeImage.lockFocus()
+        NSColor.blue.drawSwatch(in: NSRect(x: 0, y: 0, width: 800, height: 450))
+        landscapeImage.unlockFocus()
+
+        let rendered = cache.renderBlur(coverArt: key, source: landscapeImage, targetSize: targetSize)
+        let unwrapped = try? XCTUnwrap(rendered)
+        XCTAssertNotNil(unwrapped)
+        if let size = unwrapped?.size {
+            XCTAssertEqual(size.width, 320, accuracy: 0.001)
+            XCTAssertEqual(size.height, 320, accuracy: 0.001)
+        }
+    }
 }
