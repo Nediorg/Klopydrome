@@ -288,6 +288,7 @@ struct SongEllipsisMenu: View {
     var side: CGFloat?
 
     @Environment(AppState.self) private var envApp: AppState?
+    @State private var isHovering = false
 
     private var resolvedApp: AppState? {
         app ?? envApp
@@ -299,40 +300,119 @@ struct SongEllipsisMenu: View {
     }
 
     var body: some View {
-        let button = Button {
-            if let resolvedApp {
-                let targets: [SubsonicSong] = {
-                    if let resolveSelection {
-                        let resolved = resolveSelection()
-                        return resolved.count > 1 ? resolved : [song]
-                    }
-                    return selection.isEmpty ? [song] : selection
-                }()
-                showSongActionMenu(
-                    for: song,
-                    app: resolvedApp,
-                    selection: targets,
-                    playlist: playlist,
-                    playlistIndex: playlistIndex,
-                    extraActions: extraActions
-                )
-            }
-        } label: {
+        ZStack {
             Image(systemName: "ellipsis")
                 .font(.system(size: (resolvedSide <= 16) ? 10 : (compact ? 12 : 14), weight: .semibold))
                 .foregroundStyle(foregroundStyle)
+                .brightness(isHovering && !compact ? 0.14 : 0)
+
+            EllipsisClickTrigger(
+                onMouseDown: { event, view in
+                    guard let resolvedApp else { return }
+                    let targets: [SubsonicSong] = {
+                        if let resolveSelection {
+                            let resolved = resolveSelection()
+                            return resolved.count > 1 ? resolved : [song]
+                        }
+                        return selection.isEmpty ? [song] : selection
+                    }()
+                    let menu = buildSongActionMenu(
+                        for: song,
+                        app: resolvedApp,
+                        selection: targets,
+                        playlist: playlist,
+                        playlistIndex: playlistIndex,
+                        extraActions: extraActions
+                    )
+                    NSMenu.popUpContextMenu(menu, with: event, for: view)
+                },
+                onHover: { hovering in
+                    isHovering = hovering
+                }
+            )
         }
-        .buttonStyle(.plain)
         .frame(width: resolvedSide, height: resolvedSide)
         .contentShape(Rectangle())
         .help("Ещё".localized)
         .accessibilityLabel("Действия для песни".localized)
+        .animation(Motion.spring(Motion.hover), value: isHovering)
+    }
+}
 
-        if compact {
-            button
-        } else {
-            button.hoverBrighten()
+/// Transparent NSView overlay that captures mouseDown to pop up NSMenu immediately,
+/// completely bypassing SwiftUI gesture recognizers (e.g. row selection).
+private struct EllipsisClickTrigger: NSViewRepresentable {
+    var onMouseDown: (NSEvent, NSView) -> Void
+    var onHover: (Bool) -> Void
+
+    func makeNSView(context: Context) -> EllipsisClickNSView {
+        let view = EllipsisClickNSView()
+        view.onMouseDown = onMouseDown
+        view.onHover = onHover
+        return view
+    }
+
+    func updateNSView(_ nsView: EllipsisClickNSView, context: Context) {
+        nsView.onMouseDown = onMouseDown
+        nsView.onHover = onHover
+    }
+}
+
+private final class EllipsisClickNSView: NSView {
+    var onMouseDown: ((NSEvent, NSView) -> Void)?
+    var onHover: ((Bool) -> Void)?
+    private var trackingArea: NSTrackingArea?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard bounds.contains(point) else { return nil }
+        return self
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
         }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHover?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHover?(false)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onMouseDown?(event, self)
+        onHover?(false)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        onMouseDown?(event, self)
+        onHover?(false)
     }
 }
 
