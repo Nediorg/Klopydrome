@@ -148,4 +148,47 @@ final class MemoryOptimizationTests: XCTestCase {
 
         store.clearMemoryCache()
     }
+
+    func testMiniPlayerVariableBlurCacheClear() {
+        let cache = MiniPlayerVariableBlurCache.shared
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 100,
+            pixelsHigh: 100,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 400,
+            bitsPerPixel: 32
+        )!
+        let dummy = NSImage(size: NSSize(width: 100, height: 100))
+        dummy.addRepresentation(rep)
+
+        let rendered = cache.renderBlur(coverArt: "test-blur", source: dummy, targetSize: CGSize(width: 100, height: 100))
+        XCTAssertNotNil(rendered)
+        XCTAssertNotNil(cache.cached(coverArt: "test-blur", targetSize: CGSize(width: 100, height: 100)))
+
+        cache.clear()
+        XCTAssertNil(cache.cached(coverArt: "test-blur", targetSize: CGSize(width: 100, height: 100)))
+    }
+
+    func testShuffleStateSingleBackupQueue() {
+        let player = Player()
+        let songs = (1...5).map { idx in
+            SubsonicSong(id: "s-\(idx)", title: "Song \(idx)")
+        }
+        player.queue = songs
+        player.currentIndex = 0
+
+        player.setShuffleEnabled(true)
+        XCTAssertTrue(player.shuffle)
+        XCTAssertEqual(player.shuffleState.originalQueue.count, 5)
+
+        player.setShuffleEnabled(false)
+        XCTAssertFalse(player.shuffle)
+        XCTAssertTrue(player.shuffleState.originalQueue.isEmpty)
+        XCTAssertEqual(player.queue.map(\.id), songs.map(\.id))
+    }
 }

@@ -12,7 +12,7 @@ struct SongsView: View {
             return processedSongs
         }
         if searchText.isEmpty && !favoritesOnly {
-            return songs.uniqued()
+            return songs
         }
         return []
     }
@@ -257,12 +257,8 @@ struct SongsView: View {
             newSongs.append(song)
             added = true
         }
-        if added {
-            let existing = Set(app.library.songs.map(\.id))
-            let strictlyNew = newSongs.filter { !existing.contains($0.id) }
-            if !strictlyNew.isEmpty {
-                app.library.songs.append(contentsOf: strictlyNew)
-            }
+        if !newSongs.isEmpty {
+            app.library.songs.append(contentsOf: newSongs)
         }
         return added
     }

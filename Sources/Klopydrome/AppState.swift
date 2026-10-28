@@ -232,7 +232,11 @@ final class AppState {
 
     func handleMemoryPressure() {
         CoverArtStore.shared.clearMemoryCache()
+        MiniPlayerVariableBlurCache.shared.clear()
         clearInMemoryCaches()
+        Task {
+            await offlineRepository?.clearMemoryCache()
+        }
     }
 
     func clearInMemoryCaches() {

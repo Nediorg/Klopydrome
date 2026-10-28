@@ -43,14 +43,16 @@ extension SwiftDataOfflineRepository {
         if let songs = detail.entry {
             playlist.tracksSummaryData = try? JSONEncoder().encode(songs)
 
-            let downloadedDesc = FetchDescriptor<OfflineTrack>(
-                predicate: #Predicate { $0.isDownloaded }
-            )
-            let downloadedTracks = try modelContext.fetch(downloadedDesc)
-            let downloadedByID = Dictionary(
-                downloadedTracks.map { ($0.id, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
+            let songIDs = Set(songs.map(\.id))
+            var downloadedByID: [String: OfflineTrack] = [:]
+            for songID in songIDs {
+                let downloadedDesc = FetchDescriptor<OfflineTrack>(
+                    predicate: #Predicate { $0.id == songID && $0.isDownloaded }
+                )
+                if let track = try modelContext.fetch(downloadedDesc).first {
+                    downloadedByID[songID] = track
+                }
+            }
 
             for (index, song) in songs.enumerated() {
                 guard let track = downloadedByID[song.id] else { continue }
@@ -101,20 +103,42 @@ extension SwiftDataOfflineRepository {
     }
 
     private func reconstructPlaylistSongs(for playlist: OfflinePlaylist) throws -> [SubsonicSong] {
-        let downloadedDesc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
-        let downloadedTracks = try modelContext.fetch(downloadedDesc)
-        let downloadedByID = Dictionary(
-            downloadedTracks.map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        var downloadedByID: [String: OfflineTrack] = [:]
+        for entry in playlist.entries {
+            if let track = entry.track, track.isDownloaded {
+                downloadedByID[track.id] = track
+            }
+        }
 
         if let data = playlist.tracksSummaryData,
            let summarySongs = try? JSONDecoder().decode([SubsonicSong].self, from: data) {
+            let missingIDs = Set(summarySongs.map(\.id)).subtracting(downloadedByID.keys)
+            for id in missingIDs {
+                let downloadedDesc = FetchDescriptor<OfflineTrack>(
+                    predicate: #Predicate { $0.id == id && $0.isDownloaded }
+                )
+                if let track = try modelContext.fetch(downloadedDesc).first {
+                    downloadedByID[id] = track
+                }
+            }
             return summarySongs.map { song in
                 if let downloaded = downloadedByID[song.id] {
                     return mapTrackToSong(downloaded)
                 }
                 return song
+            }
+        }
+
+        let unlinkedIDs = playlist.entries
+            .filter { $0.track == nil || !$0.track!.isDownloaded }
+            .compactMap(\.trackID)
+        let missingIDs = Set(unlinkedIDs).subtracting(downloadedByID.keys)
+        for id in missingIDs {
+            let downloadedDesc = FetchDescriptor<OfflineTrack>(
+                predicate: #Predicate { $0.id == id && $0.isDownloaded }
+            )
+            if let track = try modelContext.fetch(downloadedDesc).first {
+                downloadedByID[id] = track
             }
         }
 

@@ -192,7 +192,6 @@ final class Player {
             queue = []
             currentIndex = 0
             shuffleState.originalQueue = []
-            shuffleState.shuffledQueue = []
             shuffle = false
             shufflePreferenceEnabled = false
             playbackContext = nil
@@ -201,7 +200,6 @@ final class Player {
         playbackContext = context
         let shouldShuffle = shufflePreferenceEnabled
         shuffleState.originalQueue = []
-        shuffleState.shuffledQueue = []
         shuffle = false
         queue = songs
         currentIndex = min(max(index, 0), songs.count - 1)

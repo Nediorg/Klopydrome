@@ -13,6 +13,11 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
 
     private init() {
         cache.countLimit = 16
+        cache.totalCostLimit = 32 * 1024 * 1024
+    }
+
+    func clear() {
+        lock.withLock { cache.removeAllObjects() }
     }
 
     static func blurCoverage(for height: Double) -> Double {
@@ -85,8 +90,9 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
         }
 
         let result = NSImage(cgImage: blurredCG, size: targetSize)
+        let cost = width * height * 4
         lock.withLock {
-            cache.setObject(result, forKey: key)
+            cache.setObject(result, forKey: key, cost: cost)
         }
         return result
     }

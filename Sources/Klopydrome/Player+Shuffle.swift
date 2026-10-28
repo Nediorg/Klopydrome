@@ -34,7 +34,6 @@ extension Player {
             rest.removeAll { $0.id == current.id }
         }
         let shuffled = shuffled(rest, by: shuffleState.mode)
-        shuffleState.shuffledQueue = shuffled
         queue = [currentSong].compactMap { $0 } + shuffled
         currentIndex = 0
         shuffle = true
@@ -52,7 +51,6 @@ extension Player {
             currentIndex = 0
         }
         shuffleState.originalQueue = []
-        shuffleState.shuffledQueue = []
         shuffle = false
     }
 

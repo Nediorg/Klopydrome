@@ -28,7 +28,7 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
     }
 
     public func fetchTrackCount() throws -> Int {
-        try modelContext.fetch(FetchDescriptor<OfflineTrack>()).count
+        try modelContext.fetchCount(FetchDescriptor<OfflineTrack>())
     }
 
     public func saveAlbumDetail(_ detail: AlbumDetail) async throws {
@@ -45,14 +45,15 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
             album.tracksSummaryData = try? JSONEncoder().encode(minimalTracks)
 
             let songIDs = Set(songs.map(\.id))
-            let downloadedDesc = FetchDescriptor<OfflineTrack>(
-                predicate: #Predicate { $0.isDownloaded }
-            )
-            let downloadedTracks = try modelContext.fetch(downloadedDesc)
-            for track in downloadedTracks where songIDs.contains(track.id) {
-                track.album = album
-                if track.albumID == nil {
-                    track.albumID = album.id
+            for songID in songIDs {
+                let downloadedDesc = FetchDescriptor<OfflineTrack>(
+                    predicate: #Predicate { $0.id == songID && $0.isDownloaded }
+                )
+                if let track = try modelContext.fetch(downloadedDesc).first {
+                    track.album = album
+                    if track.albumID == nil {
+                        track.albumID = album.id
+                    }
                 }
             }
         }
@@ -68,12 +69,19 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
         let songs: [SubsonicSong]
         if let data = album.tracksSummaryData,
            let minimalTracks = try? JSONDecoder().decode([MinimalAlbumTrack].self, from: data) {
-            let downloadedDesc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
-            let downloadedTracks = try modelContext.fetch(downloadedDesc)
-            let downloadedByID = Dictionary(
-                downloadedTracks.map { ($0.id, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
+            var downloadedByID: [String: OfflineTrack] = [:]
+            for track in album.tracks where track.isDownloaded {
+                downloadedByID[track.id] = track
+            }
+            let missingIDs = Set(minimalTracks.map(\.id)).subtracting(downloadedByID.keys)
+            for trackID in missingIDs {
+                let downloadedDesc = FetchDescriptor<OfflineTrack>(
+                    predicate: #Predicate { $0.id == trackID && $0.isDownloaded }
+                )
+                if let track = try modelContext.fetch(downloadedDesc).first {
+                    downloadedByID[trackID] = track
+                }
+            }
 
             songs = minimalTracks.map { minimal in
                 if let downloaded = downloadedByID[minimal.id] {
@@ -151,6 +159,10 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
         for artist in artists { modelContext.delete(artist) }
 
         try modelContext.save()
+    }
+
+    public func clearMemoryCache() async {
+        modelContext.rollback()
     }
 }
 

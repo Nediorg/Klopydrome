@@ -21,5 +21,4 @@ enum ShuffleMode: String, CaseIterable, Identifiable {
 final class ShuffleState {
     var mode: ShuffleMode = .songs
     var originalQueue: [SubsonicSong] = []
-    var shuffledQueue: [SubsonicSong] = []
 }

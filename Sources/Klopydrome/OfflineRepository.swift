@@ -15,4 +15,9 @@ public protocol OfflineRepository: Sendable {
     func fetchPlaylists(matchingDownloadedTrackIDs downloadedIDs: Set<String>) async throws -> [PlaylistSummary]
     func fetchArtists() async throws -> [Artist]
     func clearAll() async throws
+    func clearMemoryCache() async
+}
+
+public extension OfflineRepository {
+    func clearMemoryCache() async {}
 }
