@@ -42,7 +42,7 @@ struct QueuePanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("Queue Tab".localized, selection: $selectedTab) {
-                Text("Queue".localized).tag(Tab.upNext)
+                Text("Playing Next".localized).tag(Tab.upNext)
                 Text("History".localized).tag(Tab.history)
             }
             .pickerStyle(.segmented)
