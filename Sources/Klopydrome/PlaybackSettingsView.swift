@@ -5,40 +5,10 @@ import NavidromeClient
 struct PlaybackSettingsView: View {
     @Environment(AppState.self) private var app
 
-    /// A nil value means the default MPV engine; writing the resolved value
-    /// makes the user’s choice explicit in the persisted server configuration.
-    private var playbackEngineBinding: Binding<PlaybackEngine> {
-        Binding(
-            get: { app.serverConfig.effectivePlaybackEngine },
-            set: { app.serverConfig.playbackEngine = $0 }
-        )
-    }
-
-    private var crossfadeEnabled: Binding<Bool> {
-        Binding(
-            get: { app.serverConfig.effectiveAutomixEnabled },
-            set: { app.serverConfig.automixEnabled = $0 }
-        )
-    }
-
     private var crossfadeDuration: Binding<Double> {
         Binding(
             get: { app.serverConfig.effectiveAutomixFadeDuration },
             set: { app.serverConfig.automixFadeDuration = $0.rounded() }
-        )
-    }
-
-    private var crossfadeApplyToAlbums: Binding<Bool> {
-        Binding(
-            get: { app.serverConfig.effectiveAutomixApplyToAlbums },
-            set: { app.serverConfig.automixApplyToAlbums = $0 }
-        )
-    }
-
-    private var replayGainMode: Binding<ReplayGainMode> {
-        Binding(
-            get: { app.serverConfig.effectiveReplayGainMode },
-            set: { app.serverConfig.replayGainMode = $0 }
         )
     }
 
@@ -49,31 +19,11 @@ struct PlaybackSettingsView: View {
         )
     }
 
-    private var silenceTrimMode: Binding<SilenceTrimMode> {
-        Binding(
-            get: { app.serverConfig.effectiveSilenceTrimMode },
-            set: { app.serverConfig.silenceTrimMode = $0 }
-        )
-    }
-
-    private var nextTrackPreloadingEnabled: Binding<Bool> {
-        Binding(
-            get: { app.serverConfig.effectiveNextTrackPreloadingEnabled },
-            set: { app.serverConfig.nextTrackPreloadingEnabled = $0 }
-        )
-    }
-
-    private var downloadTranscodedBinding: Binding<Bool> {
-        Binding(
-            get: { app.serverConfig.effectiveDownloadTranscoded },
-            set: { app.serverConfig.downloadTranscoded = $0 }
-        )
-    }
-
     var body: some View {
+        @Bindable var app = app
         Form {
             Section {
-                Picker("Движок".localized, selection: playbackEngineBinding) {
+                Picker("Движок".localized, selection: $app.serverConfig.playbackEngine.default(.mpv)) {
                     ForEach(PlaybackEngine.allCases) { engine in
                         Text(engine.label.localized).tag(engine)
                     }
@@ -81,13 +31,13 @@ struct PlaybackSettingsView: View {
             } header: {
                 Text("Плеер".localized)
             } footer: {
-                if playbackEngineBinding.wrappedValue == .avFoundation {
+                if app.serverConfig.effectivePlaybackEngine == .avFoundation {
                     Text("В режиме AVFoundation часть функций воспроизведения недоступна.".localized)
                 }
             }
 
             Section {
-                Picker("Кодек".localized, selection: Bindable(app).serverConfig.format) {
+                Picker("Кодек".localized, selection: $app.serverConfig.format) {
                     Text("Оригинал".localized).tag(String?.none)
                     Text("Opus").tag(String?.some("opus"))
                     Text("MP3").tag(String?.some("mp3"))
@@ -95,7 +45,7 @@ struct PlaybackSettingsView: View {
                     Text("FLAC").tag(String?.some("flac"))
                 }
 
-                Picker("Битрейт".localized, selection: Bindable(app).serverConfig.maxBitRate) {
+                Picker("Битрейт".localized, selection: $app.serverConfig.maxBitRate) {
                     Text("Оригинал".localized).tag(0)
                     Text("320 kbps").tag(320)
                     Text("256 kbps").tag(256)
@@ -104,7 +54,10 @@ struct PlaybackSettingsView: View {
                     Text("64 kbps").tag(64)
                 }
 
-                Toggle("Кэшировать транскодированные треки".localized, isOn: downloadTranscodedBinding)
+                Toggle(
+                    "Кэшировать транскодированные треки".localized,
+                    isOn: $app.serverConfig.downloadTranscoded.orTrue
+                )
             } header: {
                 Text("Стриминг".localized)
             } footer: {
@@ -112,7 +65,10 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("Предзагружать следующую песню".localized, isOn: nextTrackPreloadingEnabled)
+                Toggle(
+                    "Предзагружать следующую песню".localized,
+                    isOn: $app.serverConfig.nextTrackPreloadingEnabled.orTrue
+                )
             } header: {
                 Text("Предзагрузка".localized)
             } footer: {
@@ -121,14 +77,8 @@ struct PlaybackSettingsView: View {
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
-                Toggle("Авто-скробблинг".localized, isOn: Binding(
-                    get: { app.scrobblingEnabled },
-                    set: { app.scrobblingEnabled = $0 }
-                ))
-                Toggle("Запоминать очередь".localized, isOn: Binding(
-                    get: { app.queuePersistenceEnabled },
-                    set: { app.queuePersistenceEnabled = $0 }
-                ))
+                Toggle("Авто-скробблинг".localized, isOn: $app.scrobblingEnabled)
+                Toggle("Запоминать очередь".localized, isOn: $app.queuePersistenceEnabled)
             } header: {
                 Text("Поведение".localized)
             } footer: {
@@ -136,17 +86,17 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("Включить плавный переход".localized, isOn: crossfadeEnabled)
-                Toggle("Включать в альбомах".localized, isOn: crossfadeApplyToAlbums)
-                    .disabled(!crossfadeEnabled.wrappedValue)
+                Toggle("Включить плавный переход".localized, isOn: $app.serverConfig.automixEnabled.orFalse)
+                Toggle("Включать в альбомах".localized, isOn: $app.serverConfig.automixApplyToAlbums.orFalse)
+                    .disabled(!app.serverConfig.effectiveAutomixEnabled)
                 HStack {
                     Text("Длительность".localized)
                     Slider(value: crossfadeDuration, in: 1...12)
-                    Text(L10n.format("format.duration.seconds", Int(crossfadeDuration.wrappedValue)))
+                    Text(L10n.format("format.duration.seconds", Int(app.serverConfig.effectiveAutomixFadeDuration)))
                         .monospacedDigit()
                         .frame(width: 32, alignment: .trailing)
                 }
-                .disabled(!crossfadeEnabled.wrappedValue)
+                .disabled(!app.serverConfig.effectiveAutomixEnabled)
             } header: {
                 Text("Плавный переход".localized)
             } footer: {
@@ -155,7 +105,10 @@ struct PlaybackSettingsView: View {
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
-                Picker("Коррекция громкости (ReplayGain)".localized, selection: replayGainMode) {
+                Picker(
+                    "Коррекция громкости (ReplayGain)".localized,
+                    selection: $app.serverConfig.replayGainMode.default(.off)
+                ) {
                     ForEach(ReplayGainMode.allCases) { mode in
                         Text(mode.label.localized).tag(mode)
                     }
@@ -163,12 +116,12 @@ struct PlaybackSettingsView: View {
                 HStack {
                     Text("Предусиление".localized)
                     Slider(value: replayGainPreamp, in: AutomixLoudness.preampRange)
-                    Text(L10n.format("format.gain.decibels", Double(replayGainPreamp.wrappedValue)))
+                    Text(L10n.format("format.gain.decibels", Double(app.serverConfig.effectiveReplayGainPreampDB)))
                         .monospacedDigit()
                         .frame(width: 56, alignment: .trailing)
                 }
-                .disabled(replayGainMode.wrappedValue == .off)
-                Picker("Обрезка тишины в конце".localized, selection: silenceTrimMode) {
+                .disabled(app.serverConfig.effectiveReplayGainMode == .off)
+                Picker("Обрезка тишины в конце".localized, selection: $app.serverConfig.silenceTrimMode.default(.off)) {
                     ForEach(SilenceTrimMode.allCases) { mode in
                         Text(mode.label.localized).tag(mode)
                     }

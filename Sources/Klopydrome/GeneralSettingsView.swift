@@ -21,24 +21,24 @@ struct GeneralSettingsView: View {
     }
 
     private var accountSection: some View {
-        Section("Аккаунт") {
-            LabeledContent("Сервер") {
+        Section("Аккаунт".localized) {
+            LabeledContent("Сервер".localized) {
                 Text(app.serverConfig.url)
                     .foregroundStyle(.secondary)
             }
 
-            Button("Выйти из аккаунта", role: .destructive) {
+            Button("Выйти из аккаунта".localized, role: .destructive) {
                 showLogout = true
             }
             .confirmationDialog(
-                "Выйти из аккаунта?",
+                "Выйти из аккаунта?".localized,
                 isPresented: $showLogout,
                 titleVisibility: .visible
             ) {
-                Button("Выйти", role: .destructive) {
+                Button("Выйти".localized, role: .destructive) {
                     app.disconnect()
                 }
-                Button("Отмена", role: .cancel) {}
+                Button("Отмена".localized, role: .cancel) {}
             } message: {
                 // swiftlint:disable:next line_length
                 Text("Очередь, кэш и сохранённый пароль будут очищены. Вы сможете подключиться к другому серверу.".localized)

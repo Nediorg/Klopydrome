@@ -25,6 +25,15 @@ extension Binding where Value == Bool? {
     }
 }
 
+extension Binding {
+    func `default`<Wrapped>(_ fallback: Wrapped) -> Binding<Wrapped> where Value == Wrapped? {
+        Binding<Wrapped>(
+            get: { wrappedValue ?? fallback },
+            set: { wrappedValue = $0 }
+        )
+    }
+}
+
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
