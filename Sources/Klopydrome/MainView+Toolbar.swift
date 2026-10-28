@@ -155,8 +155,8 @@ struct PlayerHeaderBar: View {
                         .hoverFill()
                 }
                 .buttonStyle(.plain)
-                .help("Дальше".localized)
-                .accessibilityLabel("Дальше".localized)
+                .help("Далее".localized)
+                .accessibilityLabel("Далее".localized)
             }
         }
         .fixedSize(horizontal: true, vertical: false)

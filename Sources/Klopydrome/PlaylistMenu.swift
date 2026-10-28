@@ -138,14 +138,14 @@ struct SmartPlaylistContextMenuItems: View {
         Button(L10n.format("format.playlist.play", playlist.name)) {
             Task {
                 if let songs = try? await app.computeSmartPlaylist(playlist) {
-                    playable(songs) { app.play($0, at: 0) }
+                    playable(songs) { app.play($0, at: 0, context: .smartPlaylist(playlist)) }
                 }
             }
         }
         Button(L10n.format("format.playlist.shuffle", playlist.name)) {
             Task {
                 if let songs = try? await app.computeSmartPlaylist(playlist) {
-                    playable(songs) { app.playShuffled($0) }
+                    playable(songs) { app.playShuffled($0, context: .smartPlaylist(playlist)) }
                 }
             }
         }

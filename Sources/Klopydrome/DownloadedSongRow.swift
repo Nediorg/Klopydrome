@@ -146,7 +146,7 @@ struct DownloadedSongRow: View {
             app.player.togglePlayPause()
         } else {
             let index = app.downloadedSongs.firstIndex(where: { $0.id == song.id }) ?? 0
-            app.player.play(app.downloadedSongs, startAt: index)
+            app.play(app.downloadedSongs, at: index)
         }
     }
 }

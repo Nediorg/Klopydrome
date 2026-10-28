@@ -17,7 +17,7 @@ extension AppState {
         let songs = await albumsSongs(album)
         guard !songs.isEmpty else { return }
         guard !player.queue.isEmpty else {
-            play(songs, at: 0)
+            play(songs, at: 0, context: .album(album))
             return
         }
         player.queue.append(contentsOf: songs)

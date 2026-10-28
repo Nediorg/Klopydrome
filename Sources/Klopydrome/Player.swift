@@ -112,6 +112,21 @@ final class Player {
         }
     }
 
+    /// Formatted subtitle describing the originating playback source (only album or playlist).
+    var queueContextSubtitle: String? {
+        guard !queue.isEmpty else { return nil }
+        switch playbackContext {
+        case .album(let album):
+            return String(format: "From %@".localized, album.displayName)
+        case .playlist(let summary):
+            return String(format: "From %@".localized, summary.displayName)
+        case .smartPlaylist(let smart):
+            return String(format: "From %@".localized, smart.name)
+        default:
+            return nil
+        }
+    }
+
     /// Called when the player needs the app to resolve and start a track.
     var onTrackRequest: ((SubsonicSong) -> Void)?
     /// Notifies the app after a meaningful playback-state transition.
@@ -250,17 +265,26 @@ final class Player {
 
     // MARK: Queue
 
-    func setQueue(_ songs: [SubsonicSong], startAt index: Int = 0, autoPlay: Bool = true, recordHistory: Bool = true) {
+    func setQueue(
+        _ songs: [SubsonicSong],
+        startAt index: Int = 0,
+        autoPlay: Bool = true,
+        recordHistory: Bool = true,
+        context: PlaybackContext? = nil
+    ) {
         resetPreloadedNext()
         guard !songs.isEmpty else {
+            stop()
             queue = []
             currentIndex = 0
             shuffleState.originalQueue = []
             shuffleState.shuffledQueue = []
             shuffle = false
             shufflePreferenceEnabled = false
+            playbackContext = nil
             return
         }
+        playbackContext = context
         let shouldShuffle = shufflePreferenceEnabled
         shuffleState.originalQueue = []
         shuffleState.shuffledQueue = []
@@ -271,8 +295,13 @@ final class Player {
         startCurrent(autoPlay: autoPlay, recordHistory: recordHistory)
     }
 
-    func play(_ songs: [SubsonicSong], startAt index: Int = 0, recordHistory: Bool = true) {
-        setQueue(songs, startAt: index, recordHistory: recordHistory)
+    func play(
+        _ songs: [SubsonicSong],
+        startAt index: Int = 0,
+        recordHistory: Bool = true,
+        context: PlaybackContext? = nil
+    ) {
+        setQueue(songs, startAt: index, autoPlay: true, recordHistory: recordHistory, context: context)
     }
 
     /// Jump to a specific position within the existing queue (Up Next list).

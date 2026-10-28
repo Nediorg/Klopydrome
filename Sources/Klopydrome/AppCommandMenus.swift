@@ -154,7 +154,7 @@ struct AppCommandMenus: Commands {
             // Radio-style, not independent checkboxes: the two player panels are
             // mutually exclusive (a single `visiblePlayerPanel`), so only one
             // checkmark can ever be shown and toggling one replaces the other.
-            panelMenuItem("Очередь", tab: .queue, shortcut: "u")
+            panelMenuItem("Далее", tab: .queue, shortcut: "u")
             panelMenuItem("Текст", tab: .lyrics, shortcut: "l")
         }
     }

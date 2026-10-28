@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import NavidromeClient
 
@@ -45,7 +46,6 @@ struct QueuePanelView: View {
 
     @Environment(AppState.self) private var app
     @State private var selectedTab: Tab = .upNext
-    @State private var clearHovered = false
 
     @State private var confirmingClear = false
 
@@ -59,31 +59,29 @@ struct QueuePanelView: View {
             .labelsHidden()
             .padding()
 
-            HStack {
-                Text((selectedTab == .upNext ? "Далее" : "История").localized)
-                    .font(.headline)
-                Spacer()
-                Button {
-                    confirmingClear = true
-                } label: {
-                    Text("Очистить".localized)
-                        .font(.callout)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .contentShape(Rectangle())
-                        .background {
-                            if clearHovered {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(Color.primary.opacity(0.08))
-                            }
-                        }
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text((selectedTab == .upNext ? "На очереди" : "История").localized)
+                        .font(.system(size: 15, weight: .bold))
+                    if selectedTab == .upNext, let subtitle = app.player.queueContextSubtitle {
+                        Text(subtitle)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AMColor.secondaryText)
+                            .lineLimit(1)
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .disabled(list.isEmpty)
-                .onHover { clearHovered = $0 }
-                .animation(.snappy(duration: 0.15), value: clearHovered)
-                .help("Очистить список".localized)
+                Spacer()
+                if !list.isEmpty {
+                    Button {
+                        confirmingClear = true
+                    } label: {
+                        Text("Очистить".localized)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AMColor.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Очистить список".localized)
+                }
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
@@ -93,26 +91,24 @@ struct QueuePanelView: View {
             if list.isEmpty {
                 emptyState
             } else {
-                List {
-                    ForEach(Array(list.enumerated()), id: \.element.id) { index, song in
-                        QueueTrackRow(
-                            song: song,
-                            isCurrent: isCurrent(song),
-                            canRemove: selectedTab == .upNext,
-                            onRemove: { app.player.remove(at: index) },
-                            action: { select(song, at: index) }
-                        )
-                        .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(list.enumerated()), id: \.element.id) { index, song in
+                            QueueTrackRow(
+                                song: song,
+                                isCurrent: isCurrent(song),
+                                canRemove: selectedTab == .upNext,
+                                onRemove: { app.player.remove(at: index) },
+                                showDivider: index < list.count - 1,
+                                action: { select(song, at: index) }
+                            )
+                        }
                     }
-                    .onMove { source, destination in
-                        guard selectedTab == .upNext else { return }
-                        app.player.move(fromOffsets: source, toOffset: destination)
-                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                .scrollIndicators(.automatic)
+                .background(OverlayScrollerModifier())
             }
         }
         .frame(maxWidth: .infinity)
@@ -160,13 +156,14 @@ struct QueuePanelView: View {
                 app.player.jump(to: queueIndex)
             }
         case .history:
-            app.player.play([song], recordHistory: false)
+            app.play([song], at: 0)
         }
     }
 
     private func clearAction() {
         switch selectedTab {
         case .upNext:
+            app.player.stop()
             app.player.setQueue([])
         case .history:
             app.player.clearHistory()
@@ -174,68 +171,113 @@ struct QueuePanelView: View {
     }
 }
 
-/// A single queue track row: artwork, title, artist — album and duration,
-/// with a macOS hover highlight, deletion button, context menu, and red accent for current track.
+/// A single queue track row: artwork with playing/hover overlay, title, artist — album,
+/// with a subtle macOS hover highlight, deletion button, ellipsis context menu,
+/// and accent color on title for currently playing track.
 struct QueueTrackRow: View {
     let song: SubsonicSong
     let isCurrent: Bool
     var canRemove: Bool = false
     var onRemove: (() -> Void)?
+    var showDivider: Bool = false
     let action: () -> Void
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
+    @State private var hoverTracker = HoverTracker()
+
+    private var isPlaying: Bool { isCurrent && app.player.isPlaying }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                CoverArtView(coverArt: song.coverArt, size: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            HStack(spacing: 8) {
+                ZStack {
+                    CoverArtView(coverArt: song.coverArt, size: 36, cornerRadius: 4)
 
-                VStack(alignment: .leading, spacing: 2) {
+                    if isCurrent && !hovering {
+                        Color.black.opacity(0.35)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white)
+                    } else if hovering {
+                        Color.black.opacity(0.35)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 0) {
                     Text(song.displayTitle)
-                        .font(.subheadline)
-                        .fontWeight(isCurrent ? .semibold : .regular)
-                        .foregroundStyle(isCurrent ? .white : .primary)
+                        .font(.callout.weight(.regular))
+                        .foregroundStyle(isCurrent ? AMColor.accent : AMColor.primaryText)
                         .lineLimit(1)
                     Text(song.displaySubtitle)
-                        .font(.caption)
-                        .foregroundStyle(isCurrent ? .white.opacity(0.8) : .secondary)
+                        .font(.callout)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
-
-                if canRemove && hovering {
-                    Button {
-                        onRemove?()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(isCurrent ? .white.opacity(0.9) : Color.secondary)
+                HStack(spacing: 4) {
+                    if canRemove && hovering {
+                        Button {
+                            onRemove?()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.secondary)
+                                .frame(width: 22, height: 22)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Удалить из очереди".localized)
+                        .transition(.identity)
                     }
-                    .buttonStyle(.plain)
-                    .help("Удалить из очереди".localized)
-                } else if let duration = song.duration {
-                    Text(Player.format(seconds: Double(duration)))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(isCurrent ? .white.opacity(0.8) : .secondary)
+
+                    SongEllipsisMenu(
+                        song: song,
+                        selection: [song],
+                        foregroundStyle: .secondary,
+                        app: app,
+                        extraActions: canRemove ? [
+                            SongMenuExtraAction(
+                                title: "Удалить из очереди".localized,
+                                systemImage: "trash",
+                                action: { onRemove?() }
+                            )
+                        ] : [],
+                        compact: true,
+                        side: 24
+                    )
                 }
+                .fixedSize(horizontal: true, vertical: false)
             }
-            .padding(.vertical, 7)
-            .padding(.horizontal, 10)
-            .contentShape(Rectangle())
+            .padding(.leading, 7)
+            .padding(.trailing, 10)
+            .padding(.vertical, 6)
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .background {
-                if isCurrent {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous).fill(AMColor.accent)
-                } else if hovering {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06))
+                if hovering {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
                 }
             }
         }
         .buttonStyle(.plain)
-        .animation(.snappy(duration: 0.15), value: hovering)
-        .onHover { hovering = $0 }
+        .frame(height: 48)
+        .overlay(alignment: .bottom) {
+            if showDivider {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.1))
+                    .frame(height: 1)
+                    .padding(.leading, 55)
+                    .padding(.trailing, 10)
+            }
+        }
         .contextMenu {
             if canRemove {
                 Button(role: .destructive) {
@@ -247,6 +289,54 @@ struct QueueTrackRow: View {
             }
             SongActionItems(app: app, song: song, selection: [song])
         }
+        .onHover { isInside in
+            hoverTracker.isInside = isInside
+            if isInside {
+                if !ScrollGate.shared.isScrolling && !hovering {
+                    hovering = true
+                }
+            } else {
+                if hovering {
+                    hovering = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidStart)) { _ in
+            if hovering {
+                hovering = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
+            if hoverTracker.isInside && !hovering {
+                hovering = true
+            }
+        }
+        .onDisappear {
+            hoverTracker.isInside = false
+            hovering = false
+        }
         .accessibilityLabel(song.displayTitle)
+    }
+}
+
+private struct OverlayScrollerModifier: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        OverlayScrollerView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class OverlayScrollerView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            enclosingScrollView?.scrollerStyle = .overlay
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            enclosingScrollView?.scrollerStyle = .overlay
+        }
     }
 }

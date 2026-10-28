@@ -7,8 +7,8 @@ extension AppState {
 
         var title: String {
             switch self {
-            case .lyrics: "Текст"
-            case .queue: "Очередь"
+            case .lyrics: "Текст".localized
+            case .queue: "Далее".localized
             }
         }
     }

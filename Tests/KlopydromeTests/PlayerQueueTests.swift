@@ -123,6 +123,65 @@ final class PlayerQueueTests: XCTestCase {
         XCTAssertEqual(player.queue.count, songs.count)
     }
 
+    func testQueueContextSubtitleOnlyForAlbumOrPlaylist() {
+        let player = Player()
+        let song = makeSong("track1")
+        let album = SubsonicAlbum(id: "alb1", title: "Abbey Road")
+        let playlist = PlaylistSummary(id: "pl1", name: "Favorites 2026")
+        let smart = SmartPlaylist(name: "Recently Played")
+
+        player.setQueue([song], autoPlay: false, context: .album(album))
+        XCTAssertNotNil(player.queueContextSubtitle)
+        XCTAssertTrue(player.queueContextSubtitle?.contains("Abbey Road") == true)
+
+        player.setQueue([song], autoPlay: false, context: .playlist(playlist))
+        XCTAssertNotNil(player.queueContextSubtitle)
+        XCTAssertTrue(player.queueContextSubtitle?.contains("Favorites 2026") == true)
+
+        player.setQueue([song], autoPlay: false, context: .smartPlaylist(smart))
+        XCTAssertNotNil(player.queueContextSubtitle)
+        XCTAssertTrue(player.queueContextSubtitle?.contains("Recently Played") == true)
+
+        player.setQueue([song], autoPlay: false, context: .artist(Artist(id: "art1", name: "The Beatles")))
+        XCTAssertNil(player.queueContextSubtitle)
+
+        player.setQueue([song], autoPlay: false, context: .general(title: "Custom"))
+        XCTAssertNil(player.queueContextSubtitle)
+
+        player.setQueue([song], autoPlay: false, context: nil)
+        XCTAssertNil(player.queueContextSubtitle)
+
+        player.setQueue([], autoPlay: false, context: .album(album))
+        XCTAssertNil(player.queueContextSubtitle)
+    }
+
+    func testQueueClearingResetsPlaybackContext() {
+        let player = Player()
+        let song = makeSong("track1")
+        let album = SubsonicAlbum(id: "alb1", title: "Abbey Road")
+
+        player.setQueue([song], autoPlay: false, context: .album(album))
+        XCTAssertEqual(player.playbackContext, .album(album))
+
+        player.setQueue([])
+        XCTAssertNil(player.playbackContext)
+        XCTAssertNil(player.queueContextSubtitle)
+    }
+
+    func testStartingPlaybackWithoutContextClearsPreviousContext() {
+        let player = Player()
+        let song1 = makeSong("track1")
+        let song2 = makeSong("track2")
+        let album = SubsonicAlbum(id: "alb1", title: "Abbey Road")
+
+        player.setQueue([song1], autoPlay: false, context: .album(album))
+        XCTAssertEqual(player.playbackContext, .album(album))
+
+        player.setQueue([song2], autoPlay: false)
+        XCTAssertNil(player.playbackContext)
+        XCTAssertNil(player.queueContextSubtitle)
+    }
+
     private func assertContiguous(
         _ songs: [SubsonicSong],
         where predicate: (SubsonicSong) -> Bool,

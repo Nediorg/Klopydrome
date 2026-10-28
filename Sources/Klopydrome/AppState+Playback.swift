@@ -184,12 +184,12 @@ extension AppState {
         contextTitle: String? = nil,
         context: PlaybackContext? = nil
     ) {
-        if let context {
-            player.playbackContext = context
-        } else {
-            player.queueContextTitle = contextTitle
-        }
-        player.play(songs, startAt: index)
+        let resolvedContext: PlaybackContext? = {
+            if let context { return context }
+            if let contextTitle, !contextTitle.isEmpty { return .general(title: contextTitle) }
+            return nil
+        }()
+        player.setQueue(songs, startAt: index, context: resolvedContext)
     }
 
     func play(
@@ -198,15 +198,15 @@ extension AppState {
         contextTitle: String? = nil,
         context: PlaybackContext? = nil
     ) {
-        if let context {
-            player.playbackContext = context
-        } else {
-            player.queueContextTitle = contextTitle
-        }
+        let resolvedContext: PlaybackContext? = {
+            if let context { return context }
+            if let contextTitle, !contextTitle.isEmpty { return .general(title: contextTitle) }
+            return nil
+        }()
         if let index = queue.firstIndex(where: { $0.id == song.id }) {
-            player.play(queue, startAt: index)
+            player.setQueue(queue, startAt: index, context: resolvedContext)
         } else {
-            player.play([song], startAt: 0)
+            player.setQueue([song], startAt: 0, context: resolvedContext)
         }
     }
 
@@ -216,12 +216,12 @@ extension AppState {
         context: PlaybackContext? = nil
     ) {
         guard !songs.isEmpty else { return }
-        if let context {
-            player.playbackContext = context
-        } else {
-            player.queueContextTitle = contextTitle
-        }
-        player.play(songs.shuffled(), startAt: 0)
+        let resolvedContext: PlaybackContext? = {
+            if let context { return context }
+            if let contextTitle, !contextTitle.isEmpty { return .general(title: contextTitle) }
+            return nil
+        }()
+        player.setQueue(songs.shuffled(), startAt: 0, context: resolvedContext)
     }
 
     func play(_ album: SubsonicAlbum) {
@@ -254,7 +254,7 @@ extension AppState {
             var stationQueue = [song]
             stationQueue.append(contentsOf: similar.filter { $0.id != song.id })
             await MainActor.run {
-                player.play(stationQueue, startAt: 0)
+                play(stationQueue, at: 0)
             }
         }
     }
@@ -272,7 +272,7 @@ extension AppState {
 
     func playNext(_ song: SubsonicSong) {
         guard !player.queue.isEmpty else {
-            player.play([song], startAt: 0)
+            play([song], at: 0)
             return
         }
         var queue = player.queue
@@ -283,7 +283,7 @@ extension AppState {
 
     func playLater(_ song: SubsonicSong) {
         guard !player.queue.isEmpty else {
-            player.play([song], startAt: 0)
+            play([song], at: 0)
             return
         }
         player.queue.append(song)
