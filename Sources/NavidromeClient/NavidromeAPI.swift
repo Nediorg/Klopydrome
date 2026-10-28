@@ -1,17 +1,11 @@
 import Foundation
 
-/// JWT payload returned by Navidrome's `POST /auth/login` (and the legacy
-/// `POST /api/authenticate`). The token authorizes all `/api/*` requests.
 private struct NdLoginResponse: Decodable {
     let token: String
     let username: String?
     let isAdmin: Bool?
 }
 
-/// Server-side playlist record from `GET /api/playlist/:id`. Only the fields
-/// the app needs for smart-playlist rule editing are decoded here; the raw
-/// `rules` JSON is carried as a dynamic `NDJSON` so the app can round-trip it
-/// through its own editor without loss.
 public struct NdPlaylist: Decodable {
     public let id: String
     public let name: String?
@@ -27,9 +21,6 @@ public struct NdPlaylist: Decodable {
     }
 }
 
-/// A dynamic JSON value able to hold everything the Navidrome smart-playlist
-/// DSL emits: booleans, numbers, strings, nested objects (`all`/`any`/operator
-/// wrappers) and the small string arrays used by range operators.
 public indirect enum NDJSON: Codable, Hashable {
     case string(String)
     case number(Double)
@@ -59,15 +50,6 @@ public indirect enum NDJSON: Codable, Hashable {
     }
 }
 
-/// Navidrome's native JSON REST API (`/api/*`), used only where the Subsonic
-/// API has no equivalent — specifically reading/writing the `rules` of
-/// server-side smart playlists. The native API is unstable by design, so this
-/// client is intentionally thin and best-effort.
-///
-/// Auth: `POST /auth/login` returns a JWT; it is sent on every `/api/*` request
-/// as `X-ND-Authorization: Bearer <token>`. Navidrome rotates the token on each
-/// response (returned in the `x-nd-authorization` header), so the client
-/// persists every refresh.
 public final class NavidromeAPI {
     public let baseURL: URL
     let session: URLSession
@@ -77,8 +59,6 @@ public final class NavidromeAPI {
     private let lock = NSLock()
     private var _token: String?
 
-    /// The currently valid JWT; refreshed on every response via the
-    /// `x-nd-authorization` response header.
     public var token: String? {
         lock.lock()
         defer { lock.unlock() }
@@ -103,8 +83,6 @@ public final class NavidromeAPI {
 
     // MARK: - Auth
 
-    /// Performs `POST /auth/login` (falling back to legacy `/api/authenticate`)
-    /// and caches the JWT. No-op when a token is already present.
     public func login() async throws {
         lock.lock()
         if _token != nil {
@@ -139,13 +117,10 @@ public final class NavidromeAPI {
 
     // MARK: - Playlists
 
-    /// Fetches one playlist's server record, including its smart-playlist
-    /// `rules` (when it is one). Refreshes the JWT from the response.
     public func getPlaylist(id: String) async throws -> NdPlaylist {
         try await request(path: "api/playlist/\(id)", method: "GET")
     }
 
-    /// Updates a playlist's metadata and/or smart-playlist rules via `PUT`.
     public func updatePlaylist(id: String, name: String? = nil, comment: String? = nil,
                                isPublic: Bool? = nil, rules: NDJSON? = nil) async throws {
         var body: [String: Any] = [:]
@@ -159,8 +134,6 @@ public final class NavidromeAPI {
         _ = try await send(path: "api/playlist/\(id)", method: "PUT", body: data)
     }
 
-    /// Creates a playlist (regular or smart) via `POST /api/playlist` and
-    /// returns the server's record for the new entity.
     @discardableResult
     public func createPlaylist(name: String, comment: String? = nil,
                                isPublic: Bool? = nil, rules: NDJSON? = nil) async throws -> NdPlaylist {
@@ -175,7 +148,6 @@ public final class NavidromeAPI {
         return try JSONDecoder().decode(NdPlaylist.self, from: responseData)
     }
 
-    /// Encodes a `NDJSON` value into a JSON-serializable `Any` for `NSJSONSerialization`.
     private func encodeAny(_ json: NDJSON) -> Any {
         switch json {
         case .string(let s): return s
@@ -186,22 +158,6 @@ public final class NavidromeAPI {
         }
     }
 
-    // MARK: - Shares
-
-    /// Creates a public share (Navidrome's native `POST /api/share`). Unlike the
-    /// Subsonic `createShare` endpoint, the native API honours `downloadable`, so
-    /// this is the path used for the in-app "Поделиться" action. The share URL is
-    /// not returned by the server (its `url` field is `json:"-"`), so callers
-    /// build it as `<baseURL>/share/<id>`.
-    ///
-    /// - Parameters:
-    ///   - resourceIds: One or more Navidrome entity ids (song / album / playlist /
-    ///     artist). Multiple ids are joined with commas per the model's `resourceIds`
-    ///     field.
-    ///   - description: Optional human label; falls back to the server-generated
-    ///     contents label when empty.
-    ///   - expiresAt: Optional expiry; `nil` lets the server apply its default.
-    ///   - downloadable: Whether visitors may download the shared items.
     @discardableResult
     public func createShare(resourceIds: [String], description: String? = nil,
                             expiresAt: Date? = nil, downloadable: Bool = false) async throws -> NdShare {
@@ -223,8 +179,6 @@ public final class NavidromeAPI {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    /// Sends an authenticated request, persisting any JWT rotation from the
-    /// response header, and returns the response data.
     private func send(
         path: String,
         method: String,
@@ -253,7 +207,6 @@ public final class NavidromeAPI {
             lock.unlock()
             return try await send(path: path, method: method, body: body, isRetry: true)
         }
-        // Navidrome rotates the JWT on every response; keep the fresh token.
         if let rotated = http.value(forHTTPHeaderField: "x-nd-authorization"),
            rotated.hasPrefix("Bearer ") {
             let fresh = String(rotated.dropFirst("Bearer ".count))
@@ -268,9 +221,6 @@ public final class NavidromeAPI {
     }
 }
 
-/// Minimal projection of Navidrome's `Share` model. Only `id` is required to
-/// build the public share URL; the rest are decoded best-effort and ignored
-/// if absent.
 public struct NdShare: Decodable {
     public let id: String
     public let description: String?
@@ -279,14 +229,12 @@ public struct NdShare: Decodable {
     public let contents: String?
 }
 
-/// File-scope RFC3339 formatter for the native share API's `expiresAt` field.
 let navidromeShareDateFormatter: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime]
     return formatter
 }()
 
-/// Errors thrown by the Navidrome native-API client.
 public enum NavidromeAPIError: LocalizedError {
     case invalidURL
     case invalidRequest
@@ -296,17 +244,17 @@ public enum NavidromeAPIError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidURL: return NSLocalizedString("Некорректный адрес сервера.", comment: "NavidromeAPIError")
-        case .invalidRequest: return NSLocalizedString("Не удалось сформировать запрос.", comment: "NavidromeAPIError")
-        case .invalidResponse: return NSLocalizedString("Неожиданный ответ сервера.", comment: "NavidromeAPIError")
+        case .invalidURL: return NSLocalizedString("Invalid server URL.", comment: "NavidromeAPIError")
+        case .invalidRequest: return NSLocalizedString("Couldn't build the request.", comment: "NavidromeAPIError")
+        case .invalidResponse: return NSLocalizedString("Unexpected server response.", comment: "NavidromeAPIError")
         case .unauthorized:
             return NSLocalizedString(
-                "Не удалось авторизоваться на сервере.",
+                "Couldn't sign in to the server.",
                 comment: "NavidromeAPIError"
             )
         case .http(let code):
             return String(
-                format: NSLocalizedString("Ошибка сервера (HTTP %lld).", comment: "NavidromeAPIError"),
+                format: NSLocalizedString("Server error (HTTP %lld).", comment: "NavidromeAPIError"),
                 code
             )
         }
