@@ -1,9 +1,6 @@
 import AppKit
 import Foundation
 
-/// Monitors scroll events globally in the app to suppress expensive hover re-renders
-/// while the user is actively scrolling through long lists.
-/// When scrolling stops, hover is instantly re-enabled.
 @MainActor
 final class ScrollGate {
     static let shared = ScrollGate()
@@ -29,7 +26,6 @@ final class ScrollGate {
     }
 
     private func recordScroll(_ event: NSEvent) {
-        // Ignore zero-delta events that some trackpads send
         if event.scrollingDeltaX == 0 && event.scrollingDeltaY == 0 && event.deltaX == 0 && event.deltaY == 0 {
             return
         }
@@ -43,9 +39,9 @@ final class ScrollGate {
 
         let delayNanos: UInt64
         if event.phase == .ended || event.momentumPhase == .ended {
-            delayNanos = 40_000_000 // 40ms quick reset when gesture explicitly ends
+            delayNanos = 40_000_000
         } else {
-            delayNanos = 100_000_000 // 100ms debounce while wheel/momentum ticks continue
+            delayNanos = 100_000_000
         }
 
         resetTask = Task { @MainActor [weak self] in
@@ -58,8 +54,6 @@ final class ScrollGate {
     }
 }
 
-/// Reference-type tracker for cursor presence, avoiding SwiftUI view invalidation
-/// during raw mouse enter/exit events while scrolling is active.
 final class HoverTracker {
     var isInside = false
 }

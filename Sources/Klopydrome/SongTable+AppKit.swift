@@ -2,13 +2,11 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-/// Per-row hover state so only the specific row under the cursor invalidates.
 @Observable
 final class RowHoverState {
     var isHovered: Bool = false
 }
 
-/// Coordinates native AppKit hover tracking and routes hover state to individual rows.
 @MainActor
 final class RowHoverManager {
     private var states: [SubsonicSong.ID: RowHoverState] = [:]
@@ -107,6 +105,7 @@ struct TableTweaks: NSViewRepresentable {
         private var clipViewBoundsObserver: Any?
         private var scrollDebounceWorkItem: DispatchWorkItem?
         private var isTableScrolling = false
+        private var isPrefetching = false
 
         init(hoverManager: RowHoverManager) {
             self.hoverManager = hoverManager
@@ -225,8 +224,12 @@ struct TableTweaks: NSViewRepresentable {
             if let tableView, let clipView {
                 let visible = tableView.rows(in: clipView.bounds)
                 let maxVisible = visible.location + visible.length
-                if maxVisible >= songCount - 150 {
+                if maxVisible >= songCount - 150 && !isPrefetching {
+                    isPrefetching = true
                     onPrefetch?()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
+                        self?.isPrefetching = false
+                    }
                 }
             }
             scrollDebounceWorkItem?.cancel()
