@@ -225,4 +225,18 @@ final class MiniPlayerResizeGeometryTests: XCTestCase {
             XCTAssertEqual(size.height, 320, accuracy: 0.001)
         }
     }
+
+    @MainActor
+    func testWindowDidResizeUpdatesUserCompactSideWithoutInLiveResize() {
+        let controller = MiniPlayerPanelController()
+        let panel = NSPanel(
+            contentRect: NSRect(origin: NSPoint(x: 100, y: 100), size: NSSize(width: 480, height: 480)),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.delegate = controller
+        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+        XCTAssertEqual(controller.userCompactSide, 480, accuracy: 0.001)
+    }
 }

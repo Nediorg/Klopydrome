@@ -341,7 +341,7 @@ final class AutomixTests: XCTestCase {
         )
 
         XCTAssertEqual(try XCTUnwrap(player.crossfadeRemainingTime), 3, accuracy: 0.001)
-        XCTAssertEqual(player.crossfadeStatusText, "Crossfade · 3 s")
+        XCTAssertEqual(player.crossfadeStatusText, L10n.format("format.crossfade.remaining", 3))
     }
 
     func testStatusRoundsPartialSecondUpForTheListener() {
@@ -354,6 +354,6 @@ final class AutomixTests: XCTestCase {
             duration: 5
         )
 
-        XCTAssertEqual(player.crossfadeStatusText, "Crossfade · 3 s")
+        XCTAssertEqual(player.crossfadeStatusText, L10n.format("format.crossfade.remaining", 3))
     }
 }

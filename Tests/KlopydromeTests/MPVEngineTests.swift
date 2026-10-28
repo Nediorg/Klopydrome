@@ -44,7 +44,7 @@ final class MPVEngineTests: XCTestCase {
         engine.handleTrackFailure(errorCode: -12)
         engine.handleTrackFailure(errorCode: -12)
 
-        XCTAssertEqual(messages, ["MPV could not open the audio stream (code -12)."])
+        XCTAssertEqual(messages, [L10n.format("format.mpv.openFailure", -12)])
     }
 
     func testBufferingNotificationWhenPausedForCache() {

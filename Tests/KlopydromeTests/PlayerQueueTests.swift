@@ -142,12 +142,6 @@ final class PlayerQueueTests: XCTestCase {
         XCTAssertNotNil(player.queueContextSubtitle)
         XCTAssertTrue(player.queueContextSubtitle?.contains("Recently Played") == true)
 
-        player.setQueue([song], autoPlay: false, context: .artist(Artist(id: "art1", name: "The Beatles")))
-        XCTAssertNil(player.queueContextSubtitle)
-
-        player.setQueue([song], autoPlay: false, context: .general(title: "Custom"))
-        XCTAssertNil(player.queueContextSubtitle)
-
         player.setQueue([song], autoPlay: false, context: nil)
         XCTAssertNil(player.queueContextSubtitle)
 

@@ -216,23 +216,23 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
             )
         )
         let playlistSummary = app.pendingActionsSummary(for: mutations)
-        XCTAssertEqual(playlistSummary, ["Изменение или добавление плейлистов".localized])
+        XCTAssertEqual(playlistSummary, ["Playlist changes or additions".localized])
 
         mutations.stars["song-1"] = QueuedStarAction(id: "song-1", kind: .song, isStarred: true, timestamp: Date())
         let starAndPlaylist = app.pendingActionsSummary(for: mutations)
         XCTAssertEqual(starAndPlaylist.count, 2)
-        XCTAssertTrue(starAndPlaylist.contains("Изменение или добавление плейлистов".localized))
-        XCTAssertTrue(starAndPlaylist.contains("Отметки «Избранное»".localized))
+        XCTAssertTrue(starAndPlaylist.contains("Playlist changes or additions".localized))
+        XCTAssertTrue(starAndPlaylist.contains("Favorites".localized))
 
         mutations.ratings["song-2"] = QueuedRatingAction(songID: "song-2", rating: 5, timestamp: Date())
         let allSummary = app.pendingActionsSummary(for: mutations)
         XCTAssertEqual(allSummary.count, 3)
-        XCTAssertTrue(allSummary.contains("Оценки треков".localized))
+        XCTAssertTrue(allSummary.contains("Track ratings".localized))
     }
 
     func testPendingMutationsContextLocalization() {
-        let prevSession = "С прошлого сеанса остались локальные изменения:".localized
-        let offlineDisabled = "В офлайн-режиме накопились локальные изменения:".localized
+        let prevSession = "Local changes remain from the previous session:".localized
+        let offlineDisabled = "Local changes accumulated while offline:".localized
         XCTAssertFalse(prevSession.isEmpty)
         XCTAssertFalse(offlineDisabled.isEmpty)
         XCTAssertNotEqual(prevSession, offlineDisabled)

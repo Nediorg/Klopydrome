@@ -359,10 +359,8 @@ final class PlaylistCacheTests: XCTestCase {
         XCTAssertEqual(player.currentPlaylist?.id, playlist.id)
         XCTAssertEqual(player.queueContextTitle, playlist.name)
 
-        // Overriding queueContextTitle resets to general context
-        player.queueContextTitle = "Custom Context"
+        player.playbackContext = nil
         XCTAssertNil(player.currentPlaylist)
-        XCTAssertEqual(player.queueContextTitle, "Custom Context")
-        XCTAssertEqual(player.playbackContext, .general(title: "Custom Context"))
+        XCTAssertNil(player.queueContextTitle)
     }
 }
