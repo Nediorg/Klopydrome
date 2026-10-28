@@ -60,7 +60,7 @@ struct CoverArtView: View {
     }
 
     private var currentCoverID: String {
-        if let current = CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2)),
+        if CoverArtStore.shared.cachedImage(coverArt: coverArt, size: Int(size * 2)) != nil,
            let art = coverArt, !art.isEmpty {
             return art
         }

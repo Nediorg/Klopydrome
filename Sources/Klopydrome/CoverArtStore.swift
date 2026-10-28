@@ -41,8 +41,8 @@ final class CoverArtStore: @unchecked Sendable {
     /// `width * height * 4` bytes, so a large grid can't pin hundreds of MB:
     /// beyond this the cache evicts least-recently-used entries (re-reads
     /// hit the disk cache, so the thrash cost is a cheap decode).
-    private static let memoryCacheCostLimit = 64 << 20
-    private static let memoryCacheCountLimit = 250
+    private static let memoryCacheCostLimit = 32 << 20
+    private static let memoryCacheCountLimit = 1_000
 
     /// Largest decoded side for artwork requested without a pixel cap
     /// (`.original` covers, artist URLs). The disk cache keeps full quality;
@@ -130,7 +130,8 @@ final class CoverArtStore: @unchecked Sendable {
         if let exact = memory.object(forKey: key as NSString) {
             return exact
         }
-        return largerCachedImage(for: coverArt, requested: requested)
+        guard let fallback = largerCachedImage(for: coverArt, requested: requested) else { return nil }
+        return fallback
     }
 
     func image(coverArt: String?, size: Int) async -> ImageBox {
@@ -146,6 +147,14 @@ final class CoverArtStore: @unchecked Sendable {
            let fallback = largerCachedImage(for: coverArt, requested: requested) {
             // swiftlint:disable:next line_length
             coverLogger.debug("fallback hit for \(coverArt, privacy: .private) \(requested.map(String.init) ?? "orig", privacy: .private) -> larger")
+            if size <= 80, fallback.size.width >= 720 || fallback.size.height >= 720 {
+                let downscaled = bounded(fallback, requestedSize: requested ?? size)
+                memory.setObject(downscaled, forKey: key as NSString, cost: Self.cost(of: downscaled))
+                lock.withLock {
+                    _ = cachedSizes[coverArt, default: []].insert(requested ?? 0)
+                }
+                return ImageBox(image: downscaled)
+            }
             return ImageBox(image: fallback)
         }
         let result = await load(key: key) { [weak self] in

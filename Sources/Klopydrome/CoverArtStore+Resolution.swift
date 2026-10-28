@@ -214,16 +214,25 @@ extension CoverArtStore {
         let scale = targetSide / largest
         let targetSize = NSSize(width: image.size.width * scale,
                                 height: image.size.height * scale)
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let ctx = CGContext(data: nil,
-                                  width: Int(targetSize.width.rounded()),
-                                  height: Int(targetSize.height.rounded()),
+        guard let ctx = CGContext(data: nil,
+                                  width: max(1, Int(targetSize.width.rounded())),
+                                  height: max(1, Int(targetSize.height.rounded())),
                                   bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { return image }
         ctx.interpolationQuality = .high
-        ctx.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+
+        var proposedRect = CGRect(origin: .zero, size: image.size)
+        if let cgImage = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil)
+            ?? (image.representations.compactMap { ($0 as? NSBitmapImageRep)?.cgImage }.first) {
+            ctx.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+        } else {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+            NSGraphicsContext.restoreGraphicsState()
+        }
         guard let scaled = ctx.makeImage() else { return image }
         return NSImage(cgImage: scaled, size: targetSize)
     }
