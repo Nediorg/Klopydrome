@@ -1,15 +1,5 @@
 import SwiftUI
 
-// MARK: - Skeleton Kit
-
-/// Canonical building blocks for loading skeleton placeholders across Klopydrome.
-/// Guarantees exact layout metrics, unified visual tokens, and strict masking
-/// so shimmering light bands never bleed onto transparent margins or spacing.
-
-/// A single skeleton row matching the exact layout and height of `SongRow`:
-/// - 46pt when `showAlbum: true` (cover + 2 lines)
-/// - 40pt when `!showAlbum && showsArtist` (index + 2 lines for collaborations/compilations)
-/// - 32pt when `!showAlbum && !showsArtist` (index + single line for standard album tracks)
 struct SkeletonSongRow: View {
     var showAlbum: Bool = true
     var showsArtist: Bool = true
@@ -63,7 +53,6 @@ struct SkeletonSongRow: View {
     }
 }
 
-/// A vertical list of skeleton song rows with a single cohesive shimmer sweep.
 struct SkeletonSongList: View {
     var count: Int = 10
     var showAlbum: Bool = true
@@ -86,7 +75,6 @@ struct SkeletonSongList: View {
     }
 }
 
-/// A card skeleton for album grid items or circular artist avatars.
 struct SkeletonCard: View {
     var size: CGFloat = 150
     var isCircle: Bool = false
@@ -117,7 +105,6 @@ struct SkeletonCard: View {
     }
 }
 
-/// A horizontally scrolling shelf of card skeletons with a single cohesive shimmer.
 struct SkeletonCardShelf: View {
     var count: Int = 4
     var cardSize: CGFloat = 150
@@ -147,7 +134,46 @@ struct SkeletonCardShelf: View {
     }
 }
 
-/// A 3-row compact column matching Apple Music style compact song blocks (e.g. `CompactSongColumn`).
+struct SkeletonCardGrid: View {
+    var count: Int = 12
+    var minCard: CGFloat = 160
+    var gap: CGFloat = 16
+    var isCircle: Bool = false
+    var horizontalPadding: CGFloat = 24
+    var verticalPadding: CGFloat = 20
+    var accessibilityLabel: String?
+
+    var body: some View {
+        GeometryReader { geo in
+            let available = max(0, geo.size.width - horizontalPadding * 2)
+            let colCount = max(1, Int((available + gap) / (minCard + gap)))
+            let rawWidth = (available - CGFloat(colCount - 1) * gap) / CGFloat(colCount)
+            let cardWidth = floor(rawWidth)
+            let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: colCount)
+
+            ScrollView {
+                grid(cols: cols, cardWidth: cardWidth, forMask: false)
+                    .shimmering()
+                    .mask {
+                        grid(cols: cols, cardWidth: cardWidth, forMask: true)
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.vertical, verticalPadding)
+            }
+            .scrollClipDisabled()
+        }
+        .accessibilityLabel(accessibilityLabel ?? "Loading".localized)
+    }
+
+    private func grid(cols: [GridItem], cardWidth: CGFloat, forMask: Bool) -> some View {
+        LazyVGrid(columns: cols, spacing: gap) {
+            ForEach(0..<count, id: \.self) { _ in
+                SkeletonCard(size: cardWidth, isCircle: isCircle, forMask: forMask)
+            }
+        }
+    }
+}
+
 struct SkeletonCompactSongColumn: View {
     var count: Int = 3
     var width: CGFloat = 280
@@ -204,5 +230,41 @@ struct SkeletonCompactSongColumn: View {
             }
         }
         .frame(width: width)
+    }
+}
+
+struct SkeletonPillCard: View {
+    var forMask: Bool = false
+
+    var body: some View {
+        if forMask {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+        } else {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 90, height: 11)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.primary.opacity(0.05))
+                        .frame(width: 60, height: 9)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+            )
+        }
     }
 }

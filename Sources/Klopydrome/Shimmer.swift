@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// A soft diagonal light band that travels across the view, used as a loading
-/// skeleton. The band is wider than the view and its leading/trailing edges
-/// are blurred out, so no hard sweep boundary ever appears inside the tile.
-/// Honors Reduce Motion: with it on, a static gradient is shown instead of an
-/// infinitely panning highlight.
 struct Shimmer: ViewModifier {
     let enabled: Bool
     @State private var phase: CGFloat = -1
@@ -12,7 +7,7 @@ struct Shimmer: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay {
-                if enabled {
+                if enabled && Motion.enabled {
                     ShimmerBand(phase: phase)
                         .allowsHitTesting(false)
                 }
@@ -27,9 +22,6 @@ struct Shimmer: ViewModifier {
     }
 }
 
-/// The traveling light band. Its gradient spans the whole overlay and is moved
-/// as a unit; the sweep itself is a soft diagonal highlight with enough
-/// translation to traverse the tile edge-to-edge.
 struct ShimmerBand: View {
     let phase: CGFloat
     var body: some View {
@@ -53,9 +45,6 @@ struct ShimmerBand: View {
 }
 
 extension View {
-    /// Overlays a moving light sweep, typically over a placeholder. Pass
-    /// `false` when the loading state can never resolve (no artwork to fetch)
-    /// so the tile stays a static placeholder instead of shimmering forever.
     func shimmering(_ enabled: Bool = true) -> some View {
         modifier(Shimmer(enabled: enabled))
     }
