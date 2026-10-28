@@ -2,8 +2,6 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-/// A compact, artwork-first player window. The cover remains a square at every
-/// size; controls are temporary overlays so an idle mini-player is only art.
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var app
 
@@ -19,9 +17,6 @@ struct MiniPlayerView: View {
         self.updateWindowChrome = updateWindowChrome
     }
 
-    /// The mini-player surfaces the same panel as the main window: the lyrics /
-    /// queue selection is AppState's, so the global menu commands and the
-    /// mini-player's own pills stay mutually exclusive and in sync.
     private var activePanel: AppState.PlayerPanelTab? {
         app.visiblePlayerPanel
     }
@@ -71,8 +66,6 @@ struct MiniPlayerView: View {
             updateWindowChrome(controlsVisible, activePanel)
         }
         .onHover(perform: updateHover)
-        // The global menu («Очередь»/«Текст») drives AppState directly, so
-        // route its changes back into the panel the same way the pills do.
         .onChange(of: app.visiblePlayerPanel) { _, _ in
             updateWindowChrome(controlsVisible, activePanel)
         }
@@ -140,13 +133,7 @@ struct MiniPlayerView: View {
 
         isHovering = false
 
-        // The SwiftUI tracking rect ends where the AppKit window chrome
-        // begins: stepping onto the traffic lights fires exit although the
-        // cursor never left the window. Hiding on that exit strands the
-        // lights hidden (no re-enter ever comes from AppKit territory), so
-        // the hide applies only once the cursor is truly outside the panel.
         hideControlsTask = Task { @MainActor in
-            // Grace delay to avoid edge jitter and immediate dropoffs during interaction
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
 
@@ -175,8 +162,6 @@ struct MiniPlayerView: View {
     }
 }
 
-/// The temporary player surface rendered over artwork. It uses AppKit blur, not
-/// Tahoe's Liquid Glass, and keeps the artwork visible through a darkened matte.
 private struct MiniPlayerControlsLayer: View {
     private static let trackActionSide: CGFloat = 21
 
@@ -284,8 +269,8 @@ private struct MiniPlayerControlsLayer: View {
             }
             .buttonStyle(MiniPlayerActionButtonStyle())
             .onHover { isHoveringStar = $0 }
-            .help(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
-            .accessibilityLabel(app.isStarred(song) ? "Убрать из избранного".localized : "В избранное".localized)
+            .help(app.isStarred(song) ? "Remove from Favorites".localized : "Add to Favorites".localized)
+            .accessibilityLabel(app.isStarred(song) ? "Remove from Favorites".localized : "Add to Favorites".localized)
 
             ZStack {
                 Image(systemName: "ellipsis")
@@ -307,14 +292,12 @@ private struct MiniPlayerControlsLayer: View {
             .frame(width: Self.trackActionSide, height: Self.trackActionSide)
             .contentShape(Circle())
             .onHover { isHoveringEllipsis = $0 }
-            .help("Ещё".localized)
-            .accessibilityLabel("Действия для песни".localized)
+            .help("More".localized)
+            .accessibilityLabel("Song Actions".localized)
         }
     }
 }
 
-/// A native hit-test region that drags the panel from the artwork while
-/// SwiftUI controls above it retain their own mouse interaction.
 private struct MiniPlayerWindowDragRegion: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         MiniPlayerWindowDragView()

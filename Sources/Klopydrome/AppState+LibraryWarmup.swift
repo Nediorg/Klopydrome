@@ -1,8 +1,6 @@
 import Foundation
 import NavidromeClient
 
-// MARK: - Stale-While-Revalidate Disk Persistence & Background Warmup
-
 extension AppState {
     private static let playlistsMetadataKey = "library_tab_playlists"
     private static let recentAlbumsMetadataKey = "library_tab_recent_albums"
@@ -15,8 +13,6 @@ extension AppState {
     private static let favoritesAlbumsMetadataKey = "library_tab_favorites_albums"
     private static let favoritesSongsMetadataKey = "library_tab_favorites_songs"
 
-    /// Immediately restores cached tab manifests from the SSD (.metadata store)
-    /// into memory at launch so visiting tabs feels instantaneous without network delay.
     func restoreLibraryFromDiskCache() async {
         guard let cache else { return }
         await restorePlaylistsAndAlbums(cache: cache)
@@ -71,7 +67,6 @@ extension AppState {
         }
     }
 
-    /// Lazily restores cached songs from disk when the Songs tab is first visited.
     func restoreCachedSongsIfNeeded() async {
         guard library.songs.isEmpty, let cache else { return }
         if let items: [SubsonicSong] = await readCachedArray(cache: cache, key: Self.songsMetadataKey) {
@@ -106,51 +101,43 @@ extension AppState {
         }
     }
 
-    /// Persists the latest playlists manifest to disk for instant next-launch recovery.
     func persistPlaylistsToDisk() async {
         guard let cache, !library.playlists.isEmpty else { return }
         await writeCached(cache: cache, key: Self.playlistsMetadataKey, value: library.playlists)
     }
 
-    /// Persists the latest recently added albums to disk for instant next-launch recovery.
     func persistRecentAlbumsToDisk() async {
         guard let cache, !library.recentAlbums.isEmpty else { return }
         await writeCached(cache: cache, key: Self.recentAlbumsMetadataKey, value: library.recentAlbums)
     }
 
-    /// Persists the first page of alphabetical albums to disk for instant next-launch recovery.
     func persistAlbumsToDisk() async {
         guard let cache, !library.albums.isEmpty else { return }
         await writeCached(cache: cache, key: Self.albumsMetadataKey, value: library.albums)
     }
 
-    /// Persists the latest artist index to disk for instant next-launch recovery.
     func persistArtistsToDisk() async {
         guard let cache, !library.artistIndexes.isEmpty else { return }
         await writeCached(cache: cache, key: Self.artistsMetadataKey, value: library.artistIndexes)
     }
 
-    /// Persists the latest genre list to disk for instant next-launch recovery.
     func persistGenresToDisk() async {
         guard let cache, !availableGenres.isEmpty else { return }
         await writeCached(cache: cache, key: Self.genresMetadataKey, value: availableGenres)
     }
 
-    /// Persists the cached songs list to disk for instant next-launch recovery.
     func persistSongsToDisk() async {
         guard let cache, !library.songs.isEmpty else { return }
         let unique = library.songs.uniqued()
         await writeCached(cache: cache, key: Self.songsMetadataKey, value: unique)
     }
 
-    /// Persists the latest home shelves to disk for instant next-launch recovery.
     func persistHomeShelvesToDisk() async {
         guard let cache, !library.homeShelves.isEmpty else { return }
         let raw = Dictionary(uniqueKeysWithValues: library.homeShelves.map { ($0.key.rawValue, $0.value) })
         await writeCached(cache: cache, key: Self.homeShelvesMetadataKey, value: raw)
     }
 
-    /// Persists cached favorite artists, albums, and songs to disk for instant next-launch recovery.
     func persistFavoritesToDisk() async {
         guard let cache else { return }
         if !library.favoritesArtists.isEmpty {
@@ -164,15 +151,11 @@ extension AppState {
         }
     }
 
-    /// Background prefetch run after successful server connection:
-    /// hydrates disk cache immediately, then refreshes fresh data silently.
     func warmupLibrary() async {
         guard client != nil, !isOfflineSession else { return }
 
-        // 1. Instant SSD hydration (0 ms perceived latency)
         await restoreLibraryFromDiskCache()
 
-        // 2. Parallel background warmup, conserving bandwidth on constrained/expensive networks
         let isConstrained = NetworkMonitor.shared.isConstrained || NetworkMonitor.shared.isExpensive
 
         await withTaskGroup(of: Void.self) { group in

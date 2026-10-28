@@ -2,10 +2,6 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-// MARK: - Detail Player Header Bar (Apple Music style)
-
-/// The player header bar that lives at the top of the detail column: transport
-/// controls, adaptive LCD, volume, and lyrics/queue buttons.
 struct PlayerHeaderBar: View {
     @Environment(AppState.self) private var app
     @Binding var showDownloads: Bool
@@ -15,7 +11,6 @@ struct PlayerHeaderBar: View {
         GeometryReader { geo in
             let totalWidth = geo.size.width
             let windowX = geo.frame(in: .global).minX
-            // Clearance for window traffic lights, collapsed sidebar toggle, and standard 16 pt margin.
             let trafficLightOffset = windowX < 120 ? max(0, 134 - windowX) : 0
             let leadingInset = max(16, trafficLightOffset)
             let trailingInset: CGFloat = 12
@@ -26,8 +21,6 @@ struct PlayerHeaderBar: View {
             let leadingWing = leadingInset + leadingWidth
             let trailingWing = trailingInset + trailingWidth
 
-            // Symmetric satellites clearance: Downloads button (24 + 8 = 32) on the left,
-            // crossfade indicator (24 + 8 = 32) on the right.
             let satelliteAllowance: CGFloat = 24 + 8
 
             let effectiveLeadingWing = leadingWing + satelliteAllowance
@@ -51,6 +44,7 @@ struct PlayerHeaderBar: View {
                 if showCenterGroup {
                     centerGroup(width: finalLCDWidth)
                         .frame(maxWidth: .infinity, alignment: .center)
+                        .transaction { $0.animation = nil }
                 }
 
                 HStack(spacing: 0) {
@@ -96,6 +90,7 @@ struct PlayerHeaderBar: View {
         ZStack {
             PlayerLCDView()
                 .frame(width: width)
+                .transaction { $0.animation = nil }
 
             if app.hasDownloadContent {
                 HStack {
@@ -122,6 +117,7 @@ struct PlayerHeaderBar: View {
                 .transition(.opacity)
             }
         }
+        .transaction { $0.animation = nil }
         .animation(.snappy(duration: 0.2), value: app.hasDownloadContent)
         .animation(.snappy(duration: 0.2), value: app.player.isCrossfading)
         .animation(.snappy(duration: 0.2), value: app.player.lastError != nil)
@@ -142,8 +138,8 @@ struct PlayerHeaderBar: View {
                         .hoverFill()
                 }
                 .buttonStyle(.plain)
-                .help("Текст".localized)
-                .accessibilityLabel("Текст".localized)
+                .help("Lyrics".localized)
+                .accessibilityLabel("Lyrics".localized)
 
                 Button {
                     app.togglePlayerPanel(.queue)
@@ -155,16 +151,13 @@ struct PlayerHeaderBar: View {
                         .hoverFill()
                 }
                 .buttonStyle(.plain)
-                .help("Далее".localized)
-                .accessibilityLabel("Далее".localized)
+                .help("Queue".localized)
+                .accessibilityLabel("Queue".localized)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
     }
 
-    /// Inline "back" chevron at the player bar's leading edge (Apple Music
-    /// style). Pops a pushed sub-page (album/artist/playlist opened from within
-    /// a tab) or, when a sidebar playlist is open, returns to "All Playlists".
     private var backButton: some View {
         Button {
             app.navigateBack()
@@ -178,8 +171,8 @@ struct PlayerHeaderBar: View {
         }
         .buttonStyle(.plain)
         .padding(.trailing, 2)
-        .help("Назад".localized)
-        .accessibilityLabel("Назад".localized)
+        .help("Back".localized)
+        .accessibilityLabel("Back".localized)
     }
 }
 
@@ -197,7 +190,7 @@ private struct ToolbarVolumeControl: View {
             }
             ToolbarVolumeSlider(value: $player.volume)
                 .frame(width: 75, height: 52)
-                .help("Громкость".localized)
+                .help("Volume".localized)
             VolumeEdgeButton(
                 systemImage: "speaker.wave.3.fill",
                 label: L10n.text("action.volume.maximum")

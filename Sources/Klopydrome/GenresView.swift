@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Alphabetical genre index, mirroring the ArtistsView / Apple Music style.
 struct GenresView: View {
     @Environment(AppState.self) private var app
 
@@ -47,7 +46,7 @@ struct GenresView: View {
         Group {
             if let loadError {
                 LibraryUnavailableView(
-                    title: "Не удалось загрузить",
+                    title: "Failed to load".localized,
                     systemImage: "wifi.exclamationmark",
                     message: loadError,
                     retry: { Task { await load() } }
@@ -56,31 +55,33 @@ struct GenresView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if indexes.isEmpty {
                 LibraryUnavailableView(
-                    title: "Нет жанров",
+                    title: "No Genres".localized,
                     systemImage: "guitars",
-                    message: "В вашей медиатеке пока нет размеченных жанров."
+                    message: "There are no tagged genres in your library yet.".localized
                 )
             } else {
                 List {
                     ForEach(indexes) { index in
                         Section(index.name) {
                             ForEach(index.genres) { genre in
-                                let name = genre.value ?? "Неизвестный жанр".localized
+                                let name = genre.value ?? "Unknown Genre".localized
                                 Button {
                                     app.openGenre(name)
                                 } label: {
                                     HStack(spacing: 12) {
                                         CircularGenreArt(name: name)
                                         Text(name)
+                                            .font(AMFont.rowTitle)
+                                            .foregroundStyle(AMColor.primaryText)
                                         Spacer()
                                         if let count = genre.songCount, count > 0 {
                                             Text("\(count) \(Pluralized.song(count))")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .font(AMFont.rowSubtitle)
+                                                .foregroundStyle(AMColor.secondaryText)
                                         } else if let count = genre.albumCount, count > 0 {
                                             Text("\(count) \(Pluralized.album(count))")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .font(AMFont.rowSubtitle)
+                                                .foregroundStyle(AMColor.secondaryText)
                                         }
                                     }
                                     .contentShape(Rectangle())
@@ -148,7 +149,6 @@ struct GenresView: View {
     }
 }
 
-/// Circular thumbnail for a genre, matching CircularArtistArt.
 struct CircularGenreArt: View {
     let name: String
     var size: CGFloat = 40

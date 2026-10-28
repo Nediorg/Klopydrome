@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// A timestamped silence row in synchronized lyrics.
-/// Three dots light up sequentially in the final 3 s before the next vocal line,
-/// one per second (T-3 s, T-2 s, T-1 s), with a continuous mathematical pulse on each ignition.
-/// Outside the countdown window the active dots gently breathe with the music.
-/// Participates in the exact same ripple spring, focus scale, and depth-of-field blur as `KaraokeLine`.
 extension LyricsPauseMarker: Equatable {
     static func == (lhs: LyricsPauseMarker, rhs: LyricsPauseMarker) -> Bool {
         lhs.pauseRange == rhs.pauseRange
@@ -27,7 +22,6 @@ struct LyricsPauseMarker: View {
     let index: Int
     let activeLineIndex: Int?
     let scrollDirection: Int
-    /// `index - activeLineIndex` — drives blur, opacity, scale, and offset identical to `KaraokeLine`.
     let lineDistance: Int
     var isBrowsing: Bool = false
     var isPlaying: Bool = true
@@ -76,7 +70,7 @@ struct LyricsPauseMarker: View {
             .contentShape(Rectangle())
             .onHover { isHovering = $0 }
             .onTapGesture(perform: onTap)
-            .accessibilityLabel("Пауза в тексте".localized)
+            .accessibilityLabel("Pause in Text".localized)
     }
 
     private var styledMarker: some View {
@@ -253,7 +247,6 @@ struct LyricsPauseMarker: View {
 
     // MARK: - Static helpers (used by tests)
 
-    /// Maps audio time to the normalized [0, 1] sweep over the final 3.0 s before vocal reentry.
     static func countdownProgress(at currentTime: Double, from start: Double, until end: Double) -> Double {
         let duration = end - start
         guard duration > 0 else { return currentTime >= end ? 1.0 : 0.0 }
@@ -264,13 +257,11 @@ struct LyricsPauseMarker: View {
         return min(max((currentTime - countdownStart) / countdownWindow, 0.0), 1.0)
     }
 
-    /// Maps the audio clock to normalized fill position across the entire pause range.
     static func progress(at currentTime: Double, from start: Double, until end: Double) -> Double {
         guard end > start else { return currentTime >= end ? 1 : 0 }
         return min(max((currentTime - start) / (end - start), 0), 1)
     }
 
-    /// Backwards compatibility helper for existing silence reset contract.
     static func fillProgress(for progress: Double) -> Double {
         let clamped = min(max(progress, 0), 1)
         return clamped < 1 ? clamped : 0

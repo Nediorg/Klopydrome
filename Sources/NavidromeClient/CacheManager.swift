@@ -24,20 +24,13 @@ public struct CacheLimits: Codable, Equatable, Sendable {
     }
 
     public static let `default` = CacheLimits(
-        maxTotalBytes: 2_000_000_000,     // ~2 GB
-        maxCoversBytes: 200_000_000,      // ~200 MB
-        maxStreamsBytes: 1_500_000_000,   // ~1.5 GB
-        maxMetadataBytes: 30_000_000      // ~30 MB
+        maxTotalBytes: 2_000_000_000,
+        maxCoversBytes: 200_000_000,
+        maxStreamsBytes: 1_500_000_000,
+        maxMetadataBytes: 30_000_000
     )
 }
 
-/// File-based cache with three stores (covers, streams, metadata) and size-based
-/// eviction of least-recently-accessed files.
-///
-/// Byte totals are tracked incrementally in memory so the common write path
-/// doesn't pay an O(n) directory scan; a scan happens only when a limit is
-/// actually exceeded. Reads of `.streams` refresh the file's mtime so LRU
-/// reflects real access, not just last write.
 public actor CacheManager {
     public let rootURL: URL
     private var _limits: CacheLimits
@@ -46,11 +39,6 @@ public actor CacheManager {
     private var kindTotals: [CacheKind: Int] = [:]
     private var totalsLoaded = false
 
-    /// Connection-local cache of full artist discography crawls (every song
-    /// for an artist), keyed by artist id. Subsonic song ids are stable only
-    /// for the lifetime of a connection, and `CacheManager` is recreated on
-    /// each `connect()` (so this clears on reconnect automatically); it is
-    /// also dropped by `clear()`. Capped to 25 artists to prevent unbounded RAM growth.
     private var discographyByArtist: [String: [SubsonicSong]] = [:]
     private var discographyArtistOrder: [String] = []
     private let maxDiscographyArtists = 25
@@ -67,18 +55,15 @@ public actor CacheManager {
         }
     }
 
-    /// Cache size ceilings.
     public var limits: CacheLimits {
         get { _limits }
         set { _limits = newValue }
     }
 
-    /// Updates the cache limits.
     public func setLimits(_ newLimits: CacheLimits) {
         _limits = newLimits
     }
 
-    /// Derive a per-server cache root so multiple servers don't collide.
     public nonisolated static func root(forServer host: String) -> URL {
         let safeHost = host
             .replacingOccurrences(of: ":", with: "-")
@@ -91,8 +76,6 @@ public actor CacheManager {
         let base = caches ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent(safeHost, isDirectory: true)
     }
-
-    // MARK: Paths
 
     public nonisolated func directory(for kind: CacheKind) -> URL {
         rootURL.appendingPathComponent(kind.rawValue, isDirectory: true)
@@ -126,8 +109,6 @@ public actor CacheManager {
     private nonisolated func sanitize(_ key: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
         let cleaned = String(key.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })
-        // Collapse repeated dots (including an attempted ".." traversal) into
-        // a single dot, then drop a leading dot so the file isn't hidden.
         let collapsed = cleaned.replacingOccurrences(of: #"\.+"#, with: ".", options: .regularExpression)
         var trimmed = collapsed
         while trimmed.hasPrefix(".") {
@@ -136,10 +117,6 @@ public actor CacheManager {
         return trimmed.isEmpty ? "unnamed" : trimmed
     }
 
-    // MARK: Read / write
-
-    /// Raw file names currently present in a store. Callers can seed an
-    /// in-memory key set from this once, then drop per-item filesystem probes.
     public func fileKeys(for kind: CacheKind) -> [String] {
         let dir = directory(for: kind)
         return (try? fileManager.contentsOfDirectory(atPath: dir.path)) ?? []
@@ -152,9 +129,6 @@ public actor CacheManager {
     public func readData(for kind: CacheKind, key: String) async -> Data? {
         let url = fileURL(for: kind, key: key)
         guard fileManager.fileExists(atPath: url.path) else { return nil }
-        // Streams are read on play; refresh the mtime so LRU eviction reflects
-        // real access and frequently-played songs aren't evicted while stale
-        // files linger. Covers/metadata read too often to justify the syscall.
         if kind == .streams {
             try? fileManager.setAttributes([.modificationDate: Date()],
                                            ofItemAtPath: url.path)
@@ -208,16 +182,10 @@ public actor CacheManager {
         kindTotals[kind] = 0
     }
 
-    // MARK: Artist discography cache
-
-    /// The cached full-discography pool for `artistId`, or `nil` if it has
-    /// not been crawled during this connection.
     public func cachedDiscography(for artistId: String) async -> [SubsonicSong]? {
         discographyByArtist[artistId]
     }
 
-    /// Stores a completed discography crawl so revisiting the artist page
-    /// skips the multi-request crawl entirely. Enforces an LRU ceiling.
     public func cacheDiscography(_ songs: [SubsonicSong], for artistId: String) async {
         discographyByArtist[artistId] = songs
         if let idx = discographyArtistOrder.firstIndex(of: artistId) {
@@ -230,17 +198,10 @@ public actor CacheManager {
         }
     }
 
-    // MARK: Size management
-
-    /// Synchronous read of the in-memory totals. Does NOT trigger a directory
-    /// scan, so it never blocks the caller. Accurate once
-    /// `ensureTotals()` has populated the counters off the main thread.
     private func totalBytes() -> Int {
         CacheKind.allCases.reduce(0) { $0 + (kindTotals[$1] ?? 0) }
     }
 
-    /// Async variant: ensures the totals are populated by scanning the stores
-    /// on the background (never the main actor), then returns them.
     public func totalBytesAsync() async -> Int {
         await ensureTotals()
         return totalBytes()
@@ -255,8 +216,6 @@ public actor CacheManager {
         return bytes(for: kind)
     }
 
-    /// Walks a store directory and sums the sizes of regular files. Pure
-    /// disk IO, no shared state, so it is safe to run on a background executor.
     private nonisolated static func scanStoreBytes(in directory: URL) -> Int {
         let fm = FileManager.default
         guard let urls = try? fm.contentsOfDirectory(
@@ -276,9 +235,6 @@ public actor CacheManager {
         kindTotals[kind, default: 0] = max(0, (kindTotals[kind, default: 0]) + delta)
     }
 
-    /// Populates `kindTotals` by scanning the on-disk stores. Runs on a
-    /// background executor so a large cache never stalls the UI; subsequent
-    /// reads are O(1) from memory.
     private func ensureTotals() async {
         guard !totalsLoaded else { return }
         let directories = CacheKind.allCases.map { ($0, directory(for: $0)) }
@@ -310,12 +266,10 @@ public actor CacheManager {
 
     private func evictIfNeeded() async {
         await ensureTotals()
-        // Per-kind limits — only scan a store when its counter exceeds the limit.
         for kind in CacheKind.allCases {
             let limit = kindLimit(kind)
             if (kindTotals[kind] ?? 0) > limit { await evict(kind, toTarget: limit) }
         }
-        // Global limit.
         if totalBytes() > limits.maxTotalBytes {
             await evict(totalTarget: limits.maxTotalBytes)
         }
@@ -358,8 +312,6 @@ public actor CacheManager {
         }.sorted { $0.date < $1.date }
     }
 
-    /// Evicts oldest files until the store is under `target`. Resyncs the byte
-    /// counter to the on-disk reality, so external removals self-heal.
     private func evict(_ kind: CacheKind, toTarget target: Int) async {
         let entries = files(in: kind)
         var total = entries.reduce(0) { $0 + $1.size }

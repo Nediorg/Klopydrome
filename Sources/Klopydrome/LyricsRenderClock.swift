@@ -1,9 +1,6 @@
 import Foundation
 import Observation
 
-/// A clock for sub-frame lyric rendering. The player publishes authoritative
-/// samples at a modest cadence, while this clock interpolates between them for
-/// visuals only; seeking and line-follow still use the authoritative samples.
 @MainActor
 @Observable
 final class LyricsRenderClock {
@@ -11,8 +8,6 @@ final class LyricsRenderClock {
     private var sampledAt = Date()
     private var isPlaying = false
     private var rate: Double = 1
-    /// Extrapolation ceiling: if player samples stall (e.g. network buffering),
-    /// the clock freezes after 0.35s instead of running away into the future.
     private let maxExtrapolation: TimeInterval = 0.35
 
     var currentTime: Double {

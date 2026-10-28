@@ -8,10 +8,10 @@ struct AppCommandMenus: Commands {
     @CommandsBuilder
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button(L10n.text("О приложении Klopydrome")) { showAboutPanel() }
+            Button("About Klopydrome".localized) { showAboutPanel() }
         }
         CommandGroup(replacing: .newItem) {
-            Button("Обновить медиатеку".localized) {
+            Button("Scan Media Library".localized) {
                 Task { await app.triggerServerScan() }
             }
             .keyboardShortcut("r", modifiers: [.command, .option])
@@ -29,29 +29,28 @@ struct AppCommandMenus: Commands {
         CommandGroup(replacing: .windowList) {}
     }
 
-    /// Every toolbar transport control must also exist as a menu command.
     @CommandsBuilder
     private var playbackMenu: some Commands {
-        CommandMenu("Воспроизведение".localized) {
-            Button((app.player.isPlaying ? "Пауза" : "Слушать").localized) {
+        CommandMenu("Playback".localized) {
+            Button((app.player.isPlaying ? "Pause" : "Play").localized) {
                 app.player.togglePlayPause()
             }
             .disabled(!app.player.hasQueue)
 
-            Button("Остановить".localized) {
+            Button("Stop".localized) {
                 app.player.stop()
             }
             .disabled(!app.player.hasQueue)
 
             Divider()
 
-            Button("Следующий трек".localized) {
+            Button("Next Track".localized) {
                 app.player.next()
             }
             .keyboardShortcut(.rightArrow, modifiers: .command)
             .disabled(!app.player.hasQueue)
 
-            Button("Предыдущий трек".localized) {
+            Button("Previous track".localized) {
                 app.player.previous()
             }
             .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -59,12 +58,12 @@ struct AppCommandMenus: Commands {
 
             Divider()
 
-            Button("Увеличить громкость".localized) {
+            Button("Increase Volume".localized) {
                 app.player.adjustVolume(by: 0.05)
             }
             .keyboardShortcut(.upArrow, modifiers: .command)
 
-            Button("Уменьшить громкость".localized) {
+            Button("Decrease Volume".localized) {
                 app.player.adjustVolume(by: -0.05)
             }
             .keyboardShortcut(.downArrow, modifiers: .command)
@@ -73,27 +72,27 @@ struct AppCommandMenus: Commands {
 
     @CommandsBuilder
     private var controlsMenu: some Commands {
-        CommandMenu("Управление".localized) {
-            Menu("Повтор".localized) {
-                repeatMenuItem("Выключить", mode: .off)
-                repeatMenuItem("Все", mode: .all)
-                repeatMenuItem("Одну песню", mode: .one)
+        CommandMenu("Controls".localized) {
+            Menu("Repeat".localized) {
+                repeatMenuItem("Off", mode: .off)
+                repeatMenuItem("All", mode: .all)
+                repeatMenuItem("One Song", mode: .one)
             }
 
             Divider()
 
-            Menu("Перемешивание".localized) {
+            Menu("Shuffling".localized) {
                 Button {
                     app.player.setShuffleEnabled(true)
                 } label: {
-                    shuffleMenuLabel("Включить", selected: app.player.shuffle)
+                    shuffleMenuLabel("On", selected: app.player.shuffle)
                 }
                 .disabled(!app.player.hasQueue || app.player.shuffle)
 
                 Button {
                     app.player.setShuffleEnabled(false)
                 } label: {
-                    shuffleMenuLabel("Выключить", selected: !app.player.shuffle)
+                    shuffleMenuLabel("Off", selected: !app.player.shuffle)
                 }
                 .disabled(!app.player.hasQueue || !app.player.shuffle)
 
@@ -115,31 +114,31 @@ struct AppCommandMenus: Commands {
             Divider()
 
             if app.isDiscordSnoozed {
-                Button("Показать активность".localized) {
+                Button("Show Activity".localized) {
                     app.resumeDiscordSnooze()
                 }
                 .disabled(!app.serverConfig.effectiveDiscordRichPresenceEnabled)
             } else {
-                Menu("Скрыть активность".localized) {
-                    Button("На эту песню".localized) {
+                Menu("Hide Activity".localized) {
+                    Button("For This Track".localized) {
                         app.snoozeDiscordForCurrentTrack()
                     }
                     .disabled(app.player.currentSong == nil)
                     Divider()
-                    Button("На 15 минут".localized) {
+                    Button("For 15 Minutes".localized) {
                         app.snoozeDiscord(for: 15 * 60)
                     }
-                    Button("На 1 час".localized) {
+                    Button("For 1 Hour".localized) {
                         app.snoozeDiscord(for: 60 * 60)
                     }
-                    Button("На 8 часов".localized) {
+                    Button("For 8 Hours".localized) {
                         app.snoozeDiscord(for: 8 * 60 * 60)
                     }
-                    Button("На 24 часа".localized) {
+                    Button("For 24 Hours".localized) {
                         app.snoozeDiscord(for: 24 * 60 * 60)
                     }
                     Divider()
-                    Button("Навсегда".localized) {
+                    Button("Forever".localized) {
                         app.snoozeDiscord(for: nil)
                     }
                 }
@@ -151,11 +150,8 @@ struct AppCommandMenus: Commands {
     @CommandsBuilder
     private var viewMenu: some Commands {
         CommandGroup(after: .toolbar) {
-            // Radio-style, not independent checkboxes: the two player panels are
-            // mutually exclusive (a single `visiblePlayerPanel`), so only one
-            // checkmark can ever be shown and toggling one replaces the other.
-            panelMenuItem("Далее", tab: .queue, shortcut: "u")
-            panelMenuItem("Текст", tab: .lyrics, shortcut: "l")
+            panelMenuItem("Queue", tab: .queue, shortcut: "u")
+            panelMenuItem("Lyrics", tab: .lyrics, shortcut: "l")
         }
     }
 

@@ -8,66 +8,42 @@ struct ServerConfig: Codable, Equatable {
     var cacheEnabled: Bool
     var maxBitRate: Int
     var serverName: String
-    /// Requested transcode codec for streams/downloads; nil/"" = server default.
     var format: String?
-    /// Stream (audio) cache size cap in bytes; nil = CacheLimits default.
     var streamCacheLimitBytes: Int?
-    /// Total cache size cap in bytes; nil = CacheLimits default.
     var totalCacheLimitBytes: Int?
-    /// Appearance override; `.system` follows the OS (GUIDELINES §2).
     var theme: AppTheme?
-    /// Cover-art resolution preference; `nil` = `.high`.
     var coverResolution: CoverResolution?
-    /// Playback engine preference; `nil` = `.mpv` (the recommended default).
     var playbackEngine: PlaybackEngine?
-    /// Automix preferences; nil preserves defaults for configurations saved before this feature.
     var automixEnabled: Bool?
     var automixFadeDuration: Double?
     var automixApplyToAlbums: Bool?
     var automixReplayGainEnabled: Bool?
-    /// ReplayGain correction; nil migrates from the legacy
-    /// `automixReplayGainEnabled` flag. Independent of crossfade.
     var replayGainMode: ReplayGainMode?
     var replayGainPreampDB: Float?
-    /// Trailing-silence trimming aggressiveness; nil = `.off`.
     var silenceTrimMode: SilenceTrimMode?
-    /// Prepares the queue successor in a muted MPV context before the current
-    /// track ends. Nil keeps the default enabled for existing configurations.
     var nextTrackPreloadingEnabled: Bool?
-    /// Opt-in Discord Rich Presence preferences for this server profile.
     var discordRichPresenceEnabled: Bool?
     var discordApplicationID: String?
-    /// Whether a paused track stays visible in Discord. Defaults to true.
     var discordShowPaused: Bool?
-    /// Lyrics visual and timing preferences
     var lyricsFontSize: LyricsFontSize?
     var lyricsAnimationMotion: LyricsAnimationMotion?
     var lyricsBlurEnabled: Bool?
     var lyricsCountdownEnabled: Bool?
     var lyricsDefaultOffset: Double?
-    /// Offline mode preferences
     var autoReconnectEnabled: Bool?
     var forceOfflineMode: Bool?
-    /// Download format preference: true downloads in streaming transcode format/bitrate, false downloads original file.
     var downloadTranscoded: Bool?
-    /// Offline caching preferences for favorites
     var cacheStarredSongs: Bool?
     var cacheStarredAlbums: Bool?
     var cacheStarredArtists: Bool?
-    /// Whether confirmation before applying offline changes / actions is suppressed.
     var suppressOfflinePrompts: Bool?
-    /// Legacy properties kept for backward-compatibility decoding:
     var suppressOfflineActionWarning: Bool?
     var suppressPendingMutations: Bool?
-    /// Whether confirmation before starting server library scan is suppressed.
     var suppressServerScanWarning: Bool?
-    /// Whether to conserve data on cellular/expensive/constrained networks.
     var adaptiveCellularDataEnabled: Bool?
 }
 
 extension ServerConfig {
-    /// Resolved engine preference. `nil` (configs persisted before the toggle
-    /// existed, or the default) falls back to the MPV engine.
     var effectivePlaybackEngine: PlaybackEngine { playbackEngine ?? .mpv }
     var effectiveAutomixEnabled: Bool { automixEnabled ?? false }
     var effectiveAutomixFadeDuration: Double {

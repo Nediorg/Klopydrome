@@ -2,12 +2,6 @@ import AppKit
 import SwiftUI
 import NavidromeClient
 
-/// Floating slide-out panel at the trailing edge that hosts either the lyrics
-/// or the playback queue. Both toolbar buttons (lyrics / up next) drive this
-/// one panel, so opening one and collapsing always work together. Overlaid on
-/// the whole window (see MainView), so it sizes and surfaces itself: a fixed
-/// inspector width on an ultra-thin material that lets the content behind it
-/// show through as it slides over.
 struct PlayerPanelView: View {
     @Environment(AppState.self) private var app
 
@@ -35,9 +29,6 @@ struct PlayerPanelView: View {
     }
 }
 
-/// Slide-out "Up Next" queue panel docked at the trailing edge of the main
-/// content area. Shows the playback queue (Up Next) or the play history.
-/// Animated with a spring and a trailing-edge move transition in MainView.
 struct QueuePanelView: View {
     enum Tab: Hashable {
         case upNext
@@ -46,14 +37,13 @@ struct QueuePanelView: View {
 
     @Environment(AppState.self) private var app
     @State private var selectedTab: Tab = .upNext
-
     @State private var confirmingClear = false
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Вкладка очереди".localized, selection: $selectedTab) {
-                Text("Далее".localized).tag(Tab.upNext)
-                Text("История".localized).tag(Tab.history)
+            Picker("Queue Tab".localized, selection: $selectedTab) {
+                Text("Queue".localized).tag(Tab.upNext)
+                Text("History".localized).tag(Tab.history)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -61,11 +51,11 @@ struct QueuePanelView: View {
 
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text((selectedTab == .upNext ? "На очереди" : "История").localized)
-                        .font(.system(size: 15, weight: .bold))
+                    Text((selectedTab == .upNext ? "Up Next" : "History").localized)
+                        .font(.headline.weight(.semibold))
                     if selectedTab == .upNext, let subtitle = app.player.queueContextSubtitle {
                         Text(subtitle)
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.callout)
                             .foregroundStyle(AMColor.secondaryText)
                             .lineLimit(1)
                     }
@@ -75,12 +65,12 @@ struct QueuePanelView: View {
                     Button {
                         confirmingClear = true
                     } label: {
-                        Text("Очистить".localized)
-                            .font(.system(size: 13, weight: .regular))
+                        Text("Clear".localized)
+                            .font(.callout)
                             .foregroundStyle(AMColor.accent)
                     }
                     .buttonStyle(.plain)
-                    .help("Очистить список".localized)
+                    .help("Clear".localized)
                 }
             }
             .padding(.horizontal)
@@ -93,7 +83,8 @@ struct QueuePanelView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(list.enumerated()), id: \.element.id) { index, song in
+                        ForEach(0..<list.count, id: \.self) { index in
+                            let song = list[index]
                             QueueTrackRow(
                                 song: song,
                                 isCurrent: isCurrent(song),
@@ -108,18 +99,17 @@ struct QueuePanelView: View {
                     .padding(.vertical, 2)
                 }
                 .scrollIndicators(.automatic)
-                .background(OverlayScrollerModifier())
             }
         }
         .frame(maxWidth: .infinity)
         .frame(maxHeight: .infinity)
         .confirmationDialog(
-            selectedTab == .upNext ? "Очистить очередь?".localized : "Очистить историю?".localized,
+            selectedTab == .upNext ? "Clear Queue?".localized : "Clear History?".localized,
             isPresented: $confirmingClear,
             titleVisibility: .visible
         ) {
-            Button("Очистить".localized, role: .destructive) { clearAction() }
-            Button("Отмена".localized, role: .cancel) {}
+            Button("Clear".localized, role: .destructive) { clearAction() }
+            Button("Cancel".localized, role: .cancel) {}
         }
     }
 
@@ -137,7 +127,7 @@ struct QueuePanelView: View {
             Image(systemName: selectedTab == .upNext ? "list.bullet" : "clock")
                 .font(.system(size: 24))
                 .foregroundStyle(.tertiary)
-            Text(selectedTab == .upNext ? "Очередь пуста".localized : "Истории прослушивания ещё нет".localized)
+            Text(selectedTab == .upNext ? "Queue is empty".localized : "No listening history yet".localized)
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -152,11 +142,11 @@ struct QueuePanelView: View {
     private func select(_ song: SubsonicSong, at index: Int) {
         switch selectedTab {
         case .upNext:
-            if let queueIndex = app.player.queue.firstIndex(where: { $0.id == song.id }) {
-                app.player.jump(to: queueIndex)
+            if app.player.queue.indices.contains(index) {
+                app.player.jump(to: index)
             }
         case .history:
-            app.play([song], at: 0)
+            app.play(song)
         }
     }
 
@@ -171,9 +161,6 @@ struct QueuePanelView: View {
     }
 }
 
-/// A single queue track row: artwork with playing/hover overlay, title, artist — album,
-/// with a subtle macOS hover highlight, deletion button, ellipsis context menu,
-/// and accent color on title for currently playing track.
 struct QueueTrackRow: View {
     let song: SubsonicSong
     let isCurrent: Bool
@@ -184,7 +171,6 @@ struct QueueTrackRow: View {
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
-    @State private var hoverTracker = HoverTracker()
 
     private var isPlaying: Bool { isCurrent && app.player.isPlaying }
 
@@ -212,11 +198,11 @@ struct QueueTrackRow: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(song.displayTitle)
-                        .font(.callout.weight(.regular))
+                        .font(AMFont.rowTitle)
                         .foregroundStyle(isCurrent ? AMColor.accent : AMColor.primaryText)
                         .lineLimit(1)
                     Text(song.displaySubtitle)
-                        .font(.callout)
+                        .font(AMFont.rowSubtitle)
                         .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
@@ -234,7 +220,7 @@ struct QueueTrackRow: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help("Удалить из очереди".localized)
+                        .help("Remove from Queue".localized)
                         .transition(.identity)
                     }
 
@@ -245,7 +231,7 @@ struct QueueTrackRow: View {
                         app: app,
                         extraActions: canRemove ? [
                             SongMenuExtraAction(
-                                title: "Удалить из очереди".localized,
+                                title: "Remove from Queue".localized,
                                 systemImage: "trash",
                                 action: { onRemove?() }
                             )
@@ -283,60 +269,13 @@ struct QueueTrackRow: View {
                 Button(role: .destructive) {
                     onRemove?()
                 } label: {
-                    Label("Удалить из очереди".localized, systemImage: "trash")
+                    Label("Remove from Queue".localized, systemImage: "trash")
                 }
                 Divider()
             }
             SongActionItems(app: app, song: song, selection: [song])
         }
-        .onHover { isInside in
-            hoverTracker.isInside = isInside
-            if isInside {
-                if !ScrollGate.shared.isScrolling && !hovering {
-                    hovering = true
-                }
-            } else {
-                if hovering {
-                    hovering = false
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidStart)) { _ in
-            if hovering {
-                hovering = false
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
-            if hoverTracker.isInside && !hovering {
-                hovering = true
-            }
-        }
-        .onDisappear {
-            hoverTracker.isInside = false
-            hovering = false
-        }
+        .onHover { hovering = $0 }
         .accessibilityLabel(song.displayTitle)
-    }
-}
-
-private struct OverlayScrollerModifier: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        OverlayScrollerView()
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-
-    private final class OverlayScrollerView: NSView {
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-        override func layout() {
-            super.layout()
-            enclosingScrollView?.scrollerStyle = .overlay
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            enclosingScrollView?.scrollerStyle = .overlay
-        }
     }
 }

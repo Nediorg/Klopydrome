@@ -1,8 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-// MARK: - Rule row
-
 struct RuleRow: View {
     @ObservedObject var node: QueryNode
     let model: QueryEditorModel
@@ -18,7 +16,7 @@ struct RuleRow: View {
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
                 .draggable(QueryDrag(nodeID: node.id, isGroup: false))
-                .accessibilityLabel("Переместить правило".localized)
+                .accessibilityLabel("Move Rule".localized)
                 .accessibilityAddTraits(.isButton)
 
             fieldPicker
@@ -32,21 +30,19 @@ struct RuleRow: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
-                    // Hit box lives inside the label (frame + contentShape),
-                    // so the whole 24pt square clicks, not just the glyph.
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Удалить правило".localized)
-            .accessibilityLabel("Удалить правило".localized)
+            .help("Delete Rule".localized)
+            .accessibilityLabel("Delete Rule".localized)
         }
         .padding(.vertical, 2)
         .hoverFill(fill: Color.primary.opacity(0.05), cornerRadius: 6)
         .onHover { hovering = $0 }
         .contextMenu {
-            Button("Дублировать".localized) { duplicate() }
-            Button("Удалить".localized, role: .destructive) {
+            Button("Duplicate".localized) { duplicate() }
+            Button("Delete".localized, role: .destructive) {
                 withAnimation(Motion.spring(Motion.expand)) { model.remove(node.id) }
             }
         }
@@ -61,7 +57,7 @@ struct RuleRow: View {
     }
 
     private var fieldPicker: some View {
-        Picker("Поле".localized, selection: fieldBinding) {
+        Picker("Field".localized, selection: fieldBinding) {
             ForEach(QueryField.allCases) { field in Text(field.label.localized).tag(field) }
         }
         .pickerStyle(.menu)
@@ -83,7 +79,7 @@ struct RuleRow: View {
     }
 
     private var opPicker: some View {
-        Picker("Оператор".localized, selection: opBinding) {
+        Picker("Operator".localized, selection: opBinding) {
             ForEach(current.field.allowedOperators, id: \.self) { option in Text(option.label.localized).tag(option) }
         }
         .pickerStyle(.menu)
@@ -103,7 +99,7 @@ struct RuleRow: View {
             if current.field == .playlistID {
                 playlistMenu
             } else if current.op.expectsBoolean || current.field.isBoolean {
-                Toggle((current.op.expectsBoolean ? "Отметить" : "Избранные").localized, isOn: booleanBinding)
+                Toggle((current.op.expectsBoolean ? "Mark" : "Favorites").localized, isOn: booleanBinding)
                     .toggleStyle(.checkbox)
                     .labelsHidden()
                     .frame(width: 170, alignment: .leading)
@@ -112,25 +108,23 @@ struct RuleRow: View {
             } else if current.field == .genre {
                 genrePicker
             } else if current.field.isNumeric {
-                TextField("Значение".localized, text: numericTextBinding)
+                TextField("Value".localized, text: numericTextBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 120)
                     .monospacedDigit()
             } else {
-                TextField("Значение".localized, text: textBinding)
+                TextField("Value".localized, text: textBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 170)
             }
         }
     }
 
-    /// Two bound inputs for the `inTheRange` operator (numbers for numeric fields,
-    /// dates for date fields).
     private var rangeEditor: some View {
         HStack(spacing: 4) {
-            rangeField(0, placeholder: "от".localized)
+            rangeField(0, placeholder: "from".localized)
             Text("—").foregroundStyle(.secondary)
-            rangeField(1, placeholder: "до".localized)
+            rangeField(1, placeholder: "to".localized)
         }
     }
 
@@ -174,7 +168,6 @@ struct RuleRow: View {
         )
     }
 
-    /// A menu of the user's playlists for `inPlaylist`/`notInPlaylist` rules.
     private var playlistMenu: some View {
         Menu {
             ForEach(app.library.playlists) { playlist in
@@ -202,13 +195,11 @@ struct RuleRow: View {
     private var selectedPlaylistName: String {
         guard let id = current.value.text, !id.isEmpty,
               let playlist = app.library.playlists.first(where: { $0.id == id }) else {
-            return "Выберите плейлист…".localized
+            return "Choose Playlist…".localized
         }
         return playlist.displayName
     }
 
-    /// Known genres from the server in a menu, so the user never typos a genre
-    /// that silently matches nothing. Typed value stays as the "custom" entry.
     private var genrePicker: some View {
         Menu {
             ForEach(app.availableGenres) { genre in
@@ -218,7 +209,7 @@ struct RuleRow: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Text(current.value.text?.isEmpty == false ? current.value.text! : "Выберите жанр…".localized)
+                Text(current.value.text?.isEmpty == false ? current.value.text! : "Choose Genre…".localized)
                     .foregroundStyle(current.value.text?.isEmpty == false ? .primary : .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)

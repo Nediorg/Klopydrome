@@ -71,9 +71,6 @@ extension Player {
         }
     }
 
-    /// Randomizes blocks but preserves the source order inside every block.
-    /// Albums are blocks by album id; groups use album artist/artist because
-    /// Subsonic does not provide an independent group field on songs.
     private func shuffledBlocks(
         _ songs: [SubsonicSong],
         key: (SubsonicSong) -> String

@@ -2,8 +2,6 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    /// Attempts to reconnect to the server without throwing away the user's active
-    /// offline playback session if connection fails.
     @discardableResult
     func reconnect(
         silent: Bool = false,
@@ -13,7 +11,6 @@ extension AppState {
         guard !serverConfig.url.isEmpty else { return false }
         guard let password = passwordForLoginPrefill() else { return false }
 
-        // If forced offline mode is enabled by user, do not reconnect
         if serverConfig.effectiveForceOfflineMode { return false }
 
         isReconnecting = true
@@ -36,12 +33,10 @@ extension AppState {
             if !silent {
                 connectionError = error.localizedDescription
             }
-            // Keep offline session alive so user can continue listening
             return false
         }
     }
 
-    /// Invoked when NetworkMonitor detects connectivity restored.
     func handleNetworkRestored() async {
         if isOfflineSession {
             guard serverConfig.effectiveAutoReconnectEnabled,
@@ -49,7 +44,6 @@ extension AppState {
                   !isReconnecting else { return }
             _ = await reconnect(silent: true)
         } else {
-            // Online session restored: verify connection, trigger view refresh, flush queued mutations
             if let client {
                 try? await client.ping()
                 CoverArtStore.shared.invalidateFailedKeys()
@@ -59,7 +53,6 @@ extension AppState {
         }
     }
 
-    /// Toggles forced offline mode on or off.
     func setWorkOffline(_ offline: Bool) async {
         if offline {
             serverConfig.forceOfflineMode = true

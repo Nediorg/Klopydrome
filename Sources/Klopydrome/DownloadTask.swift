@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import NavidromeClient
 
-/// A high-level download job representing a playlist, album, genre, or track batch.
 struct DownloadTask: Identifiable, Equatable {
     enum Kind: Equatable {
         case album(album: SubsonicAlbum)
@@ -30,11 +29,11 @@ struct DownloadTask: Identifiable, Equatable {
 
     var categoryTitle: String {
         switch kind {
-        case .album: return "Альбом".localized
-        case .playlist: return "Плейлист".localized
-        case .genre: return "Жанр".localized
-        case .track: return "Песня".localized
-        case .batch: return "Песни".localized
+        case .album: return "Album".localized
+        case .playlist: return "Playlist".localized
+        case .genre: return "Genre".localized
+        case .track: return "Song".localized
+        case .batch: return "Songs".localized
         }
     }
 
@@ -127,7 +126,6 @@ extension AppState {
                     try await downloadToCache(song)
                     await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
                 } catch is CancellationError {
-                    // Cancelled download is not marked as failed or completed
                 } catch {
                     await MainActor.run { markSongFailed(in: taskID, songID: song.id) }
                 }
@@ -246,7 +244,7 @@ extension AppState {
             return
         }
         startDownloadTask(
-            kind: .batch(title: title ?? "Песни".localized),
+            kind: .batch(title: title ?? "Songs".localized),
             coverArt: targets.first?.coverArt,
             songs: targets
         )

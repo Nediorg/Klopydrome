@@ -2,16 +2,12 @@ import SwiftUI
 import PhotosUI
 import NavidromeClient
 
-/// Apple-Music-style "New / Edit playlist" modal: a cover-art carousel with peek
-/// neighbors and hover arrows, focused name, description, public toggle, and Cancel / Done actions.
 struct CreatePlaylistModal: View {
     @Environment(AppState.self) var app
     @Environment(\.dismiss) var dismiss
 
     let songs: [SubsonicSong]
     var existing: PlaylistSummary? = nil
-    /// Called after a successful create or edit so the presenting view can
-    /// refresh its own content (e.g. reload a playlist's detail).
     var onSaved: (() -> Void)?
     var onDismiss: (() -> Void)?
 
@@ -31,10 +27,6 @@ struct CreatePlaylistModal: View {
     @FocusState var nameFocused: Bool
     @FocusState var descriptionFocused: Bool
 
-    /// Seeds the fields in `init` (not `.onAppear`): mutating `@State` during
-    /// the sheet's first display cycle re-enters AppKit's constraint pass and
-    /// crashes on macOS with the "marked as needing more Update Constraints"
-    /// exception — latent on any screen, fatal inside a NavigationSplitView.
     init(
         songs: [SubsonicSong],
         existing: PlaylistSummary? = nil,
@@ -53,8 +45,6 @@ struct CreatePlaylistModal: View {
         _visibleIndex = State(initialValue: initialCover)
     }
 
-    /// Gallery options: slot 0 is the custom photo (or current cover when editing),
-    /// followed by the preset swatches.
     enum Swatch: Identifiable {
         case photo(String?)
         case preset(PlaylistCoverPreset)
@@ -80,7 +70,6 @@ struct CreatePlaylistModal: View {
     var isEditing: Bool { existing != nil }
     var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
-    /// The preset chosen (nil when slot 0 / photo selected).
     var selectedPreset: PlaylistCoverPreset? {
         if selectedIndex > 0, case .preset(let preset) = swatches[selectedIndex] {
             return preset
@@ -91,7 +80,7 @@ struct CreatePlaylistModal: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 16) {
-                Text(isEditing ? "Изменить плейлист".localized : "Новый плейлист".localized)
+                Text(isEditing ? "Edit Playlist".localized : "New Playlist".localized)
                     .font(.headline.weight(.semibold))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.horizontal, 20)
@@ -111,7 +100,7 @@ struct CreatePlaylistModal: View {
             Divider()
 
             HStack(spacing: 10) {
-                Button("Отменить".localized) { dismissSelf() }
+                Button("Undo".localized) { dismissSelf() }
                     .buttonStyle(.plain)
                     .font(.body.weight(.medium))
                     .padding(.horizontal, 16)
@@ -127,7 +116,7 @@ struct CreatePlaylistModal: View {
                 Button {
                     create()
                 } label: {
-                    Text(isEditing ? "Сохранить".localized : "Создать".localized)
+                    Text(isEditing ? "Save".localized : "Create".localized)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20)
@@ -159,10 +148,8 @@ struct CreatePlaylistModal: View {
 
     var canCreate: Bool { !trimmedName.isEmpty }
 
-    // MARK: Fields
-
     private var titleField: some View {
-        TextField("Название плейлиста".localized, text: $name)
+        TextField("Playlist Name".localized, text: $name)
             .textFieldStyle(.plain)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -179,7 +166,7 @@ struct CreatePlaylistModal: View {
     private var descriptionField: some View {
         ZStack(alignment: .topLeading) {
             if description.isEmpty {
-                Text("Описание (необязательно)".localized)
+                Text("Description (optional)".localized)
                     .font(.body)
                     .kerning(-0.5)
                     .foregroundStyle(.tertiary)
@@ -210,7 +197,7 @@ struct CreatePlaylistModal: View {
     }
 
     private var publicToggle: some View {
-        Toggle("Публичный плейлист".localized, isOn: $isPublic)
+        Toggle("Public Playlist".localized, isOn: $isPublic)
             .toggleStyle(.switch)
             .padding(.horizontal, 2)
             .padding(.top, 2)
@@ -280,7 +267,6 @@ struct CreatePlaylistModal: View {
                 await app.cache?.removeFile(for: .covers, key: playlistId)
                 await app.cache?.removeFile(for: .covers, key: "pl-\(playlistId)")
             }
-            // Editing must refresh the sidebar summaries and reload the open playlist detail.
             if isEditing, let existing {
                 app.invalidatePlaylistDetail(for: existing.id)
                 await app.refreshPlaylists()
@@ -302,8 +288,6 @@ struct CreatePlaylistModal: View {
         }
     }
 
-    /// Renders the currently selected cover as PNG bytes, or nil when the user
-    /// picked the existing artwork. A user-supplied image is re-encoded directly.
     func selectedCoverPNG() async -> Data? {
         if selectedIndex == 0 {
             if let customImage {

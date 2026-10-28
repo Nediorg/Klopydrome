@@ -8,34 +8,20 @@ struct CoverArtView: View {
     var shadow = false
     var placeholderBackground: Color?
 
-    /// Corner radius scales with size: small thumbnails ~4pt, grid covers ~6pt,
-    /// large hero covers ~8pt matching Apple Music macOS Sequoia.
     private var radius: CGFloat {
         if let cornerRadius { return cornerRadius }
         if size < 64 { return 4 }
         if size < 180 { return 6 }
         return 8
     }
-    /// Drop shadow scales with the cover so hero artwork reads with depth
-    /// (HIG §1.3: ~y8/blur24/30%) without swamping small thumbnails.
     private var shadowRadius: CGFloat { shadow ? max(8, size * 0.08) : 0 }
     private var shadowY: CGFloat { shadow ? max(4, size * 0.03) : 0 }
 
     @State private var image: NSImage?
     @State private var previousImage: NSImage?
-    /// The identifier of the rendered artwork; changing it gives SwiftUI an
-    /// insertion/removal pair for a short opacity transition without dropping
-    /// the previous cover while the next one is loading.
     @State private var renderedCoverArt: String?
     @State private var previousCoverArt: String?
-    /// Set when the store reports the artwork doesn't exist (dead/empty cover,
-    /// network failure): the placeholder stops shimmering and stays a static
-    /// tile instead of animating indefinitely. Cleared when a new cover id
-    /// starts loading, so a later-successful tile still gets its sweep.
     @State private var loadFailed = false
-    /// Bumped by `foregroundRefreshRequested` (failed covers are invalidated
-    /// store-wide on activation): part of the task id so visible tiles
-    /// re-request even though their cover id never changed.
     @State private var retryNonce = 0
 
     init(coverArt: String?, size: CGFloat, cornerRadius: CGFloat? = nil, shadow: Bool = false,
@@ -98,20 +84,14 @@ struct CoverArtView: View {
             }
         }
         .coverShadow(enabled: shadow, radius: shadowRadius, yOffset: shadowY)
-        .accessibilityLabel(coverArt ?? String(localized: "Обложка"))
+        .accessibilityLabel(coverArt ?? "Cover".localized)
         .accessibilityAddTraits(.isImage)
         .animation(.easeInOut(duration: 0.28), value: renderedCoverArt)
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
-            // Resume shimmer immediately; the re-fired task below fills the image.
             loadFailed = false
             retryNonce += 1
         }
         .task(id: CoverArtRequest(art: coverArt, nonce: retryNonce)) {
-            // Debounce rapid changes: `coverArt` can flip several times while
-            // a playlist jumps between songs. `.task(id:)` cancels the prior
-            // task, but cancelling is not synchronous, so guard the awaited
-            // result so an earlier fetch can't overwrite fresh artwork.
-            // (The id above only restarts the task; values come from capture.)
             guard let art = coverArt, !art.isEmpty else {
                 withAnimation(.easeInOut(duration: 0.16)) {
                     previousImage = nil
@@ -125,7 +105,6 @@ struct CoverArtView: View {
             if image != nil, renderedCoverArt == art {
                 return
             }
-            // Fast cache hit avoiding placeholder flash and shimmer animation:
             if let cached = CoverArtStore.shared.cachedImage(coverArt: art, size: Int(size * 2)) {
                 if image != nil, renderedCoverArt != art {
                     previousImage = image
@@ -142,10 +121,6 @@ struct CoverArtView: View {
 
             loadFailed = false
 
-            // Grace period: if we already have an image visible, give the new
-            // cover 350ms to resolve (from disk cache or fast connection) before
-            // dropping to the placeholder. If it resolves in time, we transition
-            // directly between the covers without flashing a placeholder.
             let hadPreviousImage = (image != nil)
 
             enum LoadingResult: Sendable {
@@ -210,6 +185,7 @@ struct CoverArtView: View {
     }
 
     private func schedulePreviousImageCleanup(for art: String) {
+        guard previousImage != nil else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
             if renderedCoverArt == art {
@@ -220,16 +196,10 @@ struct CoverArtView: View {
     }
 }
 
-/// Task identity for artwork loads: the cover id plus a retry nonce so a
-/// foreground refresh re-fires visible tiles whose id never changed.
-/// Shared with artist tiles (`ArtistsView`).
 struct CoverArtRequest: Equatable {
     var art: String?
     var nonce: Int
 }
-
-/// A 2-column technical-metadata grid for a song (bitrate, format, duration,
-/// path, ids, …). Shared by the song detail page and the mini-player popover.
 
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .sidebar

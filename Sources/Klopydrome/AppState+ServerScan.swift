@@ -3,7 +3,6 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    /// Confirms before initiating a media library scan on the server.
     @MainActor
     func confirmServerScan() -> Bool {
         if serverConfig.effectiveSuppressServerScanWarning {
@@ -12,15 +11,15 @@ extension AppState {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Обновить медиатеку?".localized
-        // swiftlint:disable:next line_length
-        alert.informativeText = "Этот процесс займёт некоторое время и обновит контент на сервере. Продолжить?".localized
-        alert.addButton(withTitle: "Обновить".localized)
-        let cancel = alert.addButton(withTitle: "Отмена".localized)
+        alert.messageText = "Scan Library?".localized
+        alert.informativeText =
+            "This process may take some time and will update content on the server. Continue?".localized
+        alert.addButton(withTitle: "Refresh".localized)
+        let cancel = alert.addButton(withTitle: "Cancel".localized)
         cancel.keyEquivalent = "\u{1b}"
 
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать".localized
+        alert.suppressionButton?.title = "Do not ask again".localized
 
         let response = alert.runModal()
         if alert.suppressionButton?.state == .on {
@@ -30,7 +29,6 @@ extension AppState {
         return response == .alertFirstButtonReturn
     }
 
-    /// Polls or checks whether the Navidrome server is currently scanning its media folders.
     func checkServerScanStatus() async {
         guard let client, !isOfflineSession else { return }
         do {
@@ -43,11 +41,9 @@ extension AppState {
                 handleScanCompleted()
             }
         } catch {
-            // Server may not support getScanStatus or is temporarily unreachable
         }
     }
 
-    /// Triggers a media library scan on the Navidrome server (File > Scan Library).
     func triggerServerScan() async {
         guard let client, !isOfflineSession else { return }
         guard confirmServerScan() else { return }

@@ -8,36 +8,25 @@ enum SmartPlaylistError: LocalizedError {
         switch self {
         case .notConnected:
             return NSLocalizedString(
-                "Подключение к серверу не установлено.",
+                "No connection to server.".localized,
                 comment: "SmartPlaylistError"
             )
         }
     }
 }
 
-/// Builds the candidate song pool that a smart playlist evaluates its rules
-/// against. The Subsonic API has no single "all songs" endpoint, so we enumerate
-/// the library via paginated album lists, then expand each album to its songs.
 protocol SongRepo {
-    /// All songs available to evaluate against. `genre` narrows the crawl to a
-    /// single genre's songs (cheap), nil walks the entire library.
     func fetchPool(genre: String?) async throws -> [SubsonicSong]
 }
 
-/// Default repo backed by `SubsonicClient`, with a thread-safe in-memory pool
-/// cache so repeated preview/compute calls don't re-crawl the library. The
-/// built pool is also persisted to the metadata store, so a relaunch can load
-/// it from disk instead of re-crawling the whole library on first smart use.
 final class CachedLibraryRepo: SongRepo {
     private let client: SubsonicClient
-    /// Optional disk persistence for the crawled pool (the app's cache manager).
     private let diskCache: CacheManager?
     private let localSongs: (@MainActor @Sendable () -> [SubsonicSong])?
     private let albumPageSize = 500
     private let genrePageSize = 500
     private let maxSongs = 10_000
     private let cache = NSCache<NSString, NSArray>()
-    /// How old a persisted pool may get before we treat it as stale and re-crawl.
     private let poolMaxAge: TimeInterval = 12 * 60 * 60
 
     init(
@@ -58,7 +47,6 @@ final class CachedLibraryRepo: SongRepo {
             return hit
         }
 
-        // 1. Zero network requests: use loaded local library songs if available (no genre filter)
         if genre == nil, let getLocal = localSongs {
             let local = await getLocal()
             if !local.isEmpty {
@@ -67,7 +55,6 @@ final class CachedLibraryRepo: SongRepo {
             }
         }
 
-        // 2. A still-fresh pool written by a previous run avoids a crawl
         if let persisted = await loadDisk(genre: genre) {
             cache.setObject(persisted as NSArray, forKey: key, cost: persisted.count * 1024)
             return persisted
@@ -85,8 +72,6 @@ final class CachedLibraryRepo: SongRepo {
     }
 
     private func fetchAllSongsViaSearchOrCrawl() async throws -> [SubsonicSong] {
-        // Try paginated search3 with query: "*" in batches of 500.
-        // This eliminates the 1000+ N+1 album crawl requests, reducing them to ~20 requests.
         do {
             var songs: [SubsonicSong] = []
             var seen = Set<String>()
@@ -113,7 +98,6 @@ final class CachedLibraryRepo: SongRepo {
                 return songs
             }
         } catch {
-            // Fall back to crawlAllAlbums if search3 failed
         }
         return try await crawlAllAlbums()
     }
@@ -127,16 +111,10 @@ final class CachedLibraryRepo: SongRepo {
         await diskCache?.removeFile(for: .metadata, key: Self.diskKey(for: nil))
     }
 
-    // MARK: Disk persistence
-
-    /// Metadata-store key for a pool. Genre pools keep a per-genre entry so a
-    /// genre rule never triggers (or reuses) the full-library crawl.
     private static func diskKey(for genre: String?) -> String {
         "smartpool-\(genre ?? "all")"
     }
 
-    /// Returns the persisted pool when it exists and is younger than
-    /// `poolMaxAge`; nil otherwise.
     private func loadDisk(genre: String?) async -> [SubsonicSong]? {
         guard let diskCache else { return nil }
         let fileKey = Self.diskKey(for: genre)
@@ -155,7 +133,6 @@ final class CachedLibraryRepo: SongRepo {
         _ = try? await diskCache.write(data: data, to: .metadata, key: Self.diskKey(for: genre))
     }
 
-    /// Walks `getSongsByGenre` pages (cheap, single endpoint) up to the cap.
     private func crawlSongsByGenre(_ genre: String) async throws -> [SubsonicSong] {
         var songs: [SubsonicSong] = []
         var seen = Set<String>()
@@ -173,8 +150,6 @@ final class CachedLibraryRepo: SongRepo {
         return songs
     }
 
-    /// Walks every album via `getAlbumList2(.alphabeticalByName)` and expands each
-    /// album's songs with bounded concurrency. Stops once `maxSongs` is reached.
     private func crawlAllAlbums() async throws -> [SubsonicSong] {
         var albums: [SubsonicAlbum] = []
         var offset = 0
@@ -221,7 +196,6 @@ final class CachedLibraryRepo: SongRepo {
     }
 }
 
-/// Evaluates a smart playlist (or a bare query) against a `SongRepo` pool.
 @MainActor
 final class SmartPlaylistEngine {
     private let repo: any SongRepo
@@ -230,11 +204,8 @@ final class SmartPlaylistEngine {
         self.repo = repo
     }
 
-    /// Full compute for a saved playlist, including legacy single-field rules.
     func compute(_ playlist: SmartPlaylist) async throws -> [SubsonicSong] {
         let query = playlist.query
-        // The full-library crawl already includes every song (starred or not), so
-        // no extra favorites fetch is needed here.
         let genre = query.flatMap(SmartQueryMath.genreHint) ?? playlist.trimmedGenre
         let pool = try await repo.fetchPool(genre: genre)
         try Task.checkCancellation()
@@ -248,7 +219,6 @@ final class SmartPlaylistEngine {
         }.value
     }
 
-    /// Preview a bare query tree (not persisted) against the pool.
     func preview(_ query: SmartQuery) async throws -> [SubsonicSong] {
         let genre = SmartQueryMath.genreHint(query)
         let pool = try await repo.fetchPool(genre: genre)
@@ -271,10 +241,8 @@ final class SmartPlaylistEngine {
     }
 }
 
-/// Pure, nonisolated query helpers: pool-narrowing heuristics and sorting.
 enum SmartQueryMath {
 
-    /// Compare of a textual or numeric sort value (−1/0/1), nil-aware.
     enum ComparableBox {
         case number(Double)
         case text(String)
@@ -294,7 +262,6 @@ enum SmartQueryMath {
         }
     }
 
-    /// The single genre a query filters on, if all genre rules agree on one value.
     static func genreHint(_ query: SmartQuery) -> String? {
         var values = Set<String>()
         collectGenreValues(in: query.root, into: &values)
@@ -317,9 +284,6 @@ enum SmartQueryMath {
         if shuffle || sort?.contains("random") == true {
             return songs.shuffled()
         }
-        // Server multi-field sort syntax: "+year,-rating,title" (direction prefix
-        // optional, defaults to ascending). Each entry is applied in order. The
-        // global `order` key ("desc") reverses the direction of every field.
         let globalDescending = order == "desc"
         let entries: [(key: String, descending: Bool)]
         if let sort {
@@ -339,7 +303,6 @@ enum SmartQueryMath {
         }
     }
 
-    /// Parses one comma-separated sort key like `-year` / `+rating` / `title`.
     private static func sortEntry(_ part: Substring) -> (String, Bool)? {
         var field = part
         var descending = false
@@ -349,15 +312,12 @@ enum SmartQueryMath {
         return (String(field), descending)
     }
 
-    /// Slices an already-sorted pool by the query's `offset`/`limit`. A nil limit
-    /// means "all matches"; a bare offset still skips that many leading songs.
     static func window(_ songs: [SubsonicSong], offset: Int?, limit: Int?) -> [SubsonicSong] {
         let skip = max(offset ?? 0, 0)
         if let limit, limit > 0 { return Array(songs.dropFirst(skip).prefix(limit)) }
         return skip > 0 ? Array(songs.dropFirst(skip)) : songs
     }
 
-    /// Compares two songs by a sort key, normalising the DSL name.
     private static func compare(_ lhs: SubsonicSong, _ rhs: SubsonicSong, by name: String) -> Int {
         let value: (SubsonicSong) -> ComparableBox?
         switch name {

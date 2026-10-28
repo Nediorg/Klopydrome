@@ -3,8 +3,6 @@ import Foundation
 extension AppState {
     private static let discordSnoozeKey = "discordSnoozeUntil"
 
-    /// When non-nil and in the future, Rich Presence is suppressed.
-    /// `distantFuture` means snoozed forever until manually resumed.
     var discordSnoozeUntil: Date? {
         get {
             access(keyPath: \.discordSnoozeUntil)

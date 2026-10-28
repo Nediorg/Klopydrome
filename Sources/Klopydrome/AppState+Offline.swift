@@ -68,13 +68,6 @@ extension AppState {
         await OfflineMigration.migrateIfNeeded(cacheRoot: cacheRoot, repository: repository)
     }
 
-    /// Restores the in-memory offline download list from the on-disk catalog.
-    /// Runs on EVERY connection (online and offline) so the Downloads popover
-    /// and the offline bookkeeping reflect what is actually on disk. It must
-    /// NOT touch `library`: after an online `connect()` the library was just
-    /// reset to a fresh `LibraryCache()`, and stamping it with the offline
-    /// subset here is what made the Home shelves stay empty and every tab show
-    /// only downloaded songs, never re-fetching from the server.
     func restoreOfflineCatalog() async {
         guard let offlineRepository else { return }
         if !cachedStreamKeysSeeded {
@@ -92,10 +85,6 @@ extension AppState {
         return serverConfig.username
     }
 
-    /// Stamps the library cache with the persisted offline snapshot. Only used
-    /// inside `beginOfflineSession()`: an offline session has no server, so the
-    /// tabs must render the saved songs/albums/playlists and mark every store
-    /// as loaded (otherwise each tab would show its spinner forever).
     func restoreOfflineLibrary() async {
         await restoreOfflineCatalog()
         guard let offlineRepository else { return }
@@ -366,9 +355,6 @@ extension AppState {
         .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
-    /// Determines whether the login overlay should be displayed over the main view.
-    /// Returns false while launching, connected, offline, preparing an offline session,
-    /// or actively reconnecting.
     var shouldShowLoginView: Bool {
         !isLaunching &&
         !isConnected &&

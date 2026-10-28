@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Compact transport layout: Shuffle and Repeat remain on the sides, while the
-/// previous, play and next actions stay grouped around the visual center.
 struct MiniPlayerTransportControls: View {
     private enum EdgeControl {
         case shuffle
@@ -17,7 +15,7 @@ struct MiniPlayerTransportControls: View {
                 "shuffle",
                 control: .shuffle,
                 active: app.player.shuffle,
-                help: "Перемешать"
+                help: "Shuffle".localized
             ) {
                 app.player.toggleShuffle()
             }
@@ -25,13 +23,13 @@ struct MiniPlayerTransportControls: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 12) {
-                navigationButton("backward.fill", help: "Назад") {
+                navigationButton("backward.fill", help: "Previous Track".localized) {
                     app.player.previous()
                 }
 
                 playButton
 
-                navigationButton("forward.fill", help: "Вперёд") {
+                navigationButton("forward.fill", help: "Next Track".localized) {
                     app.player.next()
                 }
             }
@@ -42,7 +40,7 @@ struct MiniPlayerTransportControls: View {
                 repeatIcon,
                 control: .repeatMode,
                 active: app.player.repeatMode != .off,
-                help: "Повтор",
+                help: "Repeat".localized,
                 disabled: false
             ) {
                 app.player.cycleRepeat()
@@ -61,8 +59,8 @@ struct MiniPlayerTransportControls: View {
         }
         .buttonStyle(.plain)
         .disabled(!app.player.hasQueue)
-        .help("Играть/Пауза".localized)
-        .accessibilityLabel(app.player.isPlaying ? "Пауза".localized : "Играть".localized)
+        .help("Play/Pause".localized)
+        .accessibilityLabel(app.player.isPlaying ? "Pause".localized : "Play".localized)
         .contentTransition(.symbolEffect(.replace, options: .speed(1.8)))
         .animation(.snappy(duration: 0.14, extraBounce: 0), value: app.player.isPlaying)
     }
@@ -112,8 +110,6 @@ struct MiniPlayerTransportControls: View {
     }
 }
 
-/// Dedicated subview isolating formatted playback time tracking so that
-/// `MiniPlayerControlsLayer` does not re-evaluate its entire body on every audio tick.
 struct MiniPlayerTimeRow: View {
     @Environment(AppState.self) private var app
 

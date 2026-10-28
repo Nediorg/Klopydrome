@@ -1,8 +1,6 @@
 import Foundation
 import NavidromeClient
 
-// MARK: - Playlist actions
-
 extension AppState {
     func addToPlaylist(_ songs: [SubsonicSong], playlistID: String) async {
         guard confirmOfflineAction() else { return }
@@ -67,8 +65,6 @@ extension AppState {
         }
     }
 
-    /// Moves a playlist to the front of the "recent" list used by the
-    /// "Добавить в плейлист" submenu and Quick Access.
     func recordRecentPlaylist(_ id: String) {
         var recent = recentPlaylistIDs
         recent.removeAll { $0 == id }
@@ -76,7 +72,6 @@ extension AppState {
         recentPlaylistIDs = Array(recent.prefix(10))
     }
 
-    /// Reloads the sidebar playlist manifest from the server.
     func refreshPlaylists() async {
         guard let client else { return }
         guard let fresh = try? await client.getPlaylists() else { return }
@@ -91,8 +86,6 @@ extension AppState {
         await persistPlaylistsToDisk()
     }
 
-    /// Returns a full playlist response only while it agrees with the current
-    /// lightweight playlist manifest.
     func cachedPlaylistDetail(for playlist: PlaylistSummary) -> PlaylistDetail? {
         guard let detail = library.playlistDetails[playlist.id],
               detail.changed == playlist.changed,
@@ -118,8 +111,6 @@ extension AppState {
         }
     }
 
-    /// Optimistically removes songs at the given indices from a playlist,
-    /// synchronizing local state instantly before updating the server.
     func removeSongsFromPlaylist(playlistID: String, at indices: [Int]) async {
         guard confirmOfflineAction() else { return }
         guard !indices.isEmpty else { return }
@@ -297,7 +288,6 @@ extension AppState {
         await removeSong(song, from: playlist)
     }
 
-    /// Duplicates a playlist under a new name.
     func duplicatePlaylist(_ playlist: PlaylistSummary) async {
         guard confirmOfflineAction() else { return }
         guard let client else { return }

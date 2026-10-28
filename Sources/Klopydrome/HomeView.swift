@@ -1,17 +1,15 @@
 import SwiftUI
 import NavidromeClient
 
-/// Apple Music-style "Listen Now": a few horizontally scrolling shelves of
-/// large album cards.
 struct HomeView: View {
     @Environment(AppState.self) private var app
 
     enum Shelf: String, CaseIterable, Identifiable {
-        case recent = "Недавно прослушанные"
-        case new = "Недавно добавленные"
-        case frequent = "Часто слушаемые"
-        case starred = "Любимые альбомы"
-        case random = "Для вас"
+        case recent = "Recently Played"
+        case new = "Recently Added"
+        case frequent = "Most Played"
+        case starred = "Favorite Albums"
+        case random = "For You"
 
         var listType: AlbumListType {
             switch self {
@@ -102,27 +100,8 @@ struct HomeView: View {
             .buttonStyle(.borderless)
             .foregroundStyle(AMColor.accent)
             .hoverBrighten()
-            .accessibilityLabel("Обновить".localized)
-            .help("Обновить".localized)
-        }
-    }
-
-    @ViewBuilder
-    private func shelfContent(_ shelf: Shelf) -> some View {
-        let albums = albumsByShelf[shelf] ?? []
-        if albums.isEmpty && (loading || loadingShelves.contains(shelf)) {
-            ForEach(0..<6, id: \.self) { _ in AlbumCardPlaceholder() }
-        } else if let error = errorsByShelf[shelf] {
-            retryRow(shelf, error: error)
-        } else {
-            ForEach(albums) { album in
-                Button {
-                    app.openAlbumInLibrary(album)
-                } label: {
-                    AlbumCard(album: album)
-                }
-                .buttonStyle(.plain)
-            }
+            .accessibilityLabel("Refresh".localized)
+            .help("Refresh".localized)
         }
     }
 
@@ -130,26 +109,41 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             shelfHeader(shelf)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 18) {
-                    shelfContent(shelf)
+            let albums = albumsByShelf[shelf] ?? []
+            if albums.isEmpty && (loading || loadingShelves.contains(shelf)) {
+                SkeletonCardShelf(count: 6, cardSize: 165, spacing: 18)
+            } else if let error = errorsByShelf[shelf] {
+                retryRow(shelf, error: error)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 18) {
+                        ForEach(albums) { album in
+                            Button {
+                                app.openAlbumInLibrary(album)
+                            } label: {
+                                AlbumCard(album: album)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 4)
+                .scrollClipDisabled()
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .scrollClipDisabled()
         }
     }
 
     private func retryRow(_ shelf: Shelf, error: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Не удалось загрузить".localized)
+            Text("Failed to load".localized)
                 .font(.callout.weight(.semibold))
             Text(error)
                 .font(.caption)
                 .foregroundStyle(AMColor.secondaryText)
                 .lineLimit(2)
-            Button("Повторить попытку".localized) {
+            Button("Retry".localized) {
                 Task { await reloadShelf(shelf) }
             }
             .buttonStyle(.bordered)
@@ -160,10 +154,6 @@ struct HomeView: View {
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AMColor.surface))
     }
 
-    /// Loads every shelf only when the home store has never been fetched, so a
-    /// revisit to the tab shows instant cached shelves. Repeated appearances
-    /// don't re-fetch; pull-to-refresh / the per-shelf arrow still force a
-    /// reload. If shelves are empty (failed load), allow re-fetch.
     private func loadIfNeeded() async {
         let hasAnyData = Shelf.allCases.contains { shelf in
             !(app.library.homeShelves[shelf.listType] ?? []).isEmpty
@@ -279,29 +269,24 @@ struct AlbumCard: View {
     let album: SubsonicAlbum
     var width: CGFloat = 165
     var showsArtist: Bool = true
-    /// When true, the release year is shown under the artist line — useful on
-    /// discography surfaces (artist page); most grids keep the card compact.
     var showsYear: Bool = false
-    /// Reserves room for a two-line title so every card is the same height and
-    /// grid rows stay uniform (re-sorting never shifts the layout). The spare
-    /// space lands at the bottom of the card — the text block stays compact.
     var reservesTitleLines: Bool = true
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
-    @State private var hoverTracker = HoverTracker()
 
     private var isStarred: Bool { app.isStarred(album) }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 6) {
-                CoverArtView(coverArt: album.coverArt, size: width, cornerRadius: 6, shadow: true)
-                textBlock
-            }
-            .frame(width: width, alignment: .leading)
-            .foregroundStyle(.primary)
-
+        MediaCard(
+            width: width,
+            title: album.displayName,
+            subtitle: showsArtist ? album.artist : nil,
+            line2: (showsYear && album.year != nil) ? String(album.year!) : nil,
+            reservesTitleLines: reservesTitleLines
+        ) {
+            CoverArtView(coverArt: album.coverArt, size: width, cornerRadius: 6, shadow: true)
+        } trailingBadge: {
             if hovering || isStarred {
                 Button {
                     app.toggleStar(album)
@@ -314,125 +299,21 @@ struct AlbumCard: View {
                 }
                 .buttonStyle(.plain)
                 .padding(6)
-                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+                .help(isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
                 .accessibilityLabel(
-                    isStarred ? "Убрать альбом из избранного".localized : "Добавить альбом в избранное".localized
+                    isStarred ? "Remove album from Favorites".localized : "Add Album to Favorites".localized
                 )
                 .transition(.opacity)
             }
         }
-        .onHover { isInside in
-            hoverTracker.isInside = isInside
-            if isInside {
-                if !ScrollGate.shared.isScrolling {
-                    hovering = true
-                }
-            } else {
-                if hovering {
-                    hovering = false
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
-            if hoverTracker.isInside && !hovering {
-                hovering = true
-            }
-        }
-        .onDisappear {
-            hoverTracker.isInside = false
-            hovering = false
-        }
+        .onHover { hovering = $0 }
         .accessibilityLabel(album.displayName)
-        .accessibilityAction(named: isStarred ? "Убрать из избранного".localized : "В избранное".localized) {
+        .accessibilityAction(named: isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized) {
             app.toggleStar(album)
         }
         .contextMenu {
             AlbumContextMenuItems(album: album)
         }
-    }
-}
-
-private extension AlbumCard {
-    /// Title/artist/year block. With `reservesTitleLines` a hidden twin (two
-    /// title lines + artist + year) sets the block's height so all cards are
-    /// equal; the real text overlays it top-aligned, so a short title leaves
-    /// the spare space at the bottom of the card, not between the title and
-    /// the artist. Without the flag the block hugs its content.
-    @ViewBuilder
-    var textBlock: some View {
-        if reservesTitleLines {
-            ZStack(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Название\nальбома".localized)
-                        .font(.callout)
-                        .lineLimit(2)
-                    if showsArtist, album.artist?.isEmpty == false {
-                        Text("Исполнитель".localized).font(.callout)
-                    }
-                    if showsYear, album.year != nil {
-                        Text("0000").font(.callout)
-                    }
-                }
-                .hidden()
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    titleLine
-                    artistLine
-                    yearLine
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 1) {
-                titleLine
-                artistLine
-                yearLine
-            }
-        }
-    }
-
-    private var titleLine: some View {
-        Text(album.displayName)
-            .font(.callout)
-            .lineLimit(2)
-    }
-
-    @ViewBuilder
-    private var artistLine: some View {
-        if showsArtist {
-            Text(album.artist ?? "")
-                .font(.callout)
-                .foregroundStyle(AMColor.secondaryText)
-                .lineLimit(1)
-        }
-    }
-
-    @ViewBuilder
-    private var yearLine: some View {
-        if showsYear, let year = album.year {
-            Text(String(year))
-                .font(.callout)
-                .foregroundStyle(AMColor.secondaryText)
-                .lineLimit(1)
-        }
-    }
-}
-
-struct AlbumCardPlaceholder: View {
-    var width: CGFloat = 165
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-                .frame(width: width, height: width)
-            Text("Album Name")
-                .font(.callout)
-                .redacted(reason: .placeholder)
-            Text("Artist")
-                .font(.caption)
-                .redacted(reason: .placeholder)
-        }
-        .frame(width: width, alignment: .leading)
     }
 }
 

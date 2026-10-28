@@ -1,24 +1,23 @@
 import SwiftUI
 import NavidromeClient
 
-/// The Cmd+, Settings window: General (streaming/playback) and Cache.
 struct AppSettingsView: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
         TabView {
             GeneralSettingsView()
-                .tabItem { Label("Общие".localized, systemImage: "gearshape") }
+                .tabItem { Label("General".localized, systemImage: "gearshape") }
             AppearanceSettingsView()
-                .tabItem { Label("Поведение".localized, systemImage: "paintpalette") }
+                .tabItem { Label("Look and Feel".localized, systemImage: "paintpalette") }
             PlaybackSettingsView()
-                .tabItem { Label("Воспроизведение".localized, systemImage: "play.circle") }
+                .tabItem { Label("Playback".localized, systemImage: "play.circle") }
             CacheSettingsView()
-                .tabItem { Label("Кэш".localized, systemImage: "internaldrive") }
+                .tabItem { Label("Cache".localized, systemImage: "internaldrive") }
             AdvancedSettingsView()
-                .tabItem { Label("Расширенные".localized, systemImage: "slider.horizontal.3") }
+                .tabItem { Label("Advanced".localized, systemImage: "slider.horizontal.3") }
             SharesManagerView()
-                .tabItem { Label("Ссылки".localized, systemImage: "link") }
+                .tabItem { Label("Links".localized, systemImage: "link") }
         }
         .frame(width: 640, height: 500)
     }
@@ -35,11 +34,11 @@ private struct AdvancedSettingsView: View {
         Form {
             Section {
                 Toggle(
-                    "Показывать текущий трек в Discord",
+                    "Show current track in Discord".localized,
                     isOn: Bindable(app).serverConfig.discordRichPresenceEnabled.orFalse
                 )
                 Toggle(
-                    "Показывать трек на паузе",
+                    "Show paused track in Discord".localized,
                     isOn: Bindable(app).serverConfig.discordShowPaused.orTrue
                 )
                 .disabled(!isDiscordPresenceEnabled)
@@ -53,7 +52,7 @@ private struct AdvancedSettingsView: View {
             } header: {
                 Text("Discord Rich Presence".localized)
             } footer: {
-                Text("Для интеграции укажите Client ID приложения из Discord Developer Portal.".localized)
+                Text("Enter the Client ID of your application from the Discord Developer Portal.".localized)
             }
 
             DebugSettingsSection()

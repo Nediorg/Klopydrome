@@ -3,8 +3,6 @@ import AppKit
 import NavidromeClient
 
 struct MainView: View {
-    // Visible to MainView+Toolbar.swift (size gate: toolbar lives in an
-    // extension there, so shared state can't stay private).
     @Environment(AppState.self) var app
     @AppStorage("debugShowPlayerState") private var debugShowPlayerState = false
 
@@ -21,10 +19,6 @@ struct MainView: View {
                 showDownloads: $showDownloads,
                 isMiniPlayerVisible: isMiniPlayerVisible
             )
-            // Detail-column limiter: with no floor the split divider can
-            // squeeze the content to a sliver once the sidebar hits its
-            // max (300), and then keep dragging the window itself below
-            // the toolbar width. This floor stops both.
             .navigationSplitViewColumnWidth(
                 min: LayoutMetrics.detailColumnMinWidth,
                 ideal: 750,
@@ -92,10 +86,6 @@ struct MainView: View {
     }
 }
 
-// MARK: - Detail column
-
-/// The right-hand column: the navigable content region. The player bar lives in
-/// the top safe area inset of this column, matching Apple Music.
 struct DetailColumn: View {
     @Environment(AppState.self) private var app
     @Binding var showDownloads: Bool
@@ -178,25 +168,16 @@ struct DetailView: View {
     }
 }
 
-/// Minimalist progress strip for the toolbar player. A thin capsule track with
-/// the current position filled; drag to seek. Hidden until the player bar is
-/// hovered. Wrapped in a Button so the toolbar treats it as an interactive
-/// control — a bare DragGesture in a toolbar is captured by the window-drag
-/// region and would move the window instead of seeking.
 struct MinimalScrubber: View {
     @Environment(AppState.self) private var app
 
-    /// Hover keeps the track readable without turning the LCD into a second player bar.
     let isLCDHovered: Bool
     var onHover: ((Bool) -> Void)?
     private var trackHeight: CGFloat { isLCDHovered ? 5 : 3 }
     private var hitHeight: CGFloat { isLCDHovered ? 18 : 12 }
 
-    /// Progress preview while the user drags; nil uses the live player time.
     @State private var dragProgress: CGFloat?
 
-    /// Sweep shows only while the player is actually loading/stalled, never during
-    /// plain playback (background caching ahead is not "loading") or while paused.
     private var isLoading: Bool {
         app.player.isPlaying && (app.player.isBuffering || app.player.isLoading)
     }
@@ -262,7 +243,7 @@ struct MinimalScrubber: View {
                         )
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Позиция воспроизведения".localized)
+                    .accessibilityLabel("Playback position".localized)
                     .accessibilityValue(app.player.formattedCurrentTime())
                     .accessibilityAdjustableAction { direction in
                         let step = direction == .increment ? 10.0 : -10.0
@@ -298,8 +279,6 @@ struct MinimalScrubber: View {
         .clipped()
     }
 
-    /// Playback marker pinned to the bottom; taller and wider than the track
-    /// so it's easy to grab while scrubbing.
     private func marker(width: CGFloat) -> some View {
         Rectangle()
             .fill(Color.secondary.opacity(isLCDHovered ? 0.90 : 0.65))
@@ -313,8 +292,6 @@ struct MinimalScrubber: View {
             .offset(x: trackProgress * width - (isLCDHovered ? 2.5 : 2))
     }
 
-    /// The first 5 pt of the track are clamped to 0:00, making rewinding
-    /// to the very beginning of the track effortless on the first try.
     private func scrubberProgress(pointX: CGFloat, width: CGFloat) -> CGFloat {
         let deadzone: CGFloat = 5.0
         guard width > deadzone else { return 0 }

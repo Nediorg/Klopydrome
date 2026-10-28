@@ -2,8 +2,6 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-/// Modal sheet displaying complete artist details, discography statistics,
-/// genres, active years, and biography from the server.
 struct ArtistInfoSheet: View {
     let artist: Artist
     let detail: ArtistDetail
@@ -70,11 +68,9 @@ struct ArtistInfoSheet: View {
         .frame(width: 500, height: 560)
     }
 
-    // MARK: Header Bar
-
     private var headerBar: some View {
         HStack {
-            Text("Сведения об исполнителе".localized)
+            Text("Artist Information".localized)
                 .font(.headline)
             Spacer()
             Button {
@@ -88,14 +84,12 @@ struct ArtistInfoSheet: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
-            .help("Закрыть".localized)
-            .accessibilityLabel("Закрыть".localized)
+            .help("Close".localized)
+            .accessibilityLabel("Close".localized)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
     }
-
-    // MARK: Profile
 
     private var heroProfile: some View {
         HStack(spacing: 16) {
@@ -105,38 +99,36 @@ struct ArtistInfoSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(artistName)
                     .font(.title2.bold())
-                Text(roleLabel ?? "Исполнитель".localized)
+                Text(roleLabel ?? "Artist".localized)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    // MARK: Statistics
-
     private var statisticsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Медиатека".localized)
+            Text("Library".localized)
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 14) {
                 HStack(spacing: 16) {
-                    statTile(label: "Альбомы".localized, value: "\(albums.count)")
-                    statTile(label: "Песни".localized, value: "\(allSongs.count)")
+                    statTile(label: "Albums".localized, value: "\(albums.count)")
+                    statTile(label: "Songs".localized, value: "\(allSongs.count)")
                     if totalDurationSeconds > 0 {
                         let duration = Player.format(seconds: Double(totalDurationSeconds))
-                        statTile(label: "Длительность".localized, value: duration)
+                        statTile(label: "Duration".localized, value: duration)
                     }
                 }
 
                 if yearsRange != nil || totalPlays > 0 {
                     HStack(spacing: 16) {
                         if let yearsRange {
-                            statTile(label: "Годы активности".localized, value: yearsRange)
+                            statTile(label: "Active Years".localized, value: yearsRange)
                         }
                         if totalPlays > 0 {
-                            statTile(label: "Прослушиваний".localized, value: "\(totalPlays)")
+                            statTile(label: "Plays".localized, value: "\(totalPlays)")
                         }
                     }
                 }
@@ -157,11 +149,9 @@ struct ArtistInfoSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: Genres
-
     private var genresSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Жанры".localized)
+            Text("Genres".localized)
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
 
@@ -177,11 +167,9 @@ struct ArtistInfoSheet: View {
         }
     }
 
-    // MARK: Biography
-
     private func biographySection(_ bio: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Биография".localized)
+            Text("Biography".localized)
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
 
@@ -206,13 +194,10 @@ struct ArtistInfoSheet: View {
                 with: "[Read more on Last.fm](\(lastFm))"
             )
         }
-        // Strip remaining HTML tags
         text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return LocalizedStringKey(text)
     }
-
-    // MARK: Links
 
     private var linksSection: some View {
         HStack(spacing: 12) {
@@ -232,7 +217,6 @@ struct ArtistInfoSheet: View {
     }
 }
 
-/// Simple flow layout container for capsule tags.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 

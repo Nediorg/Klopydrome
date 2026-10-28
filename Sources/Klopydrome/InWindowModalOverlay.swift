@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Shared styling for centered elevated modal inspection cards.
 struct InWindowModalCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -15,7 +14,6 @@ struct InWindowModalCardModifier: ViewModifier {
             .shadow(color: .black.opacity(0.35), radius: 30, x: 0, y: 12)
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .onTapGesture {
-                // Absorb taps on background/padding of the card so backdrop doesn't receive them
             }
     }
 }
@@ -26,7 +24,6 @@ extension View {
     }
 }
 
-/// An Equatable action wrapper so dismissal interceptors can be propagated via SwiftUI preferences.
 struct InWindowModalAttemptDismissAction: Equatable {
     let id: String
     let action: () -> Void
@@ -41,8 +38,6 @@ struct InWindowModalAttemptDismissAction: Equatable {
     }
 }
 
-/// Preference key enabling content inside an in-window modal to intercept
-/// dismissal attempts (e.g. to prompt the user before discarding unsaved edits).
 struct InWindowModalAttemptDismissKey: PreferenceKey {
     static var defaultValue: InWindowModalAttemptDismissAction?
     static func reduce(
@@ -53,10 +48,6 @@ struct InWindowModalAttemptDismissKey: PreferenceKey {
     }
 }
 
-/// A centered in-window modal card presentation with an interactive dimmed backdrop.
-///
-/// Backdrop strictly transitions with `.opacity` and never scales.
-/// Card transitions with `.opacity.combined(with: .scale(scale: 0.96))`.
 struct InWindowModalOverlay<Content: View>: View {
     @Binding var isPresented: Bool
     var onAttemptDismiss: (() -> Void)?
@@ -127,10 +118,6 @@ struct InWindowModalOverlay<Content: View>: View {
     }
 }
 
-/// An item-based in-window modal card overlay with state retention during exit animation.
-///
-/// Keeps `retainedItem` populated while the 0.2s exit animation runs so that
-/// the card content does not vanish or encounter `nil` state before it finishes fading and scaling down.
 struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
     @Binding var item: Item?
     var onAttemptDismiss: (() -> Void)?
@@ -217,11 +204,7 @@ struct InWindowModalItemOverlay<Item: Identifiable, Content: View>: View {
     }
 }
 
-// MARK: - View Extension API
-
 extension View {
-    /// Allows a view presented inside an in-window modal to intercept backdrop taps
-    /// and Escape key presses (e.g. confirming discard of unsaved changes).
     func onInWindowModalAttemptDismiss(id: String = "default", _ action: @escaping () -> Void) -> some View {
         preference(
             key: InWindowModalAttemptDismissKey.self,
@@ -229,7 +212,6 @@ extension View {
         )
     }
 
-    /// Presents an in-window modal card overlay using a Boolean binding.
     func inWindowModal<Content: View>(
         isPresented: Binding<Bool>,
         onAttemptDismiss: (() -> Void)? = nil,
@@ -240,8 +222,6 @@ extension View {
         }
     }
 
-    /// Presents an in-window modal card overlay using an optional Identifiable item binding,
-    /// retaining the item during dismissal animations.
     func inWindowModal<Item: Identifiable, Content: View>(
         item: Binding<Item?>,
         onAttemptDismiss: (() -> Void)? = nil,

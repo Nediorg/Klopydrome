@@ -1,10 +1,5 @@
 import Foundation
 
-/// Local playback choices saved only when the app terminates normally.
-///
-/// These values deliberately live outside `ServerConfig`: they are app-wide UI
-/// choices, not server-profile settings, and updating the volume slider must
-/// never write to the server configuration.
 struct PlaybackExitPreferences: Equatable {
     static let volumeKey = "playbackExitVolume"
     static let shuffleEnabledKey = "playbackExitShuffleEnabled"

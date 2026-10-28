@@ -1,6 +1,5 @@
 import Foundation
 
-/// Top-level envelope every Subsonic JSON response is wrapped in.
 public struct SubsonicResponse: Decodable {
     public let subsonicResponse: SubsonicEnvelope
 
@@ -9,8 +8,6 @@ public struct SubsonicResponse: Decodable {
     }
 }
 
-/// The inner `subsonic-response` object. All payload keys are optional so a single
-/// decoder can be shared across endpoints.
 public struct SubsonicEnvelope: Decodable {
     public let status: String
     public let version: String?
@@ -19,7 +16,6 @@ public struct SubsonicEnvelope: Decodable {
     public let openSubsonic: Bool?
     public let error: SubsonicErrorPayload?
 
-    // Payloads
     public let albumList2: AlbumList?
     public let album: AlbumDetail?
     public let song: SubsonicSong?
@@ -344,18 +340,14 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
         return String(format: "Track %02d", track ?? 0)
     }
 
-    /// Canonical "Artist — Album" subtitle template shared by every now-playing
-    /// surface (LCD, mini player, queue, song rows).
     public var displaySubtitle: String {
         [artist, album].compactMap { $0 }.joined(separator: " — ")
     }
 
-    /// Effective album artist name, falling back to track artist or unknown.
     public var effectiveAlbumArtist: String {
         albumArtist ?? artist ?? "Unknown Artist"
     }
 
-    /// Whether this track belongs to a compilation / various artists album.
     public var isVariousArtists: Bool {
         guard let albumArtist else { return false }
         let lower = albumArtist.lowercased()
@@ -463,8 +455,6 @@ public struct ArtistDetail: Codable, Hashable, Identifiable {
     public let artistImageUrl: String?
     public let starred: String?
     public let album: [SubsonicAlbum]?
-    /// OpenSubsonic role tags (`artist`, `albumartist`, `composer`, …). Lets the
-    /// UI label an artist by what they actually do instead of assuming "artist".
     public let roles: [String]?
     public init(id: String, name: String? = nil, coverArt: String? = nil, albumCount: Int? = nil,
                 artistImageUrl: String? = nil, starred: String? = nil, album: [SubsonicAlbum]? = nil,

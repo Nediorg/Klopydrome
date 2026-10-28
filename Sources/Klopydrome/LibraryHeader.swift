@@ -41,7 +41,6 @@ struct LibraryHeader<MenuContent: View>: View {
                 Text(title.localized)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
-                    // Keep clear of the inline search field / menu cluster at the edges.
                     .padding(.horizontal, 90)
                     .opacity(searchVisible ? 0 : 1)
                     .animation(.easeInOut(duration: 0.15), value: searchVisible)
@@ -54,12 +53,9 @@ struct LibraryHeader<MenuContent: View>: View {
                         .controlSize(.small)
                         .frame(width: 26, height: 26)
                         .transition(.opacity)
-                        .help("Загрузка".localized)
-                        .accessibilityLabel("Загрузка".localized)
+                        .help("Loading".localized)
+                        .accessibilityLabel("Loading".localized)
                 }
-                // Inline search field appears on the right of the header,
-                // replacing the magnifier button; the sort menu shifts to the
-                // far right.
                 if searchVisible {
                     searchFieldInput
                 }
@@ -79,8 +75,8 @@ struct LibraryHeader<MenuContent: View>: View {
                     .tint(Color.secondary)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
-                    .help("Параметры".localized)
-                    .accessibilityLabel("Параметры".localized)
+                    .help("Settings".localized)
+                    .accessibilityLabel("Settings".localized)
                 }
             }
         }
@@ -92,7 +88,6 @@ struct LibraryHeader<MenuContent: View>: View {
             }
         }
         .background {
-            // Global Cmd+F keyboard shortcut trigger
             Button("") {
                 withAnimation(Motion.spring(Motion.expand)) {
                     searchVisible = true
@@ -105,7 +100,6 @@ struct LibraryHeader<MenuContent: View>: View {
         }
     }
 
-    /// Static search/cancel button that stays fixed in place without sliding animation.
     private var searchToggleButton: some View {
         Button {
             withAnimation(Motion.spring(Motion.expand)) {
@@ -129,12 +123,11 @@ struct LibraryHeader<MenuContent: View>: View {
         .buttonStyle(.plain)
         .frame(width: 26, height: 26)
         .hoverBrighten()
-        .help(searchVisible ? "Закрыть поиск".localized : "Поиск".localized)
-        .accessibilityLabel(searchVisible ? "Закрыть поиск".localized : "Поиск".localized)
+        .help(searchVisible ? "Close Search".localized : "Search".localized)
+        .accessibilityLabel(searchVisible ? "Close Search".localized : "Search".localized)
         .animation(nil, value: searchVisible)
     }
 
-    /// Inline search field; slides out with a clipping mask to the left of the static toggle button.
     private var searchFieldInput: some View {
         HStack(spacing: 6) {
             if let filteredCount, let totalCount, !searchText.isEmpty {
@@ -145,7 +138,7 @@ struct LibraryHeader<MenuContent: View>: View {
                     .padding(.trailing, 2)
             }
 
-            TextField("Поиск".localized, text: $searchText)
+            TextField("Search".localized, text: $searchText)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
                 .controlSize(.small)

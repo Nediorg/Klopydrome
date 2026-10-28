@@ -2,7 +2,6 @@ import SwiftUI
 import AppKit
 import NavidromeClient
 
-/// Table column identifiers for the Songs tab.
 enum SongColumn: String, CaseIterable, Hashable, Identifiable {
     case title
     case cloud
@@ -21,29 +20,27 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Columns shown by default (matches Apple Music layout).
     static let defaults: Set<SongColumn> = [.title, .cloud, .duration, .artist, .album, .genre, .favorite, .plays]
 
     var title: String {
         switch self {
-        case .title: return "Название".localized
-        case .cloud: return "Загрузка в облако".localized
-        case .duration: return "Время".localized
-        case .artist: return "Артист".localized
-        case .album: return "Альбом".localized
-        case .albumArtist: return "Исполнитель альбома".localized
-        case .genre: return "Жанр".localized
-        case .favorite: return "Избранное".localized
-        case .plays: return "Прослушиваний".localized
-        case .year: return "Год".localized
-        case .composer: return "Композитор".localized
-        case .bitrate: return "Битрейт".localized
-        case .rating: return "Рейтинг".localized
-        case .added: return "Добавлено".localized
+        case .title: return "Title".localized
+        case .cloud: return "Cloud Download".localized
+        case .duration: return "Time".localized
+        case .artist: return "Artist".localized
+        case .album: return "Album".localized
+        case .albumArtist: return "Album artist".localized
+        case .genre: return "Genre".localized
+        case .favorite: return "Favorite".localized
+        case .plays: return "Plays".localized
+        case .year: return "Year".localized
+        case .composer: return "Composer".localized
+        case .bitrate: return "Bitrate".localized
+        case .rating: return "Rating".localized
+        case .added: return "Added".localized
         }
     }
 
-    /// Header text/icon for TableColumn. Cloud and favorite show SF symbols instead of text.
     var headerText: Text {
         switch self {
         case .cloud:
@@ -55,15 +52,10 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Apple Music header look: small, regular weight, secondary colour.
-    /// NOTE: SwiftUI `Table` may ignore some of these on certain macOS builds;
-    /// if so, the header must be restyled via NSTableHeaderView instead.
     private static func styledHeader(_ text: Text) -> Text {
-        text.font(.system(size: 11)).fontWeight(.regular).foregroundStyle(.secondary)
+        text.font(.caption).fontWeight(.regular).foregroundStyle(.secondary)
     }
 
-    /// Numeric columns are right-aligned (header included) like Apple Music;
-    /// icon columns are centred. Requires macOS 14.4+ (`TableColumnAlignment`).
     var alignment: TableColumnAlignment {
         switch self {
         case .duration, .plays, .year, .bitrate: return .trailing
@@ -72,7 +64,6 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Content alignment for SwiftUI cell views inside the column.
     var contentAlignment: Alignment {
         switch self {
         case .duration, .plays, .year, .bitrate: return .trailing
@@ -81,7 +72,6 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Sort comparator for this column's key path.
     var comparator: KeyPathComparator<SubsonicSong> {
         switch self {
         case .title: return KeyPathComparator(\.title)
@@ -129,10 +119,6 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
-/// Sortable, configurable table of songs (Apple Music Songs tab). Column
-/// visibility is handled natively via `columnCustomization` — the user
-/// right-clicks a column header to show/hide/reorder columns.
-///
 /// The rows handed to `Table` are a lazy window (`displayedSongs`: a prefix of
 /// `songs`, grown as its tail becomes visible). SwiftUI's `Table` materializes
 /// every row given to it on the main thread, so feeding it all 15k rows at once
@@ -146,11 +132,8 @@ struct SongTable: View {
 
     @Environment(AppState.self) private var app
 
-    /// Rows per render-window step. 500 rows provides 11,000pt of scroll runway,
-    /// preventing hitches during fast trackpad flings.
     private let pageSize = 500
 
-    /// Render window size; first `displayedCount` rows of `songs` are shown.
     @State private var displayedCount: Int = 0
     @State private var displayedSongsCache: [SubsonicSong] = []
     private var displayedSongs: [SubsonicSong] { displayedSongsCache }
@@ -159,7 +142,6 @@ struct SongTable: View {
         displayedSongsCache = Array(songs.prefix(displayedCount))
     }
 
-    /// Tracks the selected rows so left-click selects and multi-select works.
     @State private var selection = Set<SubsonicSong.ID>()
     @State private var hoverManager = RowHoverManager()
 
@@ -190,8 +172,6 @@ struct SongTable: View {
             }
         }
         .onAppear {
-            // Start with a full page instead of an empty table until the
-            // first scroll grows the window.
             displayedCount = min(pageSize, songs.count)
             updateDisplayedSongs()
         }
@@ -200,20 +180,11 @@ struct SongTable: View {
             updateDisplayedSongs()
         }
         .onChange(of: sortOrder) {
-            // Reset to a single page on re-sort: `Table` re-sorts the handed-in
-            // array synchronously, and if the window had grown to the whole
-            // library that would re-materialize every row on the main thread —
-            // the exact freeze we're avoiding. `SongsView` re-sorts the full
-            // library off-main and lands a fresh page.
             hoverManager.clearHover()
             displayedCount = min(pageSize, songs.count)
             updateDisplayedSongs()
         }
-        // Light-gray selection accent (matches the sidebar) instead of the red
-        // accent, so a selected row reads as a neutral highlight, not a colored one.
         .tint(AMColor.sidebarSelection)
-        // Apple Music-style 22 pt row height plus native AppKit hover tracking
-        // over the backing NSTableView.
         .background(
             TableTweaks(
                 songCount: displayedSongs.count,
@@ -226,26 +197,19 @@ struct SongTable: View {
                 }
             )
         )
-        // `contextMenu(forSelectionType:)` auto-selects the clicked row (and lets
-        // Cmd/Shift multi-select), so the menu always has a concrete target.
-        // Pass `ids` (the current right-clicked selection) rather than the `selection`
-        // @State, which may lag by one frame if the click didn't extend an existing selection.
         .contextMenu(forSelectionType: SubsonicSong.ID.self) { ids in
             if let id = ids.first, let song = songs.first(where: { $0.id == id }) {
                 SongContextMenu(song: song, songs: songs, selection: ids, app: app)
             }
         } primaryAction: { ids in
-            // Double-click plays the whole contiguous run starting at the row.
             play(ids)
         }
     }
 
-    /// Plays the selected rows in table order (multi-select), or just the one
-    /// row if a single row is selected.
     private func play(_ ids: Set<SubsonicSong.ID>) {
         let run = songs.filter { ids.contains($0.id) }
-        guard let first = run.first, let idx = songs.firstIndex(where: { $0.id == first.id }) else { return }
-        app.play(songs, at: idx)
+        guard let first = run.first else { return }
+        app.play(first, in: songs)
     }
 
     fileprivate static func addedDateText(_ iso: String?) -> String {
@@ -253,10 +217,6 @@ struct SongTable: View {
     }
 }
 
-/// Populates a song's right-click menu in the Songs table. Shared with other
-/// lists (albums, playlists) via `Components.SongRow`, this version plays from
-/// the surrounding table context so "Слушать" also works when the row wasn't
-/// pre-selected.
 private struct SongContextMenu: View {
     let song: SubsonicSong
     let songs: [SubsonicSong]
@@ -271,22 +231,13 @@ private struct SongContextMenu: View {
             song: song,
             selection: songs.filter { ids.contains($0.id) },
             onPlay: {
-                // Play the selected rows in table order; single selection plays its run.
                 let run = songs.filter { ids.contains($0.id) }
-                if let first = run.first, let idx = songs.firstIndex(where: { $0.id == first.id }) {
-                    app.play(songs, at: idx)
-                } else {
-                    app.play([song])
-                }
+                app.play(run.first ?? song, in: songs)
             }
         )
     }
 }
 
-/// Uniform cell for a Song table column; renders per column type so every
-/// `TableColumn` shares one content type (required by `TableColumnForEach`).
-/// Takes `app` explicitly (not from `@Environment`) because Table cells are
-/// hosted in an NSTableView that doesn't reliably propagate the environment.
 private struct SongColumnCell: View {
     let column: SongColumn
     let song: SubsonicSong
@@ -369,7 +320,6 @@ private struct SongColumnCell: View {
     }
 }
 
-/// Ellipsis actions button, always visible, initialized only on click.
 private struct TitleEllipsisButton: View {
     let song: SubsonicSong
     let app: AppState
@@ -385,7 +335,6 @@ private struct TitleEllipsisButton: View {
     }
 }
 
-/// Isolated favorite button cell so only this small view re-renders on hover changes.
 private struct FavoriteCell: View {
     let song: SubsonicSong
     let app: AppState
@@ -396,8 +345,6 @@ private struct FavoriteCell: View {
     }
 }
 
-/// Isolated cloud/download status cell so caching and downloading state changes
-/// only re-render this cell rather than the entire row.
 private struct CloudCell: View {
     let song: SubsonicSong
     let app: AppState

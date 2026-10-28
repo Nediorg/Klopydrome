@@ -2,7 +2,6 @@ import Foundation
 import NavidromeClient
 import Security
 
-/// Minimal Keychain wrapper to keep the server password out of UserDefaults.
 enum KeychainStore {
     private static let service = "NavidromeSwift"
 

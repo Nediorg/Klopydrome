@@ -1,19 +1,16 @@
 import SwiftUI
 
-/// A compact status row for the Discord Rich Presence settings section. Kept in
-/// its own file so `AppSettingsView` stays under the SwiftLint file-length
-/// threshold while the connection state remains visible in Settings.
 struct DiscordStatusRow: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
-        LabeledContent("Статус") {
+        LabeledContent("Status".localized) {
             Text(app.discordConnectionStatus.label.localized)
                 .foregroundStyle(statusColor)
         }
         .help(
-            "Текущее состояние соединения с Discord. Если активности нет, "
-                + "проверьте, что Discord запущен и Application ID верный."
+            "Current Discord connection status. If there is no activity, "
+                + "check that Discord is running and the Application ID is correct.".localized
         )
     }
 

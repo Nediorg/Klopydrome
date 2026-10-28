@@ -1,10 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Preference carrying each lyric line's frame in the scroll content's own
-/// coordinate space. Content space is stable while scrolling (it is the
-/// document's space, not the viewport's), so the measured frames stay valid
-/// for the whole song.
 struct LyricsLineFrameKey: PreferenceKey {
     static let defaultValue: [Int: CGRect] = [:]
     static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
@@ -12,22 +8,6 @@ struct LyricsLineFrameKey: PreferenceKey {
     }
 }
 
-/// Invisible zero-size view placed inside the lyrics `ScrollView`'s content.
-/// Its coordinator grabs the backing `NSScrollView` via `enclosingScrollView`
-/// and drives the follow glide by writing the clip bounds every tick.
-/// SwiftUI's own programmatic scroll paths — `scrollTo`, writes to a
-/// `scrollPosition` binding, even `.animation(value:)` on the binding — all
-/// squash the animation to a fixed fast (~100ms) scroll animation regardless
-/// of the requested animation, which reads as a snap. `NSAnimationContext` +
-/// `animator()` gets the duration right but runs on AppKit's timer (~30Hz),
-/// which reads as a stuttery glide. Writing each eased position per tick
-/// directly is the way to get a genuinely smooth, duration-controlled glide.
-///
-/// Two drivers race to own the glide: a `CADisplayLink` (macOS 14+,
-/// `NSView.displayLink`) ticks at the display's refresh rate — vsync-smooth in
-/// the running app — while a 1/60s fallback timer covers contexts where the
-/// link never fires (headless tests, occluded windows). Whichever ticks first
-/// cancels the other.
 struct LyricsScrollAnimator: NSViewRepresentable {
     @Binding var coordinator: LyricsScrollAnimator.Coordinator?
     var onUserScrollChange: ((Bool) -> Void)?
@@ -50,8 +30,6 @@ struct LyricsScrollAnimator: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject {
-        /// The zero-size view hosted inside the scroll content; its superview
-        /// chain reaches the SwiftUI scroll view's backing `NSScrollView`.
         weak var hostedView: NSView?
         var onUserScrollChange: ((Bool) -> Void)?
         var lineFrames: [Int: CGRect] = [:]
@@ -96,8 +74,6 @@ struct LyricsScrollAnimator: NSViewRepresentable {
             stopDrivers()
         }
 
-        /// Glide the viewport so content offset `offsetY` (in flipped content
-        /// coordinates) is at the top of the clip, over `duration`.
         func animate(to offsetY: CGFloat, duration: TimeInterval) {
             guard let scrollView else { return }
             let flipped = scrollView.documentView?.isFlipped ?? true

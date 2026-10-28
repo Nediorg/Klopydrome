@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// A single song row in the downloaded offline library section of the downloads popover.
 struct DownloadedSongRow: View {
     let song: SubsonicSong
     let isSelected: Bool
@@ -27,13 +26,13 @@ struct DownloadedSongRow: View {
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(song.displayTitle)
-                        .font(.system(size: 12, weight: isCurrentSong ? .semibold : .medium))
-                        .foregroundStyle(Color.primary)
+                        .font(AMFont.miniTitle)
+                        .foregroundStyle(isCurrentSong ? AMColor.accent : Color.primary)
                         .lineLimit(1)
 
                     Text(song.artist ?? "")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
+                        .font(AMFont.miniSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -71,10 +70,15 @@ struct DownloadedSongRow: View {
             CoverArtView(coverArt: song.coverArt, size: 34)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
-            if isHovered || isCurrentSong {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.black.opacity(0.45))
-                    .frame(width: 34, height: 34)
+            if isCurrentSong && !isHovered {
+                Color.black.opacity(0.35)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+            } else if isHovered {
+                Color.black.opacity(0.35)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
                 Button {
                     handlePlay()
@@ -84,7 +88,7 @@ struct DownloadedSongRow: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
-                .help(isCurrentSong && app.player.isPlaying ? "Пауза".localized : "Слушать".localized)
+                .help(isCurrentSong && app.player.isPlaying ? "Pause".localized : "Play".localized)
             }
         }
         .frame(width: 34, height: 34)
@@ -112,18 +116,13 @@ struct DownloadedSongRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Удалить загрузку".localized)
-            .accessibilityLabel("Удалить загрузку".localized)
+            .help("Delete Download".localized)
+            .accessibilityLabel("Delete Download".localized)
         } else {
             HStack(spacing: 4) {
-                if isCurrentSong {
-                    Image(systemName: app.player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
                 if let duration = song.duration {
                     Text(Player.format(seconds: Double(duration)))
-                        .font(.caption.monospacedDigit())
+                        .font(AMFont.miniSubtitle.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }

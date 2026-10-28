@@ -4,8 +4,6 @@ import NavidromeClient
 import os
 
 extension AppState {
-    /// Confirms whether a server-side action should proceed while in offline mode.
-    /// Returns `true` if online, if warnings are suppressed, or if the user clicks "Continue".
     @MainActor
     func confirmOfflineAction() -> Bool {
         guard isOfflineSession else { return true }
@@ -14,15 +12,15 @@ extension AppState {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Сервер офлайн".localized
-        let msg = "После переподключения некоторые изменения могут быть не применены. Всё равно продолжить?".localized
+        alert.messageText = "Server Offline".localized
+        let msg = "After reconnecting, some changes may not be applied. Continue anyway?".localized
         alert.informativeText = msg
-        alert.addButton(withTitle: "Продолжить".localized)
-        let cancel = alert.addButton(withTitle: "Отмена".localized)
+        alert.addButton(withTitle: "Continue".localized)
+        let cancel = alert.addButton(withTitle: "Cancel".localized)
         cancel.keyEquivalent = "\u{1b}"
 
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать".localized
+        alert.suppressionButton?.title = "Do not ask again".localized
 
         let response = alert.runModal()
         if alert.suppressionButton?.state == .on {
@@ -32,7 +30,6 @@ extension AppState {
         return response == .alertFirstButtonReturn
     }
 
-    /// Helper to access or lazily create the offline mutations store.
     func ensureOfflineMutationStore() -> OfflineMutationStore? {
         if let offlineMutationStore { return offlineMutationStore }
         let hostCandidate = URL(string: serverConfig.url)?.host ?? currentOfflineHost
@@ -42,7 +39,6 @@ extension AppState {
         return store
     }
 
-    /// Restores any queued offline stars/ratings into in-memory overrides.
     func restorePendingOfflineMutations() async {
         guard let store = ensureOfflineMutationStore() else { return }
         let mutations = await store.currentMutations()
@@ -162,22 +158,20 @@ extension AppState {
         case offlineDisabled
     }
 
-    /// Builds a user-friendly list of categories for queued offline actions.
     func pendingActionsSummary(for mutations: OfflineMutations) -> [String] {
         var summary: [String] = []
         if !mutations.playlists.isEmpty {
-            summary.append("Изменение или добавление плейлистов".localized)
+            summary.append("Playlist changes or additions".localized)
         }
         if !mutations.stars.isEmpty {
-            summary.append("Отметки «Избранное»".localized)
+            summary.append("Favorites".localized)
         }
         if !mutations.ratings.isEmpty {
-            summary.append("Оценки треков".localized)
+            summary.append("Track ratings".localized)
         }
         return summary
     }
 
-    /// Displays an NSAlert asking the user whether to apply pending offline mutations.
     @MainActor
     func promptPendingMutationsConfirmation(
         mutations: OfflineMutations,
@@ -186,7 +180,7 @@ extension AppState {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Локальные изменения".localized
+        alert.messageText = "Local Changes".localized
 
         let actions = pendingActionsSummary(for: mutations)
         let bulletList = actions.map { "• \($0)" }.joined(separator: "\n")
@@ -194,19 +188,19 @@ extension AppState {
         let intro: String
         switch effectiveContext {
         case .previousSession:
-            intro = "С прошлого сеанса остались локальные изменения:".localized
+            intro = "Local changes from the previous session were not synced:".localized
         case .offlineDisabled:
-            intro = "В офлайн-режиме накопились локальные изменения:".localized
+            intro = "Local changes accumulated while offline:".localized
         }
-        let question = "Применить их на сервере?".localized
+        let question = "Apply them to the server?".localized
         alert.informativeText = "\(intro)\n\n\(bulletList)\n\n\(question)"
 
-        alert.addButton(withTitle: "Применить".localized)
-        let discardButton = alert.addButton(withTitle: "Не применять".localized)
+        alert.addButton(withTitle: "Apply".localized)
+        let discardButton = alert.addButton(withTitle: "Don't Apply".localized)
         discardButton.keyEquivalent = "\u{1b}"
 
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать".localized
+        alert.suppressionButton?.title = "Do not ask again".localized
 
         let response = alert.runModal()
         if alert.suppressionButton?.state == .on {
@@ -222,7 +216,6 @@ extension AppState {
         }
     }
 
-    /// Replays queued offline mutations to the server upon reconnection.
     func flushOfflineMutations(
         promptUser: Bool = true,
         context: PendingMutationsContext? = nil

@@ -1,8 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Single song detail (reached from a search jump/context). Shows artwork,
-/// quick transport, offline download, and a full technical-metadata grid.
 struct SongDetailView: View {
     let song: SubsonicSong
     @Environment(AppState.self) private var app
@@ -36,9 +34,9 @@ struct SongDetailView: View {
                 }
                 HStack(spacing: 12) {
                     Button {
-                        app.play([song], at: 0)
+                        app.play(song)
                     } label: {
-                        Label("Слушать", systemImage: "play.fill")
+                        Label("Play".localized, systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     if isDownloading {
@@ -48,7 +46,7 @@ struct SongDetailView: View {
                             ProgressView().controlSize(.small).frame(width: 24, height: 24)
                         }
                         .buttonStyle(.plain)
-                        .help("Отменить загрузку".localized)
+                        .help("Cancel Download".localized)
                     } else {
                         Button {
                             if app.isCached(song) {
@@ -57,8 +55,10 @@ struct SongDetailView: View {
                                 app.cacheSong(song)
                             }
                         } label: {
-                            Label(app.isCached(song) ? "Загружено" : "Загрузить",
-                                  systemImage: app.isCached(song) ? "checkmark.circle.fill" : "arrow.down.circle")
+                            Label(
+                                (app.isCached(song) ? "Downloaded" : "Download").localized,
+                                systemImage: app.isCached(song) ? "checkmark.circle.fill" : "arrow.down.circle"
+                            )
                         }
                         .buttonStyle(.bordered)
                     }

@@ -1,6 +1,5 @@
 import Foundation
 
-/// Catalogue loaded from Resources/Licenses.json — edit the JSON, not Swift.
 enum LicenseData {
     struct Entry: Identifiable, Decodable {
         let id: String

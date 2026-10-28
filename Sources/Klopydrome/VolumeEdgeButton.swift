@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// An icon-only volume action that brightens only its symbol on hover.
 struct VolumeEdgeButton: View {
     private static let hitBoxSide: CGFloat = 28
 
@@ -17,7 +16,6 @@ struct VolumeEdgeButton: View {
                 .font(.system(size: 11))
                 .foregroundStyle(isHovering ? Color.primary.opacity(0.9) : Color.secondary)
                 .offset(x: symbolOffset)
-                // Both edge actions use the same larger rectangular hit area.
                 .frame(width: Self.hitBoxSide, height: Self.hitBoxSide)
                 .contentShape(Rectangle())
         }

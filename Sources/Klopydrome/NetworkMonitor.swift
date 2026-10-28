@@ -2,8 +2,6 @@ import Foundation
 import Network
 import Observation
 
-/// Monitors network interface connectivity to enable automatic reconnection
-/// when network reachability transitions to satisfied.
 @Observable
 final class NetworkMonitor: @unchecked Sendable {
     static let shared = NetworkMonitor()
@@ -35,7 +33,6 @@ final class NetworkMonitor: @unchecked Sendable {
         lock.withLock { _isConstrained || _isExpensive }
     }
 
-    /// Closure invoked on MainActor when network connectivity transitions to satisfied.
     var onConnectivityRestored: (@MainActor () -> Void)?
 
     private init() {

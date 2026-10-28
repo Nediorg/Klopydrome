@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Horizontal shelf of an artist's other albums, displayed at the bottom of AlbumDetailView.
 struct MoreByArtist: View {
     let artistId: String
     let artistName: String
@@ -43,6 +42,8 @@ struct MoreByArtist: View {
                         }
                         .padding(.bottom, 4)
                     }
+                    .scrollClipDisabled()
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .task { await load() }

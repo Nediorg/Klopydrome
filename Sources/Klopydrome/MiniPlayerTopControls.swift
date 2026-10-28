@@ -68,8 +68,8 @@ struct MiniPlayerTopControls: View {
         }
         .buttonStyle(.plain)
         .onHover { hoveredControl = $0 ? .volume : nil }
-        .help(showingVolume ? "Скрыть громкость".localized : "Громкость".localized)
-        .accessibilityLabel(showingVolume ? "Скрыть громкость".localized : "Громкость".localized)
+        .help(showingVolume ? "Hide volume".localized : "Volume".localized)
+        .accessibilityLabel(showingVolume ? "Hide volume".localized : "Volume".localized)
     }
 
     private func presentVolumeSlider() {

@@ -1,7 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Drag payload for moving rule/group nodes between slots in the rule editor.
 struct QueryDrag: Codable, Transferable, Hashable {
     let nodeID: UUID
     var isGroup: Bool
@@ -10,28 +9,22 @@ struct QueryDrag: Codable, Transferable, Hashable {
     }
 }
 
-// MARK: - Sort options
-
-/// Sort options exposed by the rule editor. `json` is the base server key;
-/// the picker direction is emitted as a leading "-" by `json(descending:)`.
-/// `random` is a special shuffle pseudo-sort that ignores the direction toggle.
 enum SmartSort: String, CaseIterable {
     case title, artist, album, year, duration, playCount, rating, random
 
     var label: String {
         switch self {
-        case .title: return "По названию"
-        case .artist: return "По исполнителю"
-        case .album: return "По альбому"
-        case .year: return "По году"
-        case .duration: return "По длительности"
-        case .playCount: return "По прослушиваниям"
-        case .rating: return "По оценке"
-        case .random: return "Случайно"
+        case .title: return "By Title"
+        case .artist: return "By Artist"
+        case .album: return "By Album"
+        case .year: return "By Year"
+        case .duration: return "By Duration"
+        case .playCount: return "By Play Count"
+        case .rating: return "By Rating"
+        case .random: return "Random"
         }
     }
 
-    /// The server sort-field key without a direction prefix.
     var json: String {
         switch self {
         case .title: return "title"
@@ -45,7 +38,6 @@ enum SmartSort: String, CaseIterable {
         }
     }
 
-    /// Direction-aware server sort string (`-year` for descending).
     func json(descending: Bool) -> String {
         if self == .random { return json }
         return (descending ? "-" : "") + json
@@ -58,19 +50,16 @@ enum SmartSort: String, CaseIterable {
         self = parsed
     }
 
-    /// Strips a leading `+`/`-` direction prefix so `-year` parses as `.year`.
     private static func strippedKey(_ json: String) -> String {
         json.first == "-" || json.first == "+" ? String(json.dropFirst()) : json
     }
 }
 
-// MARK: - Preview popover & dismissal
-
 extension SmartPlaylistEditorView {
     var previewContent: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Просмотр".localized)
+                Text("View".localized)
                     .font(.headline)
                 if case .loaded(let songs) = previewState, !songs.isEmpty {
                     Text(L10n.format("format.smartPlaylist.songs", songs.count))
@@ -87,17 +76,17 @@ extension SmartPlaylistEditorView {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 ContentUnavailableView {
-                    Label("Не удалось загрузить".localized, systemImage: "exclamationmark.triangle")
+                    Label("Failed to load".localized, systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Повторить".localized) { preview() }
+                    Button("Retry".localized) { preview() }
                 }
             case .loaded(let songs) where songs.isEmpty:
                 ContentUnavailableView {
-                    Label("Нет совпадений".localized, systemImage: "music.note.list")
+                    Label("No Matches".localized, systemImage: "music.note.list")
                 } description: {
-                    Text("Ни одна песня не подходит под текущие правила.".localized)
+                    Text("No songs match the current rules.".localized)
                 }
             case .loaded(let songs):
                 ScrollView {
@@ -105,11 +94,11 @@ extension SmartPlaylistEditorView {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             QueueTrackRow(
                                 song: song,
-                                isCurrent: app.player.currentSong?.id == song.id
+                                isCurrent: app.player.currentSong?.id == song.id,
+                                showDivider: index < songs.count - 1
                             ) {
                                 app.play(songs, at: index)
                             }
-                            Divider().padding(.leading, 56)
                         }
                     }
                 }

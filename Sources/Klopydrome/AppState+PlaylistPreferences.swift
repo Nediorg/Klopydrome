@@ -2,7 +2,6 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    // MARK: Smart playlists
 
     func loadSmartPlaylists() {
         guard let data = UserDefaults.standard.data(forKey: smartPlaylistsKey),
@@ -36,8 +35,6 @@ extension AppState {
         smartPlaylists[index].name = name
         saveSmartPlaylists()
     }
-
-    // MARK: Followed playlists (local favourites)
 
     func loadFollowedPlaylists() {
         guard let ids = UserDefaults.standard.stringArray(forKey: followedKey) else { return }
@@ -82,8 +79,6 @@ extension AppState {
         }
     }
 
-    /// Queries the server per the playlist's rules and returns matching songs.
-    /// Serialized over to work from a detail view or preview.
     func computeSmartPlaylist(_ playlist: SmartPlaylist) async throws -> [SubsonicSong] {
         guard let engine = smartPlaylistEngine else {
             throw SmartPlaylistError.notConnected
@@ -91,8 +86,6 @@ extension AppState {
         return try await engine.compute(playlist)
     }
 
-    /// Preview a query-tree (AST) without saving: evaluates the predicate
-    /// against the full-library pool honored by the engine.
     func previewSmartQuery(_ query: SmartQuery) async throws -> [SubsonicSong] {
         guard let engine = smartPlaylistEngine else {
             throw SmartPlaylistError.notConnected

@@ -3,8 +3,6 @@ import Foundation
 import MediaPlayer
 import NavidromeClient
 
-// MARK: AVPlayer Management & Observation
-
 extension Player {
     @discardableResult
     func ensureAVPlayer() -> AVPlayer {
@@ -73,8 +71,6 @@ extension Player {
         let item = AVPlayerItem(url: url)
         observeItemStatus(item)
         player.replaceCurrentItem(with: item)
-        // Don't start playing until the item is ready — observeItemStatus fires
-        // applyPendingSeekIfNeeded(), which can begin playback if needed.
         updateNowPlayingInfo()
     }
 
@@ -85,8 +81,6 @@ extension Player {
                 guard let self else { return }
                 if item.status == .readyToPlay {
                     self.applyPendingSeekIfNeeded()
-                    // Start playback only when ready — avoids audio bursts
-                    // during queue restoration (playURL → pause → no audio).
                     if self.isPlaying {
                         self.avPlayer?.play()
                     }
@@ -108,7 +102,6 @@ extension Player {
     }
 
     func handleAVPPeriodicUpdate(_ time: CMTime) {
-        // The MPV engine ticks its own clock via onTimeUpdate.
         if engineKind == .mpv { return }
         guard let avPlayer else { return }
         let pipeSeconds = time.seconds.isFinite ? time.seconds : 0

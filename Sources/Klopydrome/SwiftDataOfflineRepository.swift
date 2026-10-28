@@ -154,8 +154,6 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
     }
 }
 
-// MARK: - Private Helpers
-
 extension SwiftDataOfflineRepository {
     @discardableResult
     private func findOrCreateTrack(

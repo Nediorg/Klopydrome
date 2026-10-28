@@ -1,15 +1,6 @@
 import Foundation
 import NavidromeClient
 
-/// Parses raw LRC text (as returned by the classic `getLyrics` endpoint on some
-/// OpenSubsonic servers, or embedded in a song) into timed lines.
-///
-/// Handles `[mm:ss]`, `[mm:ss.x]`, `[mm:ss.xx]` / `[mm:ss.xxx]` markers (one or
-/// several per line) plus the `[offset:±N]` metadata tag, whose semantics match
-/// `LyricsEntry.offset`: the effective probe time is `audio + offset`, so a
-/// positive offset shifts the highlight EARLIER (baked in as `start - offset`).
-/// Lines with no time marker (metadata such as `[ar:]`, `[ti:]`, blank lines)
-/// are dropped. A blank line with a time marker is retained as a visual pause.
 enum LrcTextParser {
     static func parse(_ text: String) -> [SyncedLine] {
         var offsetMs: Double?
@@ -40,7 +31,6 @@ enum LrcTextParser {
         return timed
     }
 
-    /// Extracts every leading `[mm:ss.fraction]` or `[hh:mm:ss.fraction]` timestamp (in ms) from a line.
     private static func parseTimestamps(from line: Substring) -> [Double] {
         var starts: [Double] = []
         var rest = line[...]
@@ -55,12 +45,10 @@ enum LrcTextParser {
         return starts
     }
 
-    /// Parsed time tag in milliseconds.
     private struct LrcTime {
         let milliseconds: Double
     }
 
-    /// `[hh:]mm:ss[.f]` -> milliseconds. Returns nil when the tag is malformed.
     private static func parseTime(_ tag: Substring) -> LrcTime? {
         let parts = tag.split(separator: ":", omittingEmptySubsequences: false)
         let hours: Double
@@ -108,7 +96,6 @@ enum LrcTextParser {
         return rest
     }
 
-    /// `[offset:±N]` (milliseconds). Returns nil for non-offset tags.
     private static func parseOffset(from line: Substring) -> Double? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard trimmed.hasPrefix("[offset:"), trimmed.hasSuffix("]") else { return nil }

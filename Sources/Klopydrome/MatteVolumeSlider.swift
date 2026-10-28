@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Compact volume control styled as a matte progress track. Unlike the native
-/// slider, its visual track and interactive bounds are identical.
 struct MatteVolumeSlider: View {
     @Binding var value: Float
 
@@ -44,7 +42,7 @@ struct MatteVolumeSlider: View {
         }
         .frame(height: thumbDiameter)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Громкость")
+        .accessibilityLabel("Volume".localized)
         .accessibilityValue("\(Int((value * 100).rounded()))%")
         .accessibilityAdjustableAction { direction in
             let delta: Float = direction == .increment ? 0.05 : -0.05

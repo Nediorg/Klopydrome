@@ -1,22 +1,11 @@
 import SwiftUI
 import NavidromeClient
 
-// MARK: - Track Actions Kit
-
-/// Canonical building blocks for track row action buttons (favorite, download/cloud, playing state).
-/// By isolating observation of dynamic states (`starOverrides`, `downloadingSongIDs`, `cachedStreamKeys`)
-/// inside these leaf views, parent song rows and tables avoid full body invalidation when individual
-/// track states mutate.
-
-/// Style variant for download status button representation.
 enum TrackDownloadStyle {
-    /// SongRow style: `arrow.down.circle` and `checkmark.circle.fill` with bounce animation.
     case roundedCircle
-    /// SongTable style: hierarchical `arrow.down.circle.fill` and clean `checkmark`.
     case tableCell
 }
 
-/// Unified track download button with progress spinner, cancel action, and delete on checkmark click.
 struct TrackDownloadButton: View {
     let song: SubsonicSong
     let app: AppState
@@ -43,8 +32,8 @@ struct TrackDownloadButton: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Отменить загрузку".localized)
-            .accessibilityLabel("Отменить загрузку".localized)
+            .help("Cancel Download".localized)
+            .accessibilityLabel("Cancel Download".localized)
             .frame(width: size, height: size)
         } else if isCachedLocally {
             Button {
@@ -66,8 +55,8 @@ struct TrackDownloadButton: View {
                 }
             }
             .buttonStyle(.plain)
-            .help("Удалить загрузку".localized)
-            .accessibilityLabel("Удалить загрузку".localized)
+            .help("Delete Download".localized)
+            .accessibilityLabel("Delete Download".localized)
             .frame(width: size, height: size)
         } else if isHovered || style == .tableCell {
             if !app.isOfflineSession {
@@ -90,8 +79,8 @@ struct TrackDownloadButton: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .help("Загрузить".localized)
-                .accessibilityLabel("Загрузить".localized)
+                .help("Download".localized)
+                .accessibilityLabel("Download".localized)
                 .frame(width: size, height: size)
             } else {
                 Color.clear.frame(width: size, height: size)
@@ -102,7 +91,6 @@ struct TrackDownloadButton: View {
     }
 }
 
-/// Unified favorite star button with hover visibility and localized accessibility.
 struct TrackFavoriteButton: View {
     let song: SubsonicSong
     let app: AppState
@@ -125,7 +113,7 @@ struct TrackFavoriteButton: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+            .help(isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
             .frame(width: size, height: size)
         } else {
             Color.clear

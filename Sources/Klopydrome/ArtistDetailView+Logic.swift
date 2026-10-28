@@ -144,8 +144,6 @@ extension ArtistDetailView {
         )
     }
 
-    /// Fetches every album of the artist (sequentially batched), returning the
-    /// concatenated songs. Serves the connection-local cache on revisits.
     func allAlbumSongs() async -> [SubsonicSong] {
         if let cached = await app.cache?.cachedDiscography(for: artist.id) {
             return cached

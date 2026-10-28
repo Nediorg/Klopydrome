@@ -3,11 +3,7 @@ import NavidromeClient
 
 // MARK: - Operators
 
-/// Comparison operators for a single rule, matching the "smart playlist"
-/// rule DSL used across the Subsonic ecosystem. `dsl` is the server
-/// operator name.
 enum QueryOperator: String, CaseIterable, Hashable {
-    // swiftlint:disable:next identifier_name
     case `is` = "is"
     case isNot
     case contains
@@ -32,29 +28,28 @@ enum QueryOperator: String, CaseIterable, Hashable {
 
     var label: String {
         switch self {
-        case .is: return "равно"
-        case .isNot: return "не равно"
-        case .contains: return "содержит"
-        case .notContains: return "не содержит"
-        case .startsWith: return "начинается с"
-        case .endsWith: return "заканчивается на"
-        case .gt: return "больше"
-        case .gte: return "не меньше"
-        case .lt: return "меньше"
-        case .lte: return "не больше"
-        case .inTheRange: return "в диапазоне"
-        case .inTheLast: return "за последние (дней)"
-        case .notInTheLast: return "не было за последние (дней)"
-        case .before: return "до даты"
-        case .after: return "после даты"
-        case .inPlaylist: return "в плейлисте"
-        case .notInPlaylist: return "не в плейлисте"
-        case .isMissing: return "пустое / отсутствует"
-        case .isPresent: return "заполнено / есть"
+        case .is: return "equals"
+        case .isNot: return "not equal"
+        case .contains: return "contains"
+        case .notContains: return "does not contain"
+        case .startsWith: return "starts with"
+        case .endsWith: return "ends with"
+        case .gt: return "greater than"
+        case .gte: return "not less than"
+        case .lt: return "less than"
+        case .lte: return "not more than"
+        case .inTheRange: return "in range"
+        case .inTheLast: return "in the last (days)"
+        case .notInTheLast: return "not in the last (days)"
+        case .before: return "before date"
+        case .after: return "after date"
+        case .inPlaylist: return "in playlist"
+        case .notInPlaylist: return "not in playlist"
+        case .isMissing: return "empty / missing"
+        case .isPresent: return "filled / exists"
         }
     }
 
-    /// Text/string operators (LIKE family on the server).
     var isStringLike: Bool {
         switch self {
         case .contains, .notContains, .startsWith, .endsWith: return true
@@ -62,7 +57,6 @@ enum QueryOperator: String, CaseIterable, Hashable {
         }
     }
 
-    /// Operators usable on date fields ({YYYY-MM-DD} range predicates).
     var isDateRange: Bool {
         switch self {
         case .inTheRange, .inTheLast, .notInTheLast, .before, .after: return true
@@ -70,13 +64,10 @@ enum QueryOperator: String, CaseIterable, Hashable {
         }
     }
 
-    /// Whether the rule's expected value is a boolean flag (true/false).
     var expectsBoolean: Bool {
         self == .isMissing || self == .isPresent
     }
 }
-
-// MARK: - Group logic
 
 enum QueryGroupLogic: String, CaseIterable, Hashable {
     case all
@@ -84,18 +75,15 @@ enum QueryGroupLogic: String, CaseIterable, Hashable {
 
     var label: String {
         switch self {
-        case .all: return "Выполняются все"
-        case .any: return "Выполняется любое"
+        case .all: return "All rules match"
+        case .any: return "Any rule matches"
         }
     }
 }
 
-// MARK: - Value
-
 struct QueryValue: Equatable, Hashable {
     let text: String?
     let number: Double?
-    /// `inTheRange` bounds, e.g. numeric [min, max] or date ["YYYY-MM-DD", …].
     let range: [JSONValue]?
 
     init(text: String) { self.text = text; self.number = nil; self.range = nil }
@@ -122,7 +110,6 @@ struct QueryValue: Equatable, Hashable {
         return text ?? ""
     }
 
-    /// Zero text (including all-whitespace) counts as "empty"/unset.
     var isEmpty: Bool {
         if let number { return number == 0 }
         if let range { return range.allSatisfy(\.isEmpty) }
@@ -143,28 +130,15 @@ extension Double {
     }
 }
 
-// MARK: - Rule
-
 struct QueryRule: Equatable, Hashable {
     var field: QueryField
     var op: QueryOperator
     var value: QueryValue
-    /// Raw DSL name of an unknown field kept verbatim (with `field == .custom`)
-    /// so server rules using custom tags round-trip without corruption.
     var customField: String?
 
     static let empty = QueryRule(field: .artist, op: .contains, value: .emptyText)
 }
 
-// MARK: - Fields
-
-// `QueryField` (full server vocabulary) lives in SmartFields.swift.
-
-// MARK: - QueryNode (reference-semantics tree)
-
-/// A node in the query tree. A `group` holds ordered children; a `rule` holds a
-/// predicate. Reference semantics give every node a stable `id`, which SwiftUI's
-/// `.draggable()`/`.dropDestination()` needs for reliable identity across passes.
 final class QueryNode: Identifiable, ObservableObject {
     let id = UUID()
 
@@ -178,7 +152,6 @@ final class QueryNode: Identifiable, ObservableObject {
 
     init(_ kind: Kind) { self.kind = kind }
 
-    /// Deep copy of another node: kind plus recursively copied children.
     convenience init(style: QueryNode) {
         self.init(style.kind)
         children = style.children.map { QueryNode(style: $0) }
@@ -212,8 +185,6 @@ final class QueryNode: Identifiable, ObservableObject {
 
 // MARK: - JSON wire model (server smart-playlist DSL)
 
-/// Single-key object → dynamic coding keys: produces `{ "<key>": value }`
-/// exactly like the server DSL (a group key like "all", or an operator key).
 struct DynKey: CodingKey {
     var intValue: Int? { nil }
     init?(intValue: Int) { nil }
@@ -247,7 +218,6 @@ enum JSONValue: Codable, Equatable, Hashable {
         }
     }
 
-    /// Zero text (including whitespace-only) and zero numbers count as "unset".
     var isEmpty: Bool {
         switch self {
         case .string(let text): return text.trimmingCharacters(in: .whitespaces).isEmpty
@@ -258,8 +228,6 @@ enum JSONValue: Codable, Equatable, Hashable {
     }
 }
 
-/// A node in JSON form: exactly one payload key ("all"/"any" for groups, an
-/// operator name for rules) mapping to either an expression array or `{field:value}`.
 struct QueryExpr: Codable, Equatable, Hashable {
     var isGroup: Bool
     var groupLogic: QueryGroupLogic?
@@ -284,9 +252,6 @@ struct QueryExpr: Codable, Equatable, Hashable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: DynKey.self)
-        // Ignore the SmartQuery meta keys that can sit alongside the root
-        // expression in the same JSON object (sort/limit/limitPercent/offset/
-        // refreshDelay + the legacy liveUpdate/order markers).
         let metaKeys = ["sort", "limit", "limitPercent", "offset", "refreshDelay", "liveUpdate", "order"]
         let keys = c.allKeys.filter { !metaKeys.contains($0.stringValue) }
         guard let key = keys.first else {
@@ -331,9 +296,6 @@ struct QueryExpr: Codable, Equatable, Hashable {
             }
         }
         guard let op, let field, let value else { return false }
-        // A blank text rule (e.g. an untouched "contains") must not match every
-        // song. Numeric values — including 0 for boolean fields like "starred" —
-        // are legitimate comparison values and are never treated as unset.
         if case .string(let s) = value, s.trimmingCharacters(in: .whitespaces).isEmpty {
             return false
         }
@@ -343,9 +305,6 @@ struct QueryExpr: Codable, Equatable, Hashable {
     }
 }
 
-/// The full query document: a root expression plus optional sort/limit and the
-/// server's top-level meta keys (limitPercent/offset/refreshDelay are preserved
-/// on round-trip but not exposed in the editor).
 struct SmartQuery: Codable, Equatable, Hashable {
     var root: QueryExpr
     var sort: String?
@@ -353,9 +312,6 @@ struct SmartQuery: Codable, Equatable, Hashable {
     var limitPercent: Int?
     var offset: Int?
     var refreshDelay: String?
-    /// Server global sort-direction override ("asc"/"desc") that reverses every
-    /// sort field. Passed through for lossless round-trip; the editor re-picks
-    /// per-field direction instead.
     var order: String?
 
     enum StaticKeys: String, CodingKey {
@@ -401,7 +357,6 @@ struct SmartQuery: Codable, Equatable, Hashable {
 
 extension QueryNode {
 
-    /// Build a UI tree from a `SmartQuery`'s root expression.
     convenience init(query: SmartQuery) {
         let root = query.root
         if root.isGroup, let logic = root.groupLogic {
@@ -413,7 +368,6 @@ extension QueryNode {
         }
     }
 
-    /// A bare expression (group or rule) as a standalone node.
     convenience init(expr: QueryExpr) {
         if expr.isGroup, let logic = expr.groupLogic {
             self.init(.group(logic))
@@ -430,7 +384,6 @@ extension QueryNode {
         }
     }
 
-    /// Fill this (group) node's children from a JSON expression.
     func replace(with expr: QueryExpr) {
         children = []
         for child in expr.children {

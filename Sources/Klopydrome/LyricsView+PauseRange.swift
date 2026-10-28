@@ -34,8 +34,6 @@ extension LyricsView {
     }
 }
 
-/// Dedicated subview isolating high-frequency player clock observation so that
-/// `LyricsView.body` does not re-evaluate on every playback tick (4 Hz / 60 Hz).
 struct LyricsClockSynchronizer: View {
     @Environment(AppState.self) private var app
     let onSync: () -> Void

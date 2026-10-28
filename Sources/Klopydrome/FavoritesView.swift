@@ -12,8 +12,6 @@ struct FavoritesView: View {
     }
     @State private var loading = true
     @State private var albumsExpanded = false
-    /// Set when the favorites fetch fails, so an error renders with retry
-    /// instead of a misleading "Нет избранного".
     @State private var loadError: String?
 
     private var isAllEmpty: Bool {
@@ -25,7 +23,7 @@ struct FavoritesView: View {
             AMColor.background.ignoresSafeArea()
 
             if let loadError {
-                LibraryUnavailableView(title: "Не удалось загрузить",
+                LibraryUnavailableView(title: "Failed to load".localized,
                                        systemImage: "wifi.exclamationmark",
                                        message: loadError,
                                        retry: { Task { await load() } })
@@ -33,17 +31,16 @@ struct FavoritesView: View {
             } else if loading && isAllEmpty {
                 favoritesSkeletonView
             } else if isAllEmpty {
-                LibraryUnavailableView(title: "Нет избранного",
+                LibraryUnavailableView(title: "No Favorites".localized,
                                        systemImage: "star",
-                                       message: "Отмечайте песни, альбомы и исполнителей звёздочкой, "
-                                                + "чтобы они появились здесь.")
+                                       message: "Star songs, albums and artists to see them here.".localized)
                     .emptyStatePinnedToTop()
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
                         if !songs.isEmpty {
                             CompactSongsSection(
-                                title: "Песни".localized,
+                                title: "Songs".localized,
                                 titleFont: .title3.bold(),
                                 songs: songs,
                                 subtitle: { $0.artist }
@@ -75,8 +72,6 @@ struct FavoritesView: View {
         }
     }
 
-    /// Fetches starred content only when it has never been loaded, so a revisit
-    /// to the tab is instant. Pull-to-refresh still forces a full reload.
     private func loadIfNeeded() async {
         guard !app.library.favoritesLoaded else { return }
         await load()
@@ -90,43 +85,27 @@ struct FavoritesView: View {
 
     private var artistSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Исполнители".localized)
+            sectionHeader("Artists".localized)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(artists) { artist in
-                        Button {
-                            app.openArtistInLibrary(artist)
-                        } label: {
-                            VStack(spacing: 6) {
-                                CircularArtistArt(name: artist.name, imageURL: artist.artistImageUrl, size: 80)
-                                Text(artist.name)
-                                    .font(.caption)
-                                    .lineLimit(2)
-                                    .frame(width: 80, alignment: .top)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            ArtistContextMenuItems(artist: artist)
-                        }
+                        ArtistTile(artist: artist)
                     }
                 }
                 .padding(.vertical, 4)
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var albumSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
-                withAnimation(Motion.spring(Motion.expand)) {
-                    albumsExpanded.toggle()
-                }
+                albumsExpanded.toggle()
             } label: {
                 HStack(spacing: 6) {
-                    Text("Альбомы".localized)
+                    Text("Albums".localized)
                         .font(.title3.bold())
                     Image(systemName: "chevron.right")
                         .font(.caption)
@@ -136,8 +115,8 @@ struct FavoritesView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(albumsExpanded ? "Свернуть".localized : "Раскрыть".localized)
-            .accessibilityLabel(albumsExpanded ? "Свернуть".localized : "Раскрыть".localized)
+            .help(albumsExpanded ? "Collapse".localized : "Expand".localized)
+            .accessibilityLabel(albumsExpanded ? "Collapse".localized : "Expand".localized)
 
             if albumsExpanded {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 16)], spacing: 16) {
@@ -169,14 +148,16 @@ struct FavoritesView: View {
                     .padding(.vertical, 4)
                 }
                 .scrollClipDisabled()
+                .fixedSize(horizontal: false, vertical: true)
                 .transition(.opacity)
             }
         }
+        .animation(Motion.spring(Motion.expand), value: albumsExpanded)
     }
 
     private var playlistSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Плейлисты".localized)
+            sectionHeader("Playlists".localized)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(followedPlaylists) { playlist in
@@ -186,35 +167,30 @@ struct FavoritesView: View {
                             PlaylistTile(playlist: playlist, width: 165)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            PlaylistContextMenuItems(playlist: playlist)
-                        }
                     }
                 }
                 .padding(.vertical, 4)
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var favoritesSkeletonView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                // 1. Songs section skeleton (3 rows)
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionHeader("Песни".localized)
+                    sectionHeader("Songs".localized)
                     SkeletonSongList(count: 3, showAlbum: true)
                 }
 
-                // 2. Albums section skeleton
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionHeader("Альбомы".localized)
+                    sectionHeader("Albums".localized)
                     SkeletonCardShelf(count: 4, cardSize: 150, isCircle: false, spacing: 16)
                 }
 
-                // 3. Artists section skeleton
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionHeader("Исполнители".localized)
+                    sectionHeader("Artists".localized)
                     SkeletonCardShelf(count: 5, cardSize: 90, isCircle: true, spacing: 16)
                 }
             }
@@ -241,7 +217,6 @@ struct FavoritesView: View {
         } catch {
             if isAllEmpty { loadError = error.localizedDescription }
         }
-        // Ensure the playlist list backing the "followed" section is fresh.
         await app.refreshPlaylists()
     }
 }

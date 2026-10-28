@@ -1,10 +1,7 @@
 import SwiftUI
 import NavidromeClient
 
-// MARK: - Logic (moved out of the main editor file to keep both files within size limits)
-
 extension SmartPlaylistEditorView {
-    // MARK: Load
 
     func load() async {
         if var server {
@@ -57,7 +54,6 @@ extension SmartPlaylistEditorView {
             limitText = query.limit.map(String.init) ?? ""
             apply(query.sort)
         } else {
-            // Legacy single-field playlist → synthesize an equivalent rule tree.
             var rules: [QueryNode] = []
             if let genre = playlist.trimmedGenre {
                 rules.append(QueryNode(.rule(QueryRule(field: .genre, op: .is, value: .init(text: genre)))))
@@ -93,8 +89,6 @@ extension SmartPlaylistEditorView {
         hasChanges = false
     }
 
-    /// Applies a loaded sort string to the picker/direction state, preserving
-    /// unrecognised (e.g. multi-field) sort strings verbatim in `customSort`.
     func apply(_ sortString: String?) {
         sortTouched = false
         customSort = nil
@@ -118,9 +112,6 @@ extension SmartPlaylistEditorView {
         customSort = nil
     }
 
-    /// User-facing bindings that record a manual sort change. Programmatic
-    /// writes from `load()`/`apply()` stay direct so preserved multi-field
-    /// sorts survive.
     var sortBinding: Binding<SmartSort> {
         Binding(get: { sort }, set: { sort = $0; markSortTouched() })
     }
@@ -137,11 +128,6 @@ extension SmartPlaylistEditorView {
         })
     }
 
-    // MARK: JSON round-trip
-
-    /// The visual tree as a query document. A preserved multi-field sort stays
-    /// byte-identical; once the user re-picks a single field the picker's
-    /// field+direction and the (cleared) global order are used.
     func visualQuery() -> SmartQuery {
         if let customSort, !sortTouched {
             return SmartQuery(root: model.root.mapExpr(), sort: customSort,
@@ -167,11 +153,9 @@ extension SmartPlaylistEditorView {
     }
 
     func readFromJSONIfValid() {
-        // Returning from JSON mode: keep the existing tree when the decoded
-        // document is equivalent, even if its text was reformatted manually.
         guard let data = jsonText.data(using: .utf8),
               let parser = try? JSONDecoder().decode(SmartQuery.self, from: data) else {
-            jsonError = "Некорректный JSON. Правила не изменены.".localized
+            jsonError = "Invalid JSON. Rules not changed.".localized
             return
         }
         guard parser != visualQuery() else {
@@ -213,7 +197,7 @@ extension SmartPlaylistEditorView {
         if mode == .json {
             guard let data = jsonText.data(using: .utf8),
                   let parser = try? JSONDecoder().decode(SmartQuery.self, from: data) else {
-                jsonError = "Некорректный JSON. Сохранение отменено.".localized
+                jsonError = "Invalid JSON. Save canceled.".localized
                 return
             }
             query = parser
@@ -226,7 +210,6 @@ extension SmartPlaylistEditorView {
         smartPlaylist.query = query
         smartPlaylist.limit = query.limit
         smartPlaylist.shuffleOrder = query.sort?.contains("random") == true
-        // Legacy convenience fields are delegated to the query; clear them.
         smartPlaylist.genre = nil
         smartPlaylist.starredOnly = false
         smartPlaylist.minPlayCount = nil
@@ -236,10 +219,9 @@ extension SmartPlaylistEditorView {
         dismissModal()
     }
 
-    /// Save and replace: PUT the edited rules back to the server playlist.
     func saveServer(_ target: ServerSmartPlaylist) {
         guard let query = buildQueryOrReturnToJSON() else {
-            jsonError = "Некорректный JSON. Сохранение отменено.".localized
+            jsonError = "Invalid JSON. Save canceled.".localized
             return
         }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -256,16 +238,13 @@ extension SmartPlaylistEditorView {
         }
     }
 
-    /// Duplicates the current playlist under a new name (a "Save as"). Local
-    /// playlists copy into a new local playlist; server playlists create a new
-    /// server-side smart playlist and navigate to it.
     func saveAs() {
         let trimmed = saveAsName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         saveAsPresented = false
         let query = buildQueryOrReturnToJSON()
         guard let query else {
-            jsonError = "Некорректный JSON. Сохранение отменено.".localized
+            jsonError = "Invalid JSON. Save canceled.".localized
             return
         }
         name = trimmed

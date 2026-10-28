@@ -38,7 +38,6 @@ struct LoginServerAddress: Equatable {
     }
 }
 
-/// Minimal sign-in screen. Only contains what's needed to connect.
 struct LoginView: View {
     @Environment(AppState.self) private var app
 
@@ -73,19 +72,18 @@ struct LoginView: View {
                             .fill(Color.accentColor.opacity(0.12))
                     )
                     .accessibilityHidden(true)
-                Text("Добро пожаловать".localized)
+                Text("Welcome".localized)
                     .font(.title2.bold())
-                Text("Чтобы продолжить, войдите в свой аккаунт".localized)
+                Text("To continue, sign in to your account".localized)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
             .padding(.top, 12)
 
-            // Input fields
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Адрес сервера".localized)
+                    Text("Server address".localized)
                         .font(.subheadline.weight(.medium))
 
                     TextField("https://music.example.com:4533", text: $urlText)
@@ -99,14 +97,14 @@ struct LoginView: View {
                         .textContentType(.URL)
                         .focused($focusedField, equals: .server)
                         .onSubmit { focusedField = .username }
-                        .accessibilityLabel("Адрес сервера".localized)
+                        .accessibilityLabel("Server address".localized)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Имя пользователя".localized)
+                    Text("Username".localized)
                         .font(.subheadline.weight(.medium))
 
-                    TextField("Имя пользователя".localized, text: $username)
+                    TextField("Username".localized, text: $username)
                         .textFieldStyle(.plain)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.horizontal, 8)
@@ -117,20 +115,20 @@ struct LoginView: View {
                         .textContentType(.username)
                         .focused($focusedField, equals: .username)
                         .onSubmit { focusedField = .password }
-                        .accessibilityLabel("Имя пользователя".localized)
+                        .accessibilityLabel("Username".localized)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Пароль".localized)
+                    Text("Password".localized)
                         .font(.subheadline.weight(.medium))
 
                     HStack(spacing: 6) {
                         Group {
                             if showPassword {
-                                TextField("Пароль".localized, text: $password)
+                                TextField("Password".localized, text: $password)
                                     .focused($focusedField, equals: .password)
                             } else {
-                                SecureField("Пароль".localized, text: $password)
+                                SecureField("Password".localized, text: $password)
                                     .focused($focusedField, equals: .password)
                             }
                         }
@@ -138,7 +136,7 @@ struct LoginView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                         .textContentType(.password)
                         .onSubmit { connect() }
-                        .accessibilityLabel("Пароль".localized)
+                        .accessibilityLabel("Password".localized)
 
                         Button {
                             showPassword.toggle()
@@ -151,8 +149,8 @@ struct LoginView: View {
                         }
                         .buttonStyle(.plain)
                         .hoverBrighten()
-                        .accessibilityLabel((showPassword ? "Скрыть пароль" : "Показать пароль").localized)
-                        .help((showPassword ? "Скрыть пароль" : "Показать пароль").localized)
+                        .accessibilityLabel((showPassword ? "Hide Password" : "Show Password").localized)
+                        .help((showPassword ? "Hide Password" : "Show Password").localized)
                     }
                     .padding(.leading, 8)
                     .padding(.trailing, 6)
@@ -186,11 +184,11 @@ struct LoginView: View {
                 if busy {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Вход…".localized)
+                        Text("Signing In…".localized)
                     }
                     .frame(maxWidth: .infinity)
                 } else {
-                    Text("Войти".localized)
+                    Text("Sign In".localized)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                 }
@@ -201,17 +199,19 @@ struct LoginView: View {
                       || username.isEmpty || password.isEmpty)
             .keyboardShortcut(.defaultAction)
             .confirmationDialog(
-                "Подключиться по незащищённому соединению?",
+                "Connect over an insecure connection?".localized,
                 isPresented: $confirmInsecure,
                 titleVisibility: .visible
             ) {
-                Button("Всё равно подключиться", role: .destructive) {
+                Button("Connect anyway".localized, role: .destructive) {
                     connect(allowInsecureHTTP: true)
                 }
-                Button("Отмена", role: .cancel) {}
+                Button("Cancel".localized, role: .cancel) {}
             } message: {
-                // swiftlint:disable:next line_length
-                Text("Пароль и токен передаются в незашифрованном виде. Подключайтесь по http:// только к доверенным серверам (например, в локальной сети).".localized)
+                Text(
+                    "The password and token are sent unencrypted. Only connect over http:// to servers you trust (e.g., on your local network)."
+                        .localized
+                )
             }
 
             Button {
@@ -222,7 +222,7 @@ struct LoginView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(showAdvanced ? 90 : 0))
-                    Text("Дополнительно".localized)
+                    Text("Advanced".localized)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -232,20 +232,20 @@ struct LoginView: View {
             }
             .buttonStyle(.plain)
             .hoverBrighten()
-            .accessibilityLabel("Дополнительно".localized)
-            .accessibilityValue((showAdvanced ? "Развернуто" : "Свернуто").localized)
+            .accessibilityLabel("Advanced".localized)
+            .accessibilityValue((showAdvanced ? "Expanded" : "Collapsed").localized)
 
             if showAdvanced {
-                Picker("Аутентификация".localized, selection: $authMode) {
-                    Text("Токен (рекомендуется)".localized).tag(AuthMode.token)
-                    Text("Пароль (устаревший)".localized).tag(AuthMode.passwordMD5)
+                Picker("Authentication".localized, selection: $authMode) {
+                    Text("Token (recommended)".localized).tag(AuthMode.token)
+                    Text("Password (legacy)".localized).tag(AuthMode.passwordMD5)
                 }
                 .labelsHidden()
                 .pickerStyle(.radioGroup)
                 .transition(.opacity)
             }
 
-            Text("Пароль хранится только в связке ключей на этом Mac.".localized)
+            Text("The password is stored only in the keychain on this Mac.".localized)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -296,8 +296,6 @@ struct LoginView: View {
         }
     }
 }
-
-// MARK: - Login Field Styling
 
 private struct LoginFieldChrome: ViewModifier {
     let isFocused: Bool

@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Observes horizontal scroll offset of the enclosing NSScrollView in real time.
 private struct HorizontalScrollObserver: NSViewRepresentable {
     @Binding var scrollX: CGFloat
 
@@ -63,11 +62,6 @@ private struct HorizontalScrollObserver: NSViewRepresentable {
     }
 }
 
-/// A combined single-line horizontal carousel for "Latest Release" and "Top Songs",
-/// matching Apple Music Sequoia.
-///
-/// When scrolled horizontally, the "Latest Release" scrolls out of view while the
-/// "Top Songs" header smoothly docks at the leading edge and stays pinned there.
 struct ArtistHeroRow: View {
     let artist: Artist
     let latest: SubsonicAlbum?
@@ -84,8 +78,6 @@ struct ArtistHeroRow: View {
     private var hasLatest: Bool { latest != nil }
     private var hasTop: Bool { top != nil && top?.isEmpty == false }
 
-    /// Calculates the horizontal offset needed to dock the header at the left edge
-    /// once the user scrolls into the Top Songs section.
     private var dockOffset: CGFloat {
         guard hasLatest else { return max(0, scrollX) }
         let startX = latestWidth + interSectionSpacing
@@ -114,6 +106,7 @@ struct ArtistHeroRow: View {
                 .background(HorizontalScrollObserver(scrollX: $scrollX))
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: true)
             .animation(.easeInOut(duration: 0.25), value: isLoadingTop)
         }
     }
@@ -122,7 +115,7 @@ struct ArtistHeroRow: View {
 
     private func latestReleaseItem(_ latest: SubsonicAlbum) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Последний релиз".localized)
+            Text("Latest release".localized)
                 .font(.title2.bold())
             Button {
                 app.openAlbumInLibrary(latest)
@@ -140,11 +133,11 @@ struct ArtistHeroRow: View {
                             .lineLimit(2)
                         if let count = latest.songCount {
                             Text("\(count) \(Pluralized.song(count))")
-                                .font(.caption)
+                                .font(AMFont.rowSubtitle)
                                 .foregroundStyle(AMColor.secondaryText)
                         } else {
                             Text(latest.artist ?? artist.name)
-                                .font(.caption)
+                                .font(AMFont.rowSubtitle)
                                 .foregroundStyle(AMColor.secondaryText)
                                 .lineLimit(1)
                         }
@@ -172,7 +165,7 @@ struct ArtistHeroRow: View {
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Text("Лучшие песни".localized)
+                Text("Top Songs".localized)
                     .font(.title2.bold())
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -201,7 +194,7 @@ struct ArtistHeroRow: View {
     private func topSongsLoadingView() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Text("Лучшие песни".localized)
+                Text("Top Songs".localized)
                     .font(.title2.bold())
                 ProgressView()
                     .controlSize(.small)

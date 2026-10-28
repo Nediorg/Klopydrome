@@ -1,12 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// A multi-line text editor whose text container has no internal insets or
-/// line-fragment padding, so the caret starts exactly at the view's origin.
-/// That makes an overlayed placeholder (padded identically) align with the
-/// text pixel-perfectly — no guessing at AppKit's default 5pt
-/// `lineFragmentPadding`. Used by the create-playlist and share sheets for
-/// their description fields.
 struct MultilineTextEditor: NSViewRepresentable {
     @Binding var text: String
 
@@ -27,8 +21,6 @@ struct MultilineTextEditor: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
-        // Only replace when the source differs; typing flows through the
-        // delegate and must not reset the caret.
         if textView.string != text {
             textView.string = text
         }

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Centered in-window modal card presenting the full description or comment of a playlist.
 struct PlaylistCommentModal: View {
     let title: String
     let comment: String
@@ -21,8 +20,8 @@ struct PlaylistCommentModal: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Закрыть".localized)
-                .accessibilityLabel("Закрыть".localized)
+                .help("Close".localized)
+                .accessibilityLabel("Close".localized)
             }
 
             ScrollView {
@@ -37,7 +36,7 @@ struct PlaylistCommentModal: View {
 
             HStack {
                 Spacer()
-                Button("Закрыть".localized) {
+                Button("Close".localized) {
                     onDismiss()
                 }
                 .keyboardShortcut(.cancelAction)

@@ -4,23 +4,19 @@ import AppKit
 
 // MARK: - Share types
 
-/// The kind of library entity being shared. Drives the share label and the
-/// entity id sent to Navidrome.
 enum ShareKind: String, CaseIterable, Sendable {
     case song, album, playlist, artist
 
     var label: String {
         switch self {
-        case .song: "Песня"
-        case .album: "Альбом"
-        case .playlist: "Плейлист"
-        case .artist: "Исполнитель"
+        case .song: "Song"
+        case .album: "Album"
+        case .playlist: "Playlist"
+        case .artist: "Artist"
         }
     }
 }
 
-/// Identifies the exact entity a share sheet is being opened for. `Identifiable`
-/// so it can drive a `.sheet(item:)` presentation on `AppState.shareTarget`.
 struct ShareTarget: Identifiable, Hashable {
     let entityID: String
     let title: String
@@ -29,7 +25,6 @@ struct ShareTarget: Identifiable, Hashable {
     var id: String { "\(kind.rawValue):\(entityID)" }
 }
 
-/// Errors specific to share creation, surfaced in the share sheet.
 enum ShareError: LocalizedError {
     case notConfigured
     case sharingDisabled
@@ -37,12 +32,9 @@ enum ShareError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return NSLocalizedString("Нет подключения к серверу Навидром.", comment: "ShareError")
+            return "No connection to the Navidrome server.".localized
         case .sharingDisabled:
-            return NSLocalizedString(
-                "Сервер не поддерживает публикацию ссылок (EnableSharing выключен).",
-                comment: "ShareError"
-            )
+            return "The server doesn't support link sharing (EnableSharing is off).".localized
         }
     }
 }
@@ -50,21 +42,11 @@ enum ShareError: LocalizedError {
 // MARK: - AppState helpers
 
 extension AppState {
-    /// Opens the share sheet for the given entity. Declared here (rather than in
-    /// a context-menu component) because the modal must be presented from the
-    /// app root, not from a menu's transient view tree.
-    ///
-    /// The sheet is attached to `MainView`, so requests from the mini-player
-    /// panel are routed through `presentInMainWindow` (panel closes first, the
-    /// main window becomes visible again, then the sheet presents into it).
     func presentShare(_ target: ShareTarget) {
         guard confirmOfflineAction() else { return }
         presentInMainWindow { self.shareTarget = target }
     }
 
-    /// Creates a share via Navidrome's native API and returns its public URL.
-    /// The native `/api/share` route is used (not the Subsonic `createShare`)
-    /// because it is the one that honours the `downloadable` flag.
     func createShareLink(for target: ShareTarget, expires: Date?, downloadable: Bool,
                          description: String? = nil) async throws -> String {
         guard let api = navidrome else { throw ShareError.notConfigured }
@@ -75,8 +57,6 @@ extension AppState {
                                                   downloadable: downloadable)
             return api.baseURL.appendingPathComponent("share").appendingPathComponent(share.id).absoluteString
         } catch let NavidromeAPIError.http(code) where code == 404 {
-            // The native `/api/share` route is only registered when the server
-            // has `EnableSharing=true`; otherwise it 404s. Surface that clearly.
             throw ShareError.sharingDisabled
         }
     }
@@ -84,9 +64,6 @@ extension AppState {
 
 // MARK: - Share sheet
 
-/// Modal that asks for an expiry and an "allow download" toggle, then calls
-/// Navidrome to mint a public share link. Built entirely from native SwiftUI
-/// controls (`Picker`, `DatePicker`, `Toggle`, `TextField`, `Button`).
 struct ShareSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -123,7 +100,7 @@ struct ShareSheet: View {
                 SharesManagerView()
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Закрыть".localized) {
+                            Button("Close".localized) {
                                 showingSharesManager = false
                             }
                         }
@@ -139,7 +116,7 @@ struct ShareSheet: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Поделиться".localized).font(.headline)
+                Text("Share".localized).font(.headline)
                 Text("\(target.kind.label.localized): \(target.title)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -153,18 +130,18 @@ struct ShareSheet: View {
     private var formBody: some View {
         VStack(spacing: 12) {
             Form {
-                Picker("Срок действия".localized, selection: $expiry) {
+                Picker("Validity period".localized, selection: $expiry) {
                     ForEach(ExpiryChoice.allCases) { choice in
                         Text(choice.label.localized).tag(choice)
                     }
                 }
-                Toggle("Разрешить загрузку".localized, isOn: $allowDownload)
+                Toggle("Allow download".localized, isOn: $allowDownload)
                 descriptionField
             }
             .formStyle(.grouped)
 
             if expiry == .custom {
-                DatePicker("Истекает".localized, selection: $customDate,
+                DatePicker("Expires".localized, selection: $customDate,
                            displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.graphical)
                     .padding(8)
@@ -179,8 +156,8 @@ struct ShareSheet: View {
             }
 
             HStack {
-                Button("Отмена".localized) { dismiss() }
-                Button("Все ссылки…".localized) {
+                Button("Cancel".localized) { dismiss() }
+                Button("All Links…".localized) {
                     showingSharesManager = true
                 }
                 Spacer()
@@ -189,7 +166,7 @@ struct ShareSheet: View {
                     if isWorking {
                         ProgressView().controlSize(.small)
                     } else {
-                        Text("Создать ссылку".localized)
+                        Text("Create Link".localized)
                     }
                 })
                 .disabled(isWorking)
@@ -198,13 +175,10 @@ struct ShareSheet: View {
         }
     }
 
-    /// Multi-line description editor rendered as a grouped-Form row, so it
-    /// shares the width and surface of the expiry/download rows (same pattern
-    /// as the create-playlist modal). Placeholder overlays the editor text.
     private var descriptionField: some View {
         ZStack(alignment: .topLeading) {
             if descriptionText.isEmpty {
-                Text("Описание (необязательно)".localized)
+                Text("Description (optional)".localized)
                     .foregroundStyle(.tertiary)
                     .padding(8)
                     .allowsHitTesting(false)
@@ -218,29 +192,29 @@ struct ShareSheet: View {
     private var resultBody: some View {
         VStack(spacing: 14) {
             if let url = generatedURL {
-                TextField("Ссылка".localized, text: .constant(url))
+                TextField("Link".localized, text: .constant(url))
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
                 HStack(spacing: 12) {
                     Button(action: { copy(url) },
                            label: {
-                        Label((copied ? "Скопировано" : "Копировать").localized,
+                        Label((copied ? "Copied" : "Copy").localized,
                               systemImage: copied ? "checkmark" : "doc.on.doc")
                     })
                     if let destination = URL(string: url) {
-                        Link("Открыть".localized, destination: destination)
+                        Link("Open".localized, destination: destination)
                     }
                     Spacer()
-                    Button("Готово".localized) { dismiss() }
+                    Button("Done".localized) { dismiss() }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 }
             } else {
-                Text("Не удалось получить ссылку.".localized).foregroundStyle(.secondary)
+                Text("Failed to get link.".localized).foregroundStyle(.secondary)
                 HStack {
                     Spacer()
-                    Button("Готово".localized) { dismiss() }
+                    Button("Done".localized) { dismiss() }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 }
@@ -285,7 +259,6 @@ struct ShareSheet: View {
 
 // MARK: - Expiry presets
 
-/// Native picker options for share expiry. `.custom` reveals a `DatePicker`.
 private enum ExpiryChoice: Identifiable, CaseIterable {
     case oneDay, oneWeek, oneMonth, oneYear, indefinite, custom
 
@@ -293,12 +266,12 @@ private enum ExpiryChoice: Identifiable, CaseIterable {
 
     var label: String {
         switch self {
-        case .oneDay: "1 день"
-        case .oneWeek: "1 неделя"
-        case .oneMonth: "1 месяц"
-        case .oneYear: "1 год"
-        case .indefinite: "Бессрочно"
-        case .custom: "Выбрать дату"
+        case .oneDay: "1 day"
+        case .oneWeek: "1 week"
+        case .oneMonth: "1 month"
+        case .oneYear: "1 year"
+        case .indefinite: "Never"
+        case .custom: "Custom date"
         }
     }
 
@@ -309,8 +282,6 @@ private enum ExpiryChoice: Identifiable, CaseIterable {
         case .oneWeek: return Date().addingTimeInterval(day * 7)
         case .oneMonth: return Date().addingTimeInterval(day * 30)
         case .oneYear: return Date().addingTimeInterval(day * 365)
-        // Navidrome has no true "never" — a nil expiry falls back to the server's
-        // default (1 year).
         case .indefinite: return Date().addingTimeInterval(day * 365 * 100)
         case .custom: return nil
         }

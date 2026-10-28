@@ -8,9 +8,6 @@ struct PlaylistDetailView: View {
     @State var confirmingDelete = false
     @State var isPreparingPlayback = false
 
-    /// The shared loader retains every song for Player, but SwiftUI only builds a
-    /// bounded prefix. A large playlist can therefore begin playing without its
-    /// entire list becoming a layout cost on the main actor.
     @State private var displayedCount = 0
     @State private var selection = SongRowSelection()
     @State private var filterText = ""
@@ -18,7 +15,6 @@ struct PlaylistDetailView: View {
     @State private var isSearchExpanded = false
     @State private var showingCommentModal = false
     @State private var commentHovered = false
-    @State private var editRulesHovered = false
     private let pageSize = 100
 
     private struct ScrollOffsetKey: PreferenceKey {
@@ -44,8 +40,6 @@ struct PlaylistDetailView: View {
     }
     private var displayedSongs: [SubsonicSong] { Array(filteredRows.prefix(displayedCount)) }
 
-    /// Whether the current user may edit the playlist's tracks (remove rows).
-    /// Server-side smart playlists (and shared ones) are readonly.
     private var canEditTracks: Bool {
         (currentDetail.isReadonly ?? false) == false
     }
@@ -102,9 +96,9 @@ struct PlaylistDetailView: View {
                         }
                     } else if filteredRows.isEmpty && !displayedSongs.isEmpty {
                         ContentUnavailableView(
-                            "Ничего не найдено".localized,
+                            "Nothing Found".localized,
                             systemImage: "magnifyingglass",
-                            description: Text("Попробуйте изменить запрос.".localized)
+                            description: Text("Try changing your query.".localized)
                         )
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 32)
@@ -118,16 +112,7 @@ struct PlaylistDetailView: View {
                                 playlist: currentDetail.summary,
                                 playlistIndex: item.playlistIndex,
                                 onPlay: { rowIndex in
-                                    if app.isOfflineSession {
-                                        guard rowIndex < displayedSongs.count else { return }
-                                        let clickedSong = displayedSongs[rowIndex]
-                                        let playIndex = playableSongs.firstIndex {
-                                            $0.id == clickedSong.id
-                                        } ?? 0
-                                        app.play(playableSongs, at: playIndex, context: .playlist(playlist))
-                                    } else {
-                                        app.play(filteredRows, at: rowIndex, context: .playlist(playlist))
-                                    }
+                                    app.play(filteredRows, at: rowIndex, context: .playlist(playlist))
                                 },
                                 isSelected: selection.isSelected(item.song.id),
                                 resolveSelection: { selection.selectedSongs(from: filteredRows) },
@@ -190,10 +175,10 @@ struct PlaylistDetailView: View {
             isPresented: $confirmingDelete,
             titleVisibility: .visible
         ) {
-            Button("Удалить".localized, role: .destructive) {
+            Button("Delete".localized, role: .destructive) {
                 delete(currentDetail)
             }
-            Button("Отмена".localized, role: .cancel) {}
+            Button("Cancel".localized, role: .cancel) {}
         }
         .inWindowModal(isPresented: $showingCommentModal) {
             PlaylistCommentModal(
@@ -204,8 +189,6 @@ struct PlaylistDetailView: View {
         }
     }
 
-    /// Header data is available immediately from the summary that opened this
-    /// destination. The shared loader fills richer metadata and rows afterward.
     private var currentDetail: PlaylistDetail {
         state?.detail ?? PlaylistDetail(
             id: playlist.id,
@@ -230,8 +213,8 @@ struct PlaylistDetailView: View {
         return HStack(alignment: .top, spacing: 24) {
             QuickLookCover(coverArt: detail.coverArt, title: detail.displayName)
                 .frame(width: 220, height: 220)
-                .help("Быстрый просмотр обложки".localized)
-                .accessibilityLabel("Предпросмотр обложки".localized)
+                .help("Quick Look artwork".localized)
+                .accessibilityLabel("Artwork Preview".localized)
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 22) {
@@ -258,21 +241,9 @@ struct PlaylistDetailView: View {
     }
 
     private func editRulesButton(_ detail: PlaylistDetail) -> some View {
-        Button {
+        EditRulesButton {
             app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: detail.summary))
-        } label: {
-            HStack(spacing: 2) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 8.5, weight: .semibold))
-                Text("Редактировать правила".localized)
-                    .font(.callout.bold())
-            }
-            .foregroundStyle(AMColor.accent)
-            .brightness(editRulesHovered ? 0.15 : 0)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { editRulesHovered = $0 }
     }
 
     private func commentButton(title: String, comment: String) -> some View {
@@ -289,7 +260,7 @@ struct PlaylistDetailView: View {
         }
         .buttonStyle(.plain)
         .onHover { commentHovered = $0 }
-        .help("Показать описание полностью".localized)
+        .help("Show full description".localized)
     }
 
     var playableSongs: [SubsonicSong] {

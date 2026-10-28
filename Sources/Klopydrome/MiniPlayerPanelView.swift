@@ -1,8 +1,6 @@
 import NavidromeClient
 import SwiftUI
 
-/// The lower extension of the mini-player. Translucent surface matching Apple Music,
-/// hosting either the lyrics or the unified playback queue panel.
 struct MiniPlayerPanelView: View {
     @Environment(AppState.self) private var app
 

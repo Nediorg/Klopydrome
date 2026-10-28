@@ -14,33 +14,21 @@ import Libmpv
 /// track-end is detected via `MPV_EVENT_END_FILE` with reason `EOF`.
 @MainActor
 final class MPVPlaybackEngine {
-    // The decoder/player is owned outright; its lifetime matches the engine.
     private var mpv: OpaquePointer?
 
-    /// Owns the libmpv event loop and runs it entirely off the main actor.
     private let pump = EventPump()
 
-    // Transport state.
     private(set) var isLoaded = false
     private(set) var isPlaying = false
     private(set) var isEnded = false
     private(set) var isBuffering = false
 
-    /// Whether the current source supports range-style seeking. False for a
-    /// server transcode still in flight (no Content-Length, no accept-ranges);
-    /// mpv flips it once the stream is a seekable file (cached transcode,
-    /// original). This is the ground truth for transcode-seek decisions — far
-    /// more reliable than guessing from the reported duration, which mpv sets
-    /// to 0/inf/NaN for unknown-length pipes.
     private(set) var isSeekable = false
 
-    /// Track metadata. `duration` is filled by the `duration` property event
-    /// once mpv has demuxed the source (fast for local, after headers for HTTP).
     private(set) var duration: Double = 0
     private(set) var sampleRate: Double = 44_100
     private(set) var channels = 2
 
-    /// Desired linear output gain (0…1), shared with the AVFoundation path.
     var volume: Float = 1.0 {
         didSet { applyVolume() }
     }
@@ -69,11 +57,7 @@ final class MPVPlaybackEngine {
     private var streamRecordURL: URL?
     private var streamRecordIsContiguous = false
 
-    /// Cached playback position (seconds), updated from mpv's `time-pos`
-    /// property events on the background event queue. Read on the main actor
-    /// via `currentTime` / forwarded through `onTimeUpdate`.
     private var currentTimeValue: Double = 0
-
 
     // MARK: - libmpv lifecycle
 
@@ -86,8 +70,6 @@ final class MPVPlaybackEngine {
             try? FileManager.default.removeItem(at: url)
         }
         guard let mpv else { return }
-        // Stop new wakeups first, then drain the pump: after this, no code
-        // path can touch the context while it is being torn down.
         mpv_set_wakeup_callback(mpv, nil, nil)
         pump.finish()
         mpv_terminate_destroy(mpv)
@@ -104,14 +86,7 @@ final class MPVPlaybackEngine {
         pump.engine = self
         mpv_set_option_string(mpv, "vo", "null")
         mpv_set_option_string(mpv, "ao", "coreaudio")
-        // macOS 27 can crash libmpv's CoreAudio hotplug callback when its
-        // default planar float output sees a device change (including a monitor
-        // with audio connecting or disconnecting). Interleaved float preserves
-        // the signal precision while avoiding that affected CoreAudio path.
         mpv_set_option_string(mpv, "audio-format", "float")
-        // Klopydrome owns MPNowPlayingInfoCenter and MPRemoteCommandCenter.
-        // Letting MPV register macOS media keys lets it publish a URL-derived
-        // fallback title and replace the app's artwork in Control Center.
         mpv_set_option_string(mpv, "input-media-keys", "no")
         mpv_set_option_string(mpv, "gapless", "yes")
         mpv_set_option_string(mpv, "terminal", "no")
@@ -125,10 +100,6 @@ final class MPVPlaybackEngine {
         }
         mpv_set_option_string(mpv, "pause", "yes")
 
-        // Bound mpv's demuxer/network caches: its defaults are sized for video
-        // (up to ~150MB of buffered demuxed data), which is far more than an
-        // audio stream needs — the app also caches streams to disk itself, so
-        // mpv only needs a few seconds of lookahead for gapless playback.
         mpv_set_option_string(mpv, "demuxer-max-bytes", "16MiB")
         mpv_set_option_string(mpv, "demuxer-max-back-bytes", "8MiB")
         mpv_set_option_string(mpv, "cache-secs", "10")
@@ -149,20 +120,13 @@ final class MPVPlaybackEngine {
             throw NSError(domain: "MPVPlaybackEngine", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "Failed to initialize mpv"])
         }
-        // Preferences are restored before libmpv has a context, so the earlier
-        // `volume` didSet cannot reach mpv. Apply the retained value now.
         applyVolume()
     }
-    /// C-convention callback mpv invokes when events are pending. It bounces
-    /// straight to the `EventPump`'s own serial queue, where the loop runs
-    /// entirely off the main actor.
     private static let wakeup: @convention(c) (UnsafeMutableRawPointer?) -> Void = { ctx in
         guard let ctx else { return }
         let pump = Unmanaged<EventPump>.fromOpaque(ctx).takeUnretainedValue()
         pump.queue.async { pump.readEvents() }
     }
-
-    // MARK: - Event pump callbacks
 
     @MainActor func updateBuffering(_ value: Bool) {
         guard isBuffering != value else { return }
@@ -175,9 +139,6 @@ final class MPVPlaybackEngine {
         updateBuffering(value)
     }
 
-    /// Called on the main actor by `EventPump` (throttled to ~10 Hz for
-    /// `time-pos`). All libmpv parsing already happened off-thread, so this is
-    /// only the cheap UI-state assignment — no main-thread busy loop.
     @MainActor func applyTimePos(_ pos: Double) {
         currentTimeValue = pos
         updateBuffering(isPausedForCache)
@@ -185,8 +146,6 @@ final class MPVPlaybackEngine {
     }
 
     @MainActor func setDuration(_ d: Double) {
-        // mpv reports 0/inf/NaN for an unknown-length pipe (a transcode still
-        // in flight). Keep only a usable finite value.
         duration = d.isFinite && d > 0 ? d : 0
     }
 
@@ -203,11 +162,6 @@ final class MPVPlaybackEngine {
     }
 
     @MainActor func handleTrackEnded() {
-        // mpv can emit MPV_EVENT_END_FILE/EOF on HTTP streams before the
-        // track is actually finished (e.g. demuxer buffer drains or a
-        // transient network hiccup). If we are still far from the known
-        // duration, treat it as a spurious EOF and resume instead of
-        // advancing to the next track.
         if duration > 0, currentTimeValue + 3 < duration {
             isEnded = false
             isPausedForCache = false
@@ -238,7 +192,6 @@ final class MPVPlaybackEngine {
         onFailure?(L10n.format("format.mpv.openFailure", Int(errorCode)))
     }
 
-    // MARK: - Loading
     func load(url: URL, streamRecordURL: URL? = nil) async throws -> FormatInfo {
         try ensureMpv()
         configureStreamRecord(streamRecordURL)
@@ -284,8 +237,6 @@ final class MPVPlaybackEngine {
     }
     #endif
 
-    /// Seeks to `seconds` (absolute). mpv performs the seek; the landed position
-    /// is reflected by `currentTime` via `time-pos` events. Returns whether the command was accepted.
     @discardableResult
     func seek(to seconds: Double) -> Bool {
         guard isLoaded else { return false }
@@ -302,11 +253,6 @@ final class MPVPlaybackEngine {
         return false
     }
 
-    // MARK: - Time
-
-    /// Last known playback position (seconds). Driven by mpv's `time-pos`
-    /// property events; `onTimeUpdate` forwards it to the player on the main
-    /// actor, so this never performs a synchronous libmpv call on the UI thread.
     var currentTime: Double { currentTimeValue }
 
     func cancelStreamRecord() {
@@ -393,25 +339,15 @@ private final class EventPump: @unchecked Sendable {
         let handle = mpv
         guard let handle else { return }
         while true {
-            // Non-blocking drain: timeout 0 returns MPV_EVENT_NONE immediately
-            // when nothing is queued, so the loop exits as soon as the queue
-            // is empty. A bounded wait would keep looping forever while the
-            // engine plays (time-pos arrives faster than any timeout), which
-            // starved `finish()` and hung the main actor on engine swap.
             guard let event = mpv_wait_event(handle, 0) else { break }
             if event.pointee.event_id == MPV_EVENT_NONE {
                 break
             }
             dispatch(event)
-            // Teardown may have cleared the handle while we were dispatching;
-            // never call mpv again after that.
             guard mpv == handle else { break }
         }
     }
 
-    /// Stops consuming events. Called from the engine's deinit; must return
-    /// before `mpv_terminate_destroy` runs so no `mpv_wait_event` survives the
-    /// context's lifetime.
     func finish() {
         queue.sync {
             mpv = nil
@@ -440,9 +376,6 @@ private final class EventPump: @unchecked Sendable {
         let name = String(cString: prop.name)
         if name == "time-pos", let dptr = prop.data?.assumingMemoryBound(to: Double.self) {
             let pos = dptr.pointee
-            // Throttle forwarded ticks to ~4 Hz. The engine still samples at
-            // mpv's native rate; only the main-actor hop is rate-limited so
-            // @Observable invalidations don't fire 10–20 times/sec.
             let now = CFAbsoluteTimeGetCurrent()
             guard now - lastTimeUpdate >= 0.25 else { return }
             lastTimeUpdate = now
@@ -485,7 +418,6 @@ private final class EventPump: @unchecked Sendable {
     }
 }
 
-/// Format metadata returned by `load`. Only `duration` is consumed by `Player`.
 struct FormatInfo {
     let duration: Double
     let sampleRate: Double

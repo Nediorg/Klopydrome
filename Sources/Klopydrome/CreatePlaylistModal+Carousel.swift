@@ -2,8 +2,6 @@ import SwiftUI
 import AppKit
 import NavidromeClient
 
-// MARK: - Carousel Extension
-
 extension CreatePlaylistModal {
     var coverCarousel: some View {
         ScrollViewReader { proxy in
@@ -144,7 +142,7 @@ extension CreatePlaylistModal {
         let menu = NSMenu()
 
         let fileItem = NSMenuItem(
-            title: "Выбрать файл…".localized,
+            title: "Choose a file…".localized,
             action: #selector(CoverMenuTarget.chooseFile),
             keyEquivalent: ""
         )
@@ -153,7 +151,7 @@ extension CreatePlaylistModal {
         menu.addItem(fileItem)
 
         let photosItem = NSMenuItem(
-            title: "Выбрать из медиатеки Фото…".localized,
+            title: "Choose from Photo Library…".localized,
             action: #selector(CoverMenuTarget.choosePhotos),
             keyEquivalent: ""
         )
@@ -233,7 +231,6 @@ extension CreatePlaylistModal {
 
 // MARK: - Custom Chevron Shape & Button
 
-/// Custom tall chevron shape matching Apple Music macOS carousel arrows.
 struct TallChevronShape: Shape {
     var direction: Direction
 
@@ -257,7 +254,6 @@ struct TallChevronShape: Shape {
     }
 }
 
-/// Translucent edge-pinned chevron button matching Apple Music macOS hover arrows.
 struct CarouselChevronButton: View {
     let direction: TallChevronShape.Direction
     let action: () -> Void

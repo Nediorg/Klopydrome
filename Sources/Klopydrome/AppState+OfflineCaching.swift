@@ -2,8 +2,6 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    // MARK: - Download state & cancellation for playlists and albums
-
     func isPlaylistDownloading(_ playlistID: String) -> Bool {
         activeDownloadTasks.contains { task in
             if case .playlist(let playlist) = task.kind {
@@ -55,8 +53,6 @@ extension AppState {
         unregisterDownload(from: [song])
     }
 
-    // MARK: - Artist Caching
-
     func cacheArtist(_ artist: Artist) {
         guard let client else { return }
         Task {
@@ -70,8 +66,6 @@ extension AppState {
         }
     }
 
-    // MARK: - Auto-caching Favorites
-
     func cacheAllStarredSongs() {
         guard let client else { return }
         Task {
@@ -80,7 +74,7 @@ extension AppState {
                 self.library.favoritesSongs = result.songs
                 self.library.favoritesLoaded = true
                 guard !result.songs.isEmpty else { return }
-                self.cacheSongs(result.songs, title: "Избранные треки".localized)
+                self.cacheSongs(result.songs, title: "Favorite tracks".localized)
             }
         }
     }
@@ -139,7 +133,7 @@ extension AppState {
         library.favoritesLoaded = true
 
         if serverConfig.effectiveCacheStarredSongs, !result.songs.isEmpty {
-            cacheSongs(result.songs, title: "Избранные треки".localized)
+            cacheSongs(result.songs, title: "Favorite tracks".localized)
         }
         if serverConfig.effectiveCacheStarredAlbums, !result.albums.isEmpty {
             for album in result.albums {

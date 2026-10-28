@@ -70,8 +70,6 @@ struct AlbumDetailView: View {
         }
     }
 
-    /// Header data is available immediately from the summary the grid navigated
-    /// with, so the top section renders without waiting for the song fetch.
     private var displayedDetail: AlbumDetail {
         detail ?? AlbumDetail(
             id: album.id,
@@ -88,20 +86,16 @@ struct AlbumDetailView: View {
         )
     }
 
-    /// Placeholder track rows shown while the album's songs stream in.
-    /// Standard album tracks are narrow (32pt, single line) without artwork.
     private var skeletonRows: some View {
         SkeletonSongList(count: 10, showAlbum: false, showsArtist: false)
     }
-
-    // MARK: Header
 
     private func header(_ detail: AlbumDetail) -> some View {
         HStack(alignment: .top, spacing: 24) {
             QuickLookCover(coverArt: detail.coverArt, title: detail.displayName)
                 .frame(width: 220, height: 220)
-                .help("Быстрый просмотр обложки".localized)
-                .accessibilityLabel("Предпросмотр обложки".localized)
+                .help("Quick Look artwork".localized)
+                .accessibilityLabel("Artwork Preview".localized)
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 4) {
@@ -158,8 +152,6 @@ struct AlbumDetailView: View {
             .foregroundStyle(AMColor.secondaryText)
     }
 
-    // MARK: Action row
-
     private var orderedSongs: [SubsonicSong] {
         let grouped = Dictionary(grouping: songs, by: { $0.discNumber ?? 1 })
         return grouped.keys.sorted().flatMap { disc in
@@ -176,12 +168,12 @@ struct AlbumDetailView: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            ActionPill(title: "Слушать", systemImage: "play.fill", filled: true) {
-                if !playableSongs.isEmpty { app.play(playableSongs, at: 0, context: .album(album)) }
+            ActionPill(title: "Play".localized, systemImage: "play.fill", filled: true) {
+                app.play(orderedSongs, at: 0, context: .album(album))
             }
             .disabled(playableSongs.isEmpty)
-            ActionPill(title: "Перемешать", systemImage: "shuffle", filled: true) {
-                if !playableSongs.isEmpty { app.playShuffled(playableSongs, context: .album(album)) }
+            ActionPill(title: "Shuffle".localized, systemImage: "shuffle", filled: true) {
+                app.playShuffled(orderedSongs, context: .album(album))
             }
             .disabled(playableSongs.isEmpty)
             Spacer()
@@ -189,7 +181,7 @@ struct AlbumDetailView: View {
                 if isSyncing {
                     ProgressView()
                         .controlSize(.small)
-                        .help("Синхронизация с сервером…".localized)
+                        .help("Syncing with server…".localized)
                         .transition(.opacity)
                 }
                 RoundFavoriteButton(isStarred: app.isStarred(album)) {
@@ -198,7 +190,7 @@ struct AlbumDetailView: View {
                 RoundEllipsisMenu {
                     AlbumContextMenuItems(album: album)
                 }
-                .help("Действия над альбомом".localized)
+                .help("Album Actions".localized)
             }
             .animation(.easeInOut(duration: 0.2), value: isSyncing)
         }
@@ -233,13 +225,7 @@ private struct AlbumTrackListSection: View {
     }
 
     private func playTrack(_ song: SubsonicSong, globalIndex: Int, ordered: [SubsonicSong]) {
-        if app.isOfflineSession {
-            let playable = songs.filter { app.isCached($0) }
-            let playIndex = playable.firstIndex(where: { $0.id == song.id }) ?? 0
-            app.play(playable, at: playIndex, context: .album(album))
-        } else {
-            app.play(ordered, at: globalIndex, context: .album(album))
-        }
+        app.play(ordered, at: globalIndex, context: .album(album))
     }
 
     var body: some View {
@@ -256,7 +242,7 @@ private struct AlbumTrackListSection: View {
             VStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.element.disc) { _, group in
                     if showDiscHeaders {
-                        Text(String(format: "Диск %d".localized, group.disc))
+                        Text(String(format: "Disc %d".localized, group.disc))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -398,7 +384,7 @@ extension AlbumDetailView {
     @ViewBuilder
     private func albumNotesSection(_ rawNotes: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Об альбоме".localized)
+            Text("About Album".localized)
                 .font(.title3.bold())
 
             VStack(alignment: .leading, spacing: 6) {
@@ -410,7 +396,7 @@ extension AlbumDetailView {
                     .textSelection(.enabled)
 
                 if rawNotes.count > 220 {
-                    Button(isNotesExpanded ? "Меньше".localized : "Подробнее".localized) {
+                    Button(isNotesExpanded ? "Less".localized : "More".localized) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isNotesExpanded.toggle()
                         }

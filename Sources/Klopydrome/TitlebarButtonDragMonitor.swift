@@ -1,8 +1,5 @@
 import AppKit
 
-/// Monitors mouse events on the window titlebar to enable dragging the window
-/// by its buttons (transport controls, lyrics/queue buttons, etc.) when the mouse
-/// is dragged beyond a minimum distance threshold, while canceling the button click.
 @MainActor
 final class TitlebarButtonDragMonitor {
     private static var monitors: [ObjectIdentifier: TitlebarButtonDragMonitor] = [:]

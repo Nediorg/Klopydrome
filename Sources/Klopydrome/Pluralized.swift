@@ -1,10 +1,6 @@
 import Foundation
 
-/// Russian plural declension + English plural, locale-aware. The Russian logic
-/// mirrors the classic `skl(n, custom, lang)` rule: counts ending in 11–19 use
-/// the "many" form; otherwise 1 → singular, 2–4 → paucal, rest → plural.
 enum Pluralized {
-    /// Whether the app is currently running in Russian.
     private static var isRussian: Bool {
         Locale.current.language.languageCode?.identifier == "ru"
     }
@@ -34,7 +30,6 @@ enum Pluralized {
         return L10n.text("\(key).\(form)")
     }
 
-    /// Russian noun form for a count: singular, paucal or plural.
     private static func russianForm(for count: Int) -> String {
         let reducedCount = count % 100
         if reducedCount >= 11 && reducedCount <= 19 {

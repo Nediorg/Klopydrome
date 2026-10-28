@@ -4,10 +4,6 @@ import NavidromeClient
 struct SidebarView: View {
     @Environment(AppState.self) private var app
 
-    /// Common selection type for the sidebar List. Playlist selection is keyed
-    /// by the playlist's stable id string, not the full struct: the synthesized
-    /// Hashable of `PlaylistSummary` changes when the list reloads (new
-    /// instances), which made subsequent playlist clicks silently ignored.
     enum Selection: Hashable {
         case section(NavigationState.Section)
         case playlistID(String)
@@ -37,7 +33,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: selectionBinding) {
             Section {
-                sidebarRow("Главная", .home)
+                sidebarRow("Home".localized, .home)
             }
 
             SidebarLibrarySection(selection: currentSelection, select: select)
@@ -46,7 +42,7 @@ struct SidebarView: View {
                 Button {
                     select(.section(.playlists))
                 } label: {
-                    playlistRow("Все плейлисты",
+                    playlistRow("All Playlists".localized,
                                 icon: icon(for: .playlists),
                                 isSelected: currentSelection == .section(.playlists))
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,7 +76,7 @@ struct SidebarView: View {
                     }
                 }
             } header: {
-                Text("Плейлисты".localized)
+                Text("Playlists".localized)
                     .contextMenu { playlistContextMenu }
             }
 
@@ -110,17 +106,12 @@ struct SidebarView: View {
                         }
                     }
                 } header: {
-                    Text("Общие плейлисты".localized)
+                    Text("Shared Playlists".localized)
                         .contextMenu { playlistContextMenu }
                 }
             }
         }
-        // Native macOS sidebar selection: the system draws the picked row as a
-        // rounded pill in the app accent color while the sidebar is focused and
-        // neutral gray when it is not (Finder/Music style), inverting the row
-        // text/icons to white on the selected row. No AppKit overrides needed.
         .listStyle(.sidebar)
-        // Keep rows below the traffic lights without moving the sidebar search field.
         .contentMargins(.top, LayoutMetrics.trafficLightInset, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
@@ -129,34 +120,28 @@ struct SidebarView: View {
         }
         .background(.thinMaterial, ignoresSafeAreaEdges: .all)
         .navigationSplitViewColumnWidth(
-            min: LayoutMetrics.sidebarMinWidth,
+            min: LayoutMetrics.sidebarIdealWidth,
             ideal: LayoutMetrics.sidebarIdealWidth,
             max: LayoutMetrics.sidebarMaxWidth
         )
-        // Freeze row layout during collapse animation: rows keep full width
-        // anchored LEADING and clip toward the divider instead of reflowing.
-        // The default center alignment drifts the icons right as the column
-        // narrows (centered overflow in a shrinking frame). Leading anchor
-        // reads as the native slide-away; user resize drags still reflow
-        // normally above the floor. Also skips per-frame List relayout.
-        .frame(minWidth: LayoutMetrics.sidebarMinWidth, alignment: .leading)
+        .frame(minWidth: LayoutMetrics.sidebarIdealWidth, alignment: .leading)
         .clipped()
         .confirmationDialog(
-            "Удалить плейлист?".localized,
+            "Delete Playlist?".localized,
             isPresented: Binding(
                 get: { confirmingDeleteID != nil },
                 set: { if !$0 { confirmingDeleteID = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Удалить".localized, role: .destructive) {
+            Button("Delete".localized, role: .destructive) {
                 if let id = confirmingDeleteID,
                    let playlist = playlists.first(where: { $0.id == id }) {
                     Task { await app.deletePlaylist(playlist) }
                 }
                 confirmingDeleteID = nil
             }
-            Button("Отмена".localized, role: .cancel) { confirmingDeleteID = nil }
+            Button("Cancel".localized, role: .cancel) { confirmingDeleteID = nil }
         }
         .searchable(text: Bindable(app).nav.searchQuery, placement: .sidebar, prompt: Text("Search".localized))
         .submitLabel(.search)
@@ -164,19 +149,12 @@ struct SidebarView: View {
         .task(id: app.isConnected) { await loadPlaylists() }
     }
 
-    /// Applies a sidebar selection to app state and signals the detail column
-    /// (via `navVersion`) to pop to the selected item's root. Called on every
-    /// explicit row tap and on List selection changes, so re-clicking the
-    /// already-active item re-navigates instead of being ignored.
     private func select(_ newValue: Selection) {
         applySelection(newValue)
         app.nav.history.removeAll()
         app.nav.navVersion += 1
     }
 
-    /// Applies a sidebar selection to app state. Sections switch the detail
-    /// content one-to-one; a playlist selection shows that playlist's detail in
-    /// the detail column (via `app.nav.selectedPlaylist`).
     private func applySelection(_ newValue: Selection?) {
         if case .section(let section)? = newValue {
             app.nav.selectedPlaylist = nil
@@ -197,12 +175,12 @@ struct SidebarView: View {
             Button {
                 app.openCreatePlaylist()
             } label: {
-                Label("Новый плейлист".localized, systemImage: "plus")
+                Label("New Playlist".localized, systemImage: "plus")
             }
             Button {
                 app.openSmartPlaylistEditor()
             } label: {
-                Label("Новый умный плейлист".localized, systemImage: "gearshape")
+                Label("New Smart Playlist".localized, systemImage: "gearshape")
             }
         }
     }
@@ -220,8 +198,6 @@ struct SidebarView: View {
         app.effectiveUsername
     }
 
-    /// Only the current user's own playlists render in the sidebar; curated and
-    /// algorithmic collections owned by others are excluded.
     private var personalPlaylists: [PlaylistSummary] {
         guard !username.isEmpty else {
             return playlists
@@ -234,7 +210,6 @@ struct SidebarView: View {
         }
     }
 
-    /// Playlists owned by someone else (shared into the library).
     private var sharedPlaylists: [PlaylistSummary] {
         guard !username.isEmpty else {
             return []
@@ -253,20 +228,9 @@ struct SidebarView: View {
         app.nav.selected = .search
         app.nav.selectedPlaylist = nil
         app.nav.history.removeAll()
-        // Bump the nav version so a repeated submit re-runs the search even when
-        // the query is unchanged (the search view keys its load task on
-        // `navVersion`) and pops any pushed detail page so the fresh results are
-        // actually visible.
         app.nav.navVersion += 1
     }
 
-    /// Sidebar row with the native look (accent icon, system selection pill)
-    /// that re-navigates even when the item is already selected.
-    ///
-    /// Tahoe (macOS 26) renders sidebar `Label` symbols larger than the row
-    /// text. A plain `HStack` bypasses the inflated `LabelStyle` altogether;
-    /// a size-only fix via `LabelStyle` forfeits the automatic accent/white
-    /// tint (icon stays white), so the `isSelected` tint has to be explicit.
     private func sidebarRow(_ text: String, _ section: NavigationState.Section) -> some View {
         let isSelected = currentSelection == .section(section)
         return Button {
@@ -285,10 +249,6 @@ struct SidebarView: View {
         .tag(Selection.section(section))
     }
 
-    /// Playlist row built as an HStack, NOT a `Label`: the sidebar list style
-    /// forces its own tint on Label icons (accent). The explicit dark-gray
-    /// resting color preserves the intended playlist appearance, while the
-    /// selected icon matches the native white active-row treatment.
     private func playlistRow(_ text: String, icon: String, isSelected: Bool) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
@@ -298,8 +258,6 @@ struct SidebarView: View {
         }
     }
 
-    /// The outline glyph for a section row; keeps icons from flipping to the
-    /// filled variant on selection.
     private func icon(for section: NavigationState.Section) -> String {
         section.icon
     }

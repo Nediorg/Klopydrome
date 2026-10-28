@@ -8,8 +8,6 @@ struct CacheSettingsView: View {
     @State private var usedTotal = 0
     @State private var usedCovers = 0
     @State private var usedMetadata = 0
-    /// Bumped after a background cache clear, so usage refreshes without
-    /// blocking the settings surface.
     @State private var reloadToken = 0
     private let megabyte = 1024 * 1024
     private let defaultStreamLimit = 1_500
@@ -69,33 +67,33 @@ struct CacheSettingsView: View {
         Form {
             Section {
                 Toggle(
-                    "Сохранять прослушанные песни".localized,
+                    "Save played songs".localized,
                     isOn: Bindable(app).serverConfig.cacheEnabled
                 )
                 Toggle(
-                    "Избранные треки".localized,
+                    "Favorite tracks".localized,
                     isOn: cacheStarredSongsBinding
                 )
                 .disabled(!app.serverConfig.cacheEnabled)
                 Toggle(
-                    "Избранные альбомы".localized,
+                    "Favorite albums".localized,
                     isOn: cacheStarredAlbumsBinding
                 )
                 .disabled(!app.serverConfig.cacheEnabled)
                 Toggle(
-                    "Избранных артистов".localized,
+                    "Favorite artists".localized,
                     isOn: cacheStarredArtistsBinding
                 )
                 .disabled(!app.serverConfig.cacheEnabled)
             } header: {
-                Text("Кэшировать для офлайн-прослушивания".localized)
+                Text("Cache for offline listening".localized)
             } footer: {
                 Text(
-                    "Автоматически сохраняет выбранные элементы медиатеки для воспроизведения без интернета.".localized
+                    "Automatically saves selected library items for playback without internet.".localized
                 )
             }
 
-            Section("Использование кэша".localized) {
+            Section("Cache usage".localized) {
                 CacheUsageOverview(
                     usedStreams: usedStreams,
                     usedCovers: usedCovers,
@@ -104,23 +102,23 @@ struct CacheSettingsView: View {
                     totalLimit: effectiveTotalLimit
                 )
 
-                Button("Очистить кэш…".localized, role: .destructive) {
+                Button("Clear Cache…".localized, role: .destructive) {
                     showConfirmation = true
                 }
             }
 
-            Section("Лимиты кэша".localized) {
+            Section("Cache Limits".localized) {
                 CacheBudgetSection(
-                    title: "Аудиокэш",
-                    details: "Включает скачанные и прослушанные треки.",
+                    title: "Audio Cache".localized,
+                    details: "Includes downloaded and streamed tracks.".localized,
                     selectedLimit: configuredStreamLimit,
                     automaticValue: effectiveStreamLimit,
                     choices: CacheLimitPreset.all,
                     onSelect: selectStreamLimit
                 )
                 CacheBudgetSection(
-                    title: "Общий кэш",
-                    details: "Включает аудио, обложки и метаданные.",
+                    title: "Total Cache".localized,
+                    details: "Includes audio, covers, and metadata.".localized,
                     selectedLimit: configuredTotalLimit,
                     automaticValue: effectiveTotalLimit,
                     choices: CacheLimitPreset.all,
@@ -140,20 +138,20 @@ struct CacheSettingsView: View {
             await reloadUsage()
         }
         .confirmationDialog(
-            "Очистить весь кэш?".localized,
+            "Clear All Cache?".localized,
             isPresented: $showConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Очистить".localized, role: .destructive) {
+            Button("Clear".localized, role: .destructive) {
                 Task {
                     await app.clearCache()
                     try? await Task.sleep(for: .milliseconds(400))
                     reloadToken &+= 1
                 }
             }
-            Button("Отмена".localized, role: .cancel) {}
+            Button("Cancel".localized, role: .cancel) {}
         } message: {
-            Text("Все кэшированные песни, обложки и метаданные будут удалены.".localized)
+            Text("All cached songs, artwork, and metadata will be deleted.".localized)
         }
     }
 
@@ -192,8 +190,6 @@ struct CacheSettingsView: View {
     }
 }
 
-/// A compact storage summary that turns the cache categories into a single
-/// readable surface, separate from the policy controls below it.
 private struct CacheUsageOverview: View {
     let usedStreams: Int
     let usedCovers: Int
@@ -229,17 +225,17 @@ private struct CacheUsageOverview: View {
 
     private var segments: [CacheUsageSegment] {
         [
-            .init(title: "Аудио", bytes: usedStreams, color: .red),
-            .init(title: "Обложки", bytes: usedCovers, color: .orange),
-            .init(title: "Метаданные", bytes: usedMetadata, color: .yellow),
-            .init(title: "Прочее", bytes: unclassifiedUsage, color: .secondary)
+            .init(title: "Audio".localized, bytes: usedStreams, color: .red),
+            .init(title: "Covers".localized, bytes: usedCovers, color: .orange),
+            .init(title: "Metadata".localized, bytes: usedMetadata, color: .yellow),
+            .init(title: "Other".localized, bytes: unclassifiedUsage, color: .secondary)
         ].filter { $0.bytes > 0 }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Кэш приложения".localized)
+                Text("Application cache".localized)
                     .fontWeight(.medium)
                 Spacer()
                 Text(L10n.format("format.storage.used", totalDescription, limitDescription))
@@ -263,11 +259,11 @@ private struct CacheUsageOverview: View {
             }
             .frame(height: 12)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Использование кэша".localized)
+            .accessibilityLabel("Cache usage".localized)
             .accessibilityValue(L10n.format("format.storage.accessibilityValue", totalDescription, limitDescription))
 
             if segments.isEmpty {
-                Text("Кэш пока пуст.".localized)
+                Text("Cache is empty.".localized)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -316,8 +312,6 @@ private struct CacheUsageLegendItem: View {
     }
 }
 
-/// A policy row for a cache limit. A compact menu picker exposes meaningful
-/// storage tiers without the false precision of a continuous slider.
 private struct CacheBudgetSection: View {
     let title: String
     let details: String
@@ -383,16 +377,13 @@ private struct CacheLimitPreset: Identifiable {
 
     var id: Int { bytes }
 
-    static let all = [
-        CacheLimitPreset(megabytes: 512, title: "512 МБ"),
-        CacheLimitPreset(megabytes: 1_024, title: "1 ГБ"),
-        CacheLimitPreset(megabytes: 1_500, title: "1,5 ГБ"),
-        CacheLimitPreset(megabytes: 2_000, title: "2 ГБ"),
-        CacheLimitPreset(megabytes: 5_000, title: "5 ГБ"),
-        CacheLimitPreset(megabytes: 10_000, title: "10 ГБ"),
-        CacheLimitPreset(megabytes: 25_000, title: "25 ГБ"),
-        CacheLimitPreset(megabytes: 50_000, title: "50 ГБ")
-    ]
+    static let all: [CacheLimitPreset] = [
+        512, 1_024, 1_500, 2_000, 5_000, 10_000, 25_000, 50_000
+    ].map { megabytes in
+        let bytes = megabytes * 1024 * 1024
+        let title = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        return CacheLimitPreset(bytes: bytes, title: title)
+    }
 
     init(megabytes: Int, title: String) {
         self.bytes = megabytes * 1024 * 1024

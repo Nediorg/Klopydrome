@@ -78,7 +78,6 @@ final class QueryEditorModel: ObservableObject {
         QueryTree.remove(id, in: root)
     }
 
-    /// Insert a deep copy of the node right after itself in the same group.
     func duplicate(_ id: UUID) {
         guard let loc = QueryTree.locate(id, in: root) else { return }
         let copy = QueryNode(style: loc.parent.children[loc.index])
@@ -126,7 +125,6 @@ struct GroupRecursiveView: View {
             .strokeBorder(isDropTarget ? AMColor.accent : Color.gray.opacity(0.28),
                           lineWidth: isDropTarget ? 2 : 1))
         .overlay(alignment: .leading) {
-            // Hierarchy rail: makes nesting readable at a glance.
             if depth > 0 {
                 Rectangle().fill(Color.gray.opacity(0.35))
                     .frame(width: 2)
@@ -137,8 +135,8 @@ struct GroupRecursiveView: View {
         .padding(.leading, depth > 0 ? 22 : 0)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Дублировать группу".localized) { duplicateSelf() }
-            Button("Удалить группу".localized, role: .destructive) {
+            Button("Duplicate Group".localized) { duplicateSelf() }
+            Button("Delete Group".localized, role: .destructive) {
                 withAnimation(Motion.spring(Motion.expand)) { model.remove(group.id) }
             }
         }
@@ -151,7 +149,6 @@ struct GroupRecursiveView: View {
         }
     }
 
-    /// Slightly stronger fill for nested groups so the hierarchy reads clearly.
     private var nestedSurface: Color {
         if depth == 0 { return AMColor.surface.opacity(0.4) }
         return Color.gray.opacity(0.10 + Double(depth) * 0.03)
@@ -167,15 +164,15 @@ struct GroupRecursiveView: View {
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
                 .draggable(QueryDrag(nodeID: group.id, isGroup: true))
-                .help("Переместить группу".localized)
-                .accessibilityLabel("Переместить группу".localized)
+                .help("Move group".localized)
+                .accessibilityLabel("Move group".localized)
 
             HStack(spacing: 6) {
                 Image(systemName: "square.3.layers.3d.down.right").foregroundStyle(.secondary)
-                Text("Группа".localized).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text("Group".localized).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             .fixedSize()
-            Picker("Логика".localized, selection: logicBinding) {
+            Picker("Logic".localized, selection: logicBinding) {
                 ForEach(QueryGroupLogic.allCases, id: \.self) { logic in
                     Text(logic.label.localized).tag(logic)
                 }
@@ -194,26 +191,22 @@ struct GroupRecursiveView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Удалить группу".localized)
-                .accessibilityLabel("Удалить группу".localized)
+                .help("Delete Group".localized)
+                .accessibilityLabel("Delete Group".localized)
             }
         }
     }
 
-    /// Buttons that add to THIS group, placed where new rules appear (bottom),
-    /// so the eye doesn't have to jump from the header to the append point.
     private var addRow: some View {
         HStack(spacing: 10) {
-            addAction(Label("Правило".localized, systemImage: "plus"), help: "Добавить правило".localized) { addRule() }
-            addAction(Label("Группа".localized, systemImage: "plus.square.stack"),
-                      help: "Добавить вложенную группу".localized) { addGroup() }
+            addAction(Label("Rule".localized, systemImage: "plus"), help: "Add Rule".localized) { addRule() }
+            addAction(Label("Group".localized, systemImage: "plus.square.stack"),
+                      help: "Add Nested Group".localized) { addGroup() }
             Spacer()
         }
         .padding(.top, 2)
     }
 
-    /// A constructive "add" action. The editor's root tints everything with the
-    /// system accent, so no per-button tint is needed here.
     private func addAction(_ label: Label<Text, Image>, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { label }
             .buttonStyle(.borderless)
@@ -279,9 +272,6 @@ struct GroupRecursiveView: View {
         }
     }
 }
-/// Insertion slots between rows. Kept slim (10pt still catches drops; the
-/// group container itself accepts drops appended at the end), so stacked
-/// rules don't drift apart — the old 22pt slots read as huge dead gaps.
 private struct SlotLine: View {
     let isHighlighted: Bool
 

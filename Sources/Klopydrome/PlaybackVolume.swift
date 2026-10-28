@@ -10,9 +10,6 @@ import Foundation
 enum PlaybackVolume {
     private static let curveExponent: Float = 3.0
 
-    /// Converts the slider position (0...1) into linear output gain using a cubic
-    /// audio taper. 50% slider corresponds to ~-18 dB (comfortable reference level),
-    /// while 10%–30% slider gives precise, fine-grained control over quiet listening.
     static func outputGain(for control: Float) -> Float {
         let normalized = min(max(control, 0), 1)
         guard normalized > 0 else { return 0 }

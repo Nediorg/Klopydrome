@@ -9,25 +9,17 @@ struct ArtistDetailView: View {
     @State private var loading = true
     @State var topSongs: [SubsonicSong]?
     @State private var loadingTopSongs = true
-    /// Every song of the artist, fetched once by `load()` and reused by
-    /// "Gather & Play" instead of issuing a duplicate request burst.
     @State var allSongs: [SubsonicSong] = []
     @State private var gatheringSongs = false
     @State private var artistInfo: ArtistInfoPayload?
     @State private var showInfoSheet = false
 
-    /// Albums fetched concurrently at a time; keeps a big artist from issuing
-    /// hundreds of simultaneous album requests to the server.
     let albumBatchSize = 8
 
-    /// Sort chosen for the album shelf; defaults to release date.
     @State private var albumSort: ArtistAlbumSort = .release
-    /// Albums this artist appears on without being the lead/album artist.
     @State var appearsOn: [SubsonicAlbum] = []
     @State private var hasSearchedAppearsOn = false
-    /// Expands the album shelf into a full grid when true; the header chevron toggles it.
     @State private var albumsExpanded = false
-    /// Sort direction for the album shelf/grid (descending = newest first by default).
     @State private var albumsDescending = true
 
     @State private var cachedAlbums: [SubsonicAlbum] = []
@@ -47,8 +39,6 @@ struct ArtistDetailView: View {
         }
     }
 
-    /// Role label inferred from the OpenSubsonic `roles` tag when present,
-    /// Identifying the artist's primary role (album artist vs composer vs guest).
     private var roleLabel: String? {
         ArtistRole.primaryRole(
             roles: displayDetail.roles,
@@ -114,7 +104,7 @@ struct ArtistDetailView: View {
                 }
                 .scrollClipDisabled()
             } else {
-                ContentUnavailableView("Исполнитель недоступен", systemImage: "music.mic")
+                ContentUnavailableView("Artist unavailable".localized, systemImage: "music.mic")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -140,7 +130,7 @@ struct ArtistDetailView: View {
     private func appearsOnSection() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Text("Появляется на".localized)
+                Text("Appears on".localized)
                     .font(.title2.bold())
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -167,33 +157,12 @@ struct ArtistDetailView: View {
 
     private func similarArtistsSection(_ similar: [Artist]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Похожие исполнители".localized)
+            Text("Similar Artists".localized)
                 .font(.title2.bold())
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(similar) { artist in
-                        Button {
-                            app.openArtistInLibrary(artist)
-                        } label: {
-                            VStack(spacing: 6) {
-                                CircularArtistArt(
-                                    name: artist.name,
-                                    imageURL: artist.artistImageUrl,
-                                    coverArt: artist.coverArt ?? app.coverArtForArtist(artist),
-                                    size: 80
-                                )
-                                Text(artist.name)
-                                    .font(.caption)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.center)
-                                    .frame(width: 80, alignment: .top)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            ArtistContextMenuItems(artist: artist)
-                        }
+                        ArtistTile(artist: artist)
                     }
                 }
                 .padding(.vertical, 8)
@@ -203,8 +172,6 @@ struct ArtistDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
     }
-
-    // MARK: Actions
 
     private func gatherAndPlay() {
         guard !gatheringSongs else { return }
@@ -246,7 +213,6 @@ struct ArtistDetailView: View {
             return
         }
 
-        // 1. Instant restore from SWR disk/memory cache
         if detail == nil, let cached = await app.cachedArtistDetail(for: artist.id) {
             detail = cached
             updateCachedAlbums()
@@ -266,7 +232,6 @@ struct ArtistDetailView: View {
         }
         let name = detail?.name ?? artist.name
 
-        // Fetch artist info and tracks concurrently
         async let infoTask: ArtistInfoPayload? = try? await client.getArtistInfo(id: resolvedID)
         async let tracksTask: Void = loadTracks(client: client, resolvedID: resolvedID, name: name)
 
@@ -313,9 +278,6 @@ struct ArtistDetailView: View {
         }
     }
 
-    /// Fetches albums this artist appears on without being the lead artist:
-    /// search3 for the artist name, pick songs where they're the track artist
-    /// on an album they don't lead, deduplicated by album id.
     private func loadAppearsOn(client: SubsonicClient) async {
         guard !hasSearchedAppearsOn else { return }
         hasSearchedAppearsOn = true
@@ -331,7 +293,6 @@ struct ArtistDetailView: View {
             guard song.artistId == artistID else { continue }
             let albumID = song.albumId ?? ""
             guard !albumID.isEmpty, !seen.contains(albumID) else { continue }
-            // Skip songs where this artist leads the album (album artist matches).
             if let albumArtist = song.albumArtist, albumArtist.lowercased() == artistName { continue }
             if grouped[albumID] == nil { grouped[albumID] = song }
         }
@@ -349,45 +310,31 @@ struct ArtistDetailView: View {
     }
 }
 
-/// Role label for an artist, from OpenSubsonic `roles` when present; otherwise
-/// a plain "Исполнитель" fallback. Resolves the artist's distinct primary role
-/// without concatenating multiple internal tags into a single text line.
 enum ArtistRole {
     static func primaryRole(roles: [String]?, hasAlbums: Bool, songs: [SubsonicSong]) -> String {
         let normalized = roles?.map { $0.lowercased() } ?? []
-        // If the artist released albums in the library, their primary role is Album Artist.
         if hasAlbums || normalized.contains("albumartist") {
-            return "Исполнитель альбома".localized
+            return "Album artist".localized
         }
-        // If the artist has no albums of their own in the library, but is a composer.
         if normalized.contains("composer") {
-            return "Композитор".localized
+            return "Composer".localized
         }
-        // If the artist appears only as a featured performer on other artists' tracks.
         if normalized.contains("artist") {
-            return "Приглашённый артист".localized
+            return "Featured Artist".localized
         }
-        return "Исполнитель".localized
+        return "Artist".localized
     }
 }
 
-// MARK: - Discography crawl
-
-/// Album shelf + grid builders for the artist page, kept out of the main struct
-/// body so `ArtistDetailView` stays under the `type_body_length` budget.
 private extension ArtistDetailView {
-    /// The album section: a header that toggles between the horizontal shelf
-    /// and a full grid of the artist's albums, without leaving the page.
     var albumsShelf: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Button {
-                    withAnimation(Motion.spring(Motion.expand)) {
-                        albumsExpanded.toggle()
-                    }
+                    albumsExpanded.toggle()
                 } label: {
                     HStack(spacing: 6) {
-                        Text("Альбомы".localized)
+                        Text("Albums".localized)
                             .font(.title2.bold())
                         Image(systemName: "chevron.right")
                             .font(.caption)
@@ -397,8 +344,8 @@ private extension ArtistDetailView {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(albumsExpanded ? "Свернуть альбомы" : "Раскрыть альбомы сеткой")
-                .accessibilityLabel(albumsExpanded ? "Свернуть альбомы" : "Раскрыть альбомы сеткой")
+                .help((albumsExpanded ? "Collapse Albums" : "Show albums in grid").localized)
+                .accessibilityLabel((albumsExpanded ? "Collapse Albums" : "Show albums in grid").localized)
                 Spacer()
                 AlbumSortMenu(sort: $albumSort, descending: $albumsDescending)
             }
@@ -425,19 +372,17 @@ private extension ArtistDetailView {
                 .transition(.opacity)
             }
         }
+        .animation(Motion.spring(Motion.expand), value: albumsExpanded)
     }
 
     private var albumsShelfSkeleton: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Альбомы".localized)
+            Text("Albums".localized)
                 .font(.title2.bold())
             SkeletonCardShelf(count: 4, cardSize: 150, isCircle: false, spacing: 12)
         }
     }
 
-    /// The discography as a compact adaptive grid (150pt cards), shown when the
-    /// album section is expanded. Smaller than the Albums tab grid so more
-    /// columns fit and cells hug the cards instead of leaving dead space.
     var albumsGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
             ForEach(albums) { album in

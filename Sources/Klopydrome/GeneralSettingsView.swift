@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// General application settings: server account, offline mode, and auto-reconnect preferences.
 struct GeneralSettingsView: View {
     @Environment(AppState.self) private var app
     @State private var showLogout = false
@@ -21,27 +20,29 @@ struct GeneralSettingsView: View {
     }
 
     private var accountSection: some View {
-        Section("Аккаунт".localized) {
-            LabeledContent("Сервер".localized) {
+        Section("Account".localized) {
+            LabeledContent("Server".localized) {
                 Text(app.serverConfig.url)
                     .foregroundStyle(.secondary)
             }
 
-            Button("Выйти из аккаунта".localized, role: .destructive) {
+            Button("Sign Out".localized, role: .destructive) {
                 showLogout = true
             }
             .confirmationDialog(
-                "Выйти из аккаунта?".localized,
+                "Sign out of account?".localized,
                 isPresented: $showLogout,
                 titleVisibility: .visible
             ) {
-                Button("Выйти".localized, role: .destructive) {
+                Button("Sign Out".localized, role: .destructive) {
                     app.disconnect()
                 }
-                Button("Отмена".localized, role: .cancel) {}
+                Button("Cancel".localized, role: .cancel) {}
             } message: {
-                // swiftlint:disable:next line_length
-                Text("Очередь, кэш и сохранённый пароль будут очищены. Вы сможете подключиться к другому серверу.".localized)
+                Text(
+                    "Queue, cache, and saved password will be cleared. You will be able to connect to another server."
+                        .localized
+                )
             }
         }
     }
@@ -53,7 +54,7 @@ struct GeneralSettingsView: View {
     private var offlineSection: some View {
         Section {
             Toggle(
-                "Офлайн-режим".localized,
+                "Offline Mode".localized,
                 isOn: Binding(
                     get: { app.serverConfig.effectiveForceOfflineMode },
                     set: { newValue in
@@ -63,13 +64,13 @@ struct GeneralSettingsView: View {
             )
 
             Toggle(
-                "Автоматически переподключаться".localized,
+                "Auto-reconnect".localized,
                 isOn: Bindable(app).serverConfig.autoReconnectEnabled.orTrue
             )
             .disabled(isWorkOffline)
 
             Toggle(
-                "Спрашивать перед синхронизацией".localized,
+                "Ask before syncing".localized,
                 isOn: Binding(
                     get: { !app.serverConfig.effectiveSuppressOfflinePrompts },
                     set: { newValue in
@@ -79,24 +80,24 @@ struct GeneralSettingsView: View {
                 )
             )
 
-            LabeledContent("Статус".localized) {
+            LabeledContent("Status".localized) {
                 Text(connectionStatusLabel)
                     .foregroundStyle(connectionStatusColor)
             }
         } header: {
-            Text("Сеть".localized)
+            Text("Network".localized)
         }
     }
 
     private var connectionStatusLabel: String {
         if isWorkOffline {
-            return "Офлайн".localized
+            return "Offline".localized
         } else if app.isReconnecting {
-            return "Подключение…".localized
+            return "Connecting…".localized
         } else if app.isOfflineSession {
-            return "Офлайн".localized
+            return "Offline".localized
         } else {
-            return "Подключено к серверу".localized
+            return "Connected to Server".localized
         }
     }
 

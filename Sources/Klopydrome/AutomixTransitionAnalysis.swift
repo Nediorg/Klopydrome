@@ -2,7 +2,6 @@ import AVFoundation
 import Foundation
 import os
 
-/// A transition selected from the measured edges of two tracks.
 struct AutomixTransitionPlan: Equatable, Sendable {
     enum Basis: String, Sendable {
         case silence
@@ -16,8 +15,6 @@ struct AutomixTransitionPlan: Equatable, Sendable {
     let basis: Basis
 }
 
-/// RMS envelopes sampled at a fixed cadence from the beginning and end of a
-/// decoded local audio file. Values are dBFS and are chronological in both arrays.
 struct AutomixEdgeProfile: Sendable {
     let frameDuration: Double
     let leadingDBFS: [Float]
@@ -87,8 +84,6 @@ enum AutomixTransitionPlanner {
         return Double(frames) * profile.frameDuration
     }
 
-    /// Finds a local energy maximum close to the nominal fade start. This is a
-    /// lightweight onset proxy when a real silent outro is not available.
     private static func nearestOnset(
         in profile: AutomixEdgeProfile,
         targetSecondsFromTail: Double

@@ -1,8 +1,6 @@
 import Dispatch
 import NavidromeClient
 extension SubsonicAlbum {
-    /// Builds the best immediately renderable album summary from a now-playing
-    /// song while the destination fetches its authoritative album detail.
     static func nowPlayingSummary(from song: SubsonicSong, albumID: String) -> Self {
         Self(
             id: albumID,
@@ -29,10 +27,6 @@ extension Artist {
 }
 
 extension AppState {
-    /// Presents main-window-owned UI (sheets are attached to `MainView`) from
-    /// any now-playing surface. When the mini-player panel is up, it yields
-    /// focus back to the main window first and presentation happens on the
-    /// next run-loop tick, once that window is visible again.
     func presentInMainWindow(_ present: @escaping @MainActor () -> Void) {
         guard MiniPlayerPanelController.shared.isVisible else {
             present()
@@ -44,20 +38,12 @@ extension AppState {
         }
     }
 
-    /// Reveals an album in the main library from any now-playing surface.
-    /// The request belongs to the main navigation stack; a mini-player-local
-    /// path has no destination and would otherwise silently discard the action.
-    /// The panel is closed FIRST so the main window is visible and key before
-    /// the navigation state it observes changes.
     func openAlbumInLibrary(_ album: SubsonicAlbum) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.history.append(.album(album))
         nav.navVersion += 1
     }
 
-    /// Opens the song-detail page in the main library from a surface outside
-    /// the main navigation stack (the mini-player panel has no stack of its
-    /// own).
     func openSongDetails(_ song: SubsonicSong) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.history.append(.song(song))
@@ -87,8 +73,6 @@ extension AppState {
         }
     }
 
-    /// Shows the playlists view — used as the “go to playlist” fallback from a
-    /// song row when no single playlist context exists.
     func openPlaylistsLibrary() {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.selectedPlaylist = nil
@@ -97,7 +81,6 @@ extension AppState {
         nav.navVersion += 1
     }
 
-    /// Reveals a concrete playlist in the main library.
     func openPlaylist(_ playlist: PlaylistSummary) {
         recordRecentPlaylist(playlist.id)
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
@@ -105,14 +88,12 @@ extension AppState {
         nav.navVersion += 1
     }
 
-    /// Reveals a smart playlist in the main library.
     func openSmartPlaylist(_ playlist: SmartPlaylist) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.history.append(.smartPlaylist(playlist))
         nav.navVersion += 1
     }
 
-    /// Pops the current sub-page from history or returns to All Playlists.
     func navigateBack() {
         if !nav.history.isEmpty {
             nav.history.removeLast()
@@ -123,9 +104,6 @@ extension AppState {
         nav.navVersion += 1
     }
 
-    /// Playlists that are known to contain the song, based on already-loaded
-    /// details and load states. No extra network — only what the library has
-    /// already fetched in this session.
     func playlistsContaining(_ song: SubsonicSong) -> [PlaylistSummary] {
         var result: [PlaylistSummary] = []
         for playlist in library.playlists {

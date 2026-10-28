@@ -1,9 +1,6 @@
 import Foundation
 
 extension Player {
-    /// Starts independent edge analysis once both playback sources are known.
-    /// Remote streams yield the conservative fallback immediately; cached local
-    /// files are decoded off the main actor and can refine the transition.
     func scheduleTransitionAnalysis() {
         guard automix.enabled,
               let currentSourceURL = automix.currentSourceURL,

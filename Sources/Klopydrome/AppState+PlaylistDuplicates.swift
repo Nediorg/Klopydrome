@@ -2,7 +2,6 @@ import AppKit
 import Foundation
 import NavidromeClient
 
-/// Pure logic for detecting and resolving duplicate songs when adding to a playlist.
 struct PlaylistDuplicateResolver {
     enum ResolutionResult: Equatable {
         case add(songs: [SubsonicSong])
@@ -38,7 +37,6 @@ struct PlaylistDuplicateResolver {
 extension AppState {
     static let duplicatePlaylistActionKey = "duplicatePlaylistAction"
 
-    /// Preference for handling duplicate songs when adding to a playlist.
     var duplicatePlaylistAction: DuplicatePlaylistAction {
         get {
             access(keyPath: \.duplicatePlaylistAction)
@@ -61,7 +59,6 @@ extension AppState {
         case cancel
     }
 
-    /// Adds songs to a playlist, checking for duplicates and prompting the user if needed.
     @MainActor
     func addSongsCheckingDuplicates(_ targets: [SubsonicSong], to playlist: PlaylistSummary) async {
         guard !targets.isEmpty else { return }
@@ -96,7 +93,6 @@ extension AppState {
         }
     }
 
-    /// Displays a native macOS modal alert when duplicate tracks are detected.
     @MainActor
     private func promptPlaylistDuplicates(
         duplicates: [SubsonicSong],
@@ -124,11 +120,11 @@ extension AppState {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать".localized
+        alert.suppressionButton?.title = "Do not ask again".localized
         alert.messageText = L10n.format("format.playlist.duplicate.singleTitle", songTitle, playlist.displayName)
-        alert.informativeText = "Добавить копию трека?".localized
-        alert.addButton(withTitle: "Добавить копию".localized)
-        let cancelBtn = alert.addButton(withTitle: "Отмена".localized)
+        alert.informativeText = "Add a copy of this track?".localized
+        alert.addButton(withTitle: "Add Copy".localized)
+        let cancelBtn = alert.addButton(withTitle: "Cancel".localized)
         cancelBtn.keyEquivalent = "\u{1b}"
 
         let response = alert.runModal()
@@ -149,11 +145,11 @@ extension AppState {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать".localized
+        alert.suppressionButton?.title = "Do not ask again".localized
         alert.messageText = L10n.format("format.playlist.duplicate.allTitle", count, playlist.displayName)
-        alert.informativeText = "Добавить копии треков?".localized
-        alert.addButton(withTitle: "Добавить копии".localized)
-        let cancelBtn = alert.addButton(withTitle: "Отмена".localized)
+        alert.informativeText = "Add copies of these tracks?".localized
+        alert.addButton(withTitle: "Add Copies".localized)
+        let cancelBtn = alert.addButton(withTitle: "Cancel".localized)
         cancelBtn.keyEquivalent = "\u{1b}"
 
         let response = alert.runModal()
@@ -175,13 +171,17 @@ extension AppState {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать".localized
-        // swiftlint:disable:next line_length
-        alert.messageText = L10n.format("format.playlist.duplicate.multipleTitle", duplicatesCount, totalCount, playlist.displayName)
-        alert.informativeText = "Вы можете пропустить существующие песни или добавить копии.".localized
-        alert.addButton(withTitle: "Пропустить дубликаты".localized)
-        alert.addButton(withTitle: "Добавить все".localized)
-        let cancelBtn = alert.addButton(withTitle: "Отмена".localized)
+        alert.suppressionButton?.title = "Do not ask again".localized
+        alert.messageText = L10n.format(
+            "format.playlist.duplicate.multipleTitle",
+            duplicatesCount,
+            totalCount,
+            playlist.displayName
+        )
+        alert.informativeText = "You can skip existing songs or add copies.".localized
+        alert.addButton(withTitle: "Skip Duplicates".localized)
+        alert.addButton(withTitle: "Add All".localized)
+        let cancelBtn = alert.addButton(withTitle: "Cancel".localized)
         cancelBtn.keyEquivalent = "\u{1b}"
 
         let response = alert.runModal()

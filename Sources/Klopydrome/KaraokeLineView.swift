@@ -1,13 +1,10 @@
 import SwiftUI
 import NavidromeClient
 
-/// 0-, 3-state styling for a lyric line.
 enum LyricLineState {
     case past, now, future
 }
 
-/// Identity skips idle rows on coarse player ticks: only rows whose inputs
-/// changed (state/visualDistance/fillLive) re-evaluate. `onTap` is deliberately excluded.
 extension KaraokeLine: Equatable {
     static func == (lhs: KaraokeLine, rhs: KaraokeLine) -> Bool {
         lhs.text == rhs.text
@@ -24,8 +21,6 @@ extension KaraokeLine: Equatable {
     }
 }
 
-/// Animated shell around the ticking line content. Isolates layout springs
-/// and depth-of-field blur from the 60 fps word-fill TimelineView.
 private struct KaraokeLineSpring<Content: View>: View {
     let scale: CGFloat
     let offsetY: CGFloat
@@ -54,23 +49,16 @@ struct KaraokeLine: View {
     @State private var isHovering = false
 
     let text: String
-    /// Line start in seconds (from `SyncedLine.start`, ms).
     let lineStart: Double?
-    /// Fallback sample for non-live states.
     let currentTime: Double
-    /// Interpolates authoritative samples between player publications.
     let renderClock: LyricsRenderClock?
     let state: LyricLineState
     let index: Int
     let activeLineIndex: Int?
     let scrollDirection: Int
-    /// Precomputed word cues for this line.
     var words: [SyncedWord]?
-    /// Layout cap for the text column.
     var maxLayoutWidth: CGFloat?
-    /// Retained for compatibility.
     var fillLive: Bool = false
-    /// True when user is browsing/scrolling: disables blur and lifts opacity for readability.
     var isBrowsing: Bool = false
     var fontSize: LyricsFontSize = .standard
     var motion: LyricsAnimationMotion = .smooth
@@ -123,7 +111,6 @@ struct KaraokeLine: View {
         self.wordSync = parsed.count > 1 && parsed.map(\.text).joined() == reserve
     }
 
-    /// Maximum line scale reached by active line (1.15).
     static let maxLineScale: CGFloat = 1.15
 
     private var textColumnWidth: CGFloat? {
@@ -272,7 +259,6 @@ struct KaraokeLine: View {
         ))
     }
 
-    /// Retained helper for existing tests and smoothstep settling.
     static func wordSettledOpacity(
         at currentTime: Double,
         wordStart: Double,

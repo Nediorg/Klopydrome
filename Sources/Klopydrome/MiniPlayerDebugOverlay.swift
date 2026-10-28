@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Tiny on-screen debug HUD: shows the seek-related state variables
-/// so we can see what's happening on your machine. Enable with:
-///   defaults write Klopydrome debugShowPlayerState -bool YES
 struct MiniPlayerDebugOverlay: View {
     let app: AppState
 

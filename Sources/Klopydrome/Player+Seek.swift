@@ -2,8 +2,6 @@ import Foundation
 import NavidromeClient
 import AVFoundation
 
-// MARK: Seek / scrub
-
 extension Player {
     /// Precise seek. When the current item isn't loaded yet (buffering a new
     /// stream), the target is remembered and applied as soon as the track is
@@ -48,8 +46,6 @@ extension Player {
             currentTime = clamped
             return
         }
-        // Remote transcodes are not seekable via AVPlayer's range requests;
-        // restart the server stream at the target (timeOffset) instead.
         if currentSourceIsRemoteTranscode {
             heldSeekTarget = clamped
             setAVPTranscodeSeek(to: clamped)
@@ -70,7 +66,6 @@ extension Player {
         }
     }
 
-    /// Applies a seek that was requested before the track finished loading or buffering.
     func applyPendingSeekIfNeeded() {
         if let pendingSeekTime {
             self.pendingSeekTime = nil
@@ -85,24 +80,15 @@ extension Player {
         }
     }
 
-    /// Begin a scrub session: the time observer stops reporting so the drag
-    /// preview is the single source of truth for `currentTime`.
     func beginScrub() {
         isScrubbing = true
         heldSeekTarget = nil
     }
 
-    /// Tune the position while scrubbing. Uses a tolerant AVPlayer seek (nearest
-    /// decodable frame) and reflects it on `currentTime` immediately, so the
-    /// knob follows the finger smoothly instead of jumping on release.
     func scrub(to time: Double) {
         let clamped = max(0, time)
         currentTime = clamped
         guard engineKind != .mpv, !currentSourceIsRemoteTranscode else {
-            // mpv seeks are cheap range requests, so while scrubbing we only
-            // move the preview; `endScrub` commits the real reposition.
-            // On remote transcodes, live scrubbing against a non-seekable pipe
-            // is not supported; hold the preview and commit on release.
             if engineKind == .mpv, !mpvEngine.isLoaded || mpvEngine.isBuffering || !mpvEngine.isSeekable {
                 pendingSeekTime = clamped
             }
@@ -118,14 +104,11 @@ extension Player {
         avPlayer.seek(to: target, toleranceBefore: .positiveInfinity, toleranceAfter: .positiveInfinity)
     }
 
-    /// Commit the scrub with a precise seek and restore live tracking.
     func endScrub(at time: Double) {
         isScrubbing = false
         seek(to: time)
     }
 }
-
-// MARK: Transport
 
 extension Player {
     func togglePlayPause() {
@@ -152,9 +135,6 @@ extension Player {
         guard let song = currentSong else { return }
         lastError = nil
         hasReportedFailure = false
-        // Queue restored from the server points at a track, but nothing has
-        // been loaded into the engine yet (fresh launch / restart). Resolve the
-        // source first — `play()` on an empty engine is a no-op.
         if engineKind == .mpv {
             if mpvEngine.isLoaded {
                 mpvEngine.play()
@@ -180,8 +160,6 @@ extension Player {
     }
 
     func stop() {
-        guard hasQueue else { return }
-
         resetPreloadedNext()
         avPlayer?.pause()
         avPlayer?.replaceCurrentItem(with: nil)
@@ -199,6 +177,7 @@ extension Player {
         mpvStreamOffset = 0
         mpvSeekRestartActive = false
         mpvRestartStepped = false
+        playbackContext = nil
         updateNowPlayingInfo()
     }
 
@@ -244,7 +223,6 @@ extension Player {
         }
     }
 
-    /// Called when the natural end of a track is reached.
     func trackDidFinish() {
         if engineKind == .mpv { mpvEngine.stop() }
         if repeatMode == .one {
@@ -256,8 +234,6 @@ extension Player {
     }
 }
 
-// MARK: Formatting
-
 extension Player {
     func formattedCurrentTime() -> String {
         Self.format(seconds: currentTime)
@@ -267,16 +243,12 @@ extension Player {
         Self.format(seconds: trackDuration)
     }
 
-    /// Remaining playback time, rendered the Apple Music way: `-3:11`.
-    /// Returns `--:--` until the duration is actually known (i.e. not 0).
     func formattedRemainingTime() -> String {
         guard trackDuration > 0 else { return "--:--" }
         let remaining = max(0, trackDuration - currentTime)
         return "-\(Self.format(seconds: remaining))"
     }
 
-    /// Formats seconds into a timer string. Avoids `String(format:)` (a slow
-    /// ObjC-bridged call) because the song table calls this once per row.
     static func format(seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let total = Int(seconds)

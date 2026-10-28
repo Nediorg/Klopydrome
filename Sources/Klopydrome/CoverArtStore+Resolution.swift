@@ -10,32 +10,25 @@ extension CoverArtStore {
         let cacheKey = CacheManager.coverKey(coverArt: coverArt, size: size ?? 0)
         if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
            let image = decodeImage(from: data, requestedSize: size) {
-            // swiftlint:disable:next line_length
             coverLogger.debug("disk hit coverArt=\(coverArt, privacy: .private) size=\(size.map(String.init) ?? "orig", privacy: .private)")
             return .image(image)
         }
-        // Disk fallback: if exact size is missing on disk, inspect larger cached sizes
-        // (e.g. 720, 1200, 0/orig) and downsample in memory without network or disk duplication.
         if let size, size > 0, let larger = await findLargerCachedCoverOnDisk(coverArt: coverArt, than: size) {
             return .image(larger)
         }
         guard let client else {
-            // Offline fallback: check any available cached size on disk (smaller or alternative bucket)
-            // so offline mode renders actual artwork instead of a placeholder.
             if let fallback = await findAnyCachedCoverOnDisk(coverArt: coverArt, requestedSize: size) {
                 return .image(fallback)
             }
             return .transient
         }
         guard let url = client.coverArtURL(id: coverArt, size: size) else {
-            // swiftlint:disable:next line_length
             coverLogger.error("no url for coverArt=\(coverArt, privacy: .private) size=\(size.map(String.init) ?? "orig", privacy: .private)")
             return .dead
         }
         coverLogger.debug("fetch coverArt=\(coverArt, privacy: .private) url=\(url.absoluteString, privacy: .private)")
         let outcome = await fetch(url: url, cacheKey: cacheKey, requestedSize: size)
         if case .image = outcome, let cache, size == nil || (size ?? 0) >= 720 {
-            // A high-resolution copy is now on disk; any obsolete low-res thumbnail file can be evicted.
             let thumbKey = CacheManager.coverKey(coverArt: coverArt, size: 240)
             if thumbKey != cacheKey {
                 await cache.removeFile(for: .covers, key: thumbKey)
@@ -50,9 +43,6 @@ extension CoverArtStore {
 
     private static let candidateFallbackSizes = [0, 2048, 1200, 1000, 750, 720, 500, 360, 240, 200, 160, 80]
 
-    /// Searches disk for any available cached version of `coverArt` when exact and
-    /// strictly larger sizes are missing (crucial for offline sessions or network drops).
-    /// Orders candidates from highest available down to lowest.
     func findAnyCachedCoverOnDisk(coverArt: String, requestedSize: Int?) async -> NSImage? {
         guard let cache else { return nil }
         let candidates: [Int]
@@ -69,7 +59,6 @@ extension CoverArtStore {
             if await cache.hasFile(for: .covers, key: key),
                let data = await cache.readData(for: .covers, key: key),
                let image = decodeImage(from: data, requestedSize: requestedSize) {
-                // swiftlint:disable:next line_length
                 coverLogger.debug("disk reuse fallback coverArt=\(coverArt, privacy: .private) found=\(candidate) for=\(requestedSize.map(String.init) ?? "orig")")
                 lock.withLock {
                     _ = cachedSizes[coverArt, default: []].insert(requestedSize ?? 0)
@@ -80,9 +69,6 @@ extension CoverArtStore {
         return nil
     }
 
-    /// Looks for a larger version of `coverArt` already stored on disk.
-    /// If found, downsamples it in memory, registers it in `cachedSizes`,
-    /// and returns the bounded image without writing duplicate files to disk.
     private func findLargerCachedCoverOnDisk(coverArt: String, than size: Int) async -> NSImage? {
         guard let cache else { return nil }
         for largerSize in CoverResolution.candidateLargerSizes(than: size) {
@@ -90,7 +76,6 @@ extension CoverArtStore {
             if await cache.hasFile(for: .covers, key: largerKey),
                let data = await cache.readData(for: .covers, key: largerKey),
                let image = decodeImage(from: data, requestedSize: size) {
-                // swiftlint:disable:next line_length
                 coverLogger.debug("disk reuse larger coverArt=\(coverArt, privacy: .private) found=\(largerSize) for=\(size)")
                 lock.withLock {
                     _ = cachedSizes[coverArt, default: []].insert(size)
@@ -111,8 +96,6 @@ extension CoverArtStore {
             resolved = nil
         }
         guard let resolved else { return client == nil ? .transient : .dead }
-        // Artist URLs are resolved absolute URLs; key the disk cache by it so
-        // repeated visits don't re-download full-resolution artwork.
         let cacheKey = CacheManager.metadataKey(endpoint: "artistImage",
                                                 params: [URLQueryItem(name: "url", value: resolved.absoluteString)])
         if let cache, let data = await cache.readData(for: .covers, key: cacheKey),
@@ -123,9 +106,6 @@ extension CoverArtStore {
         return await fetch(url: resolved, cacheKey: cacheKey, requestedSize: size)
     }
 
-    /// Downloads cover art via `URLSession` (proper timeouts, cancellable),
-    /// bounded by the concurrency gate. Classifies the outcome so transient
-    /// failures never latch into `failedKeys`.
     func fetch(url: URL, cacheKey: String?, requestedSize: Int?) async -> FetchOutcome {
         guard !Task.isCancelled else { return .transient }
         coverLogger.debug("gate acquire url=\(url.absoluteString, privacy: .private)")
@@ -137,8 +117,6 @@ extension CoverArtStore {
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                     let code = (response as? HTTPURLResponse)?.statusCode ?? -1
                     coverLogger.debug("fetch http \(code) url=\(url.absoluteString, privacy: .private)")
-                    // 404 = genuinely missing art; anything else (500, auth) may
-                    // recover, so don't latch it for the full TTL.
                     return code == 404 ? .dead : .transient
                 }
                 guard let image = self.decodeImage(from: data, requestedSize: requestedSize) else {
@@ -147,8 +125,6 @@ extension CoverArtStore {
                     )
                     return .dead
                 }
-                // Validate BEFORE writing: an error payload (HTML/JSON behind a
-                // 200, or truncated bytes) must never poison the disk cache.
                 if let cacheKey, let cache = self.cache {
                     _ = try? await cache.write(data: data, to: .covers, key: cacheKey)
                 }
@@ -157,7 +133,6 @@ extension CoverArtStore {
                 )
                 return .image(image)
             } catch {
-                // swiftlint:disable:next line_length
                 coverLogger.error("fetch error url=\(url.absoluteString, privacy: .private) \(error.localizedDescription, privacy: .private)")
                 return Self.classifyFetchError(error)
             }
@@ -165,10 +140,6 @@ extension CoverArtStore {
         return outcome ?? .transient
     }
 
-    /// Maps a fetch throw to transient (retryable, never latched) vs dead.
-    /// Covers cancellation explicitly: `URLSession` surfaces task-cancel as
-    /// `URLError.cancelled`, and structured cancellation may surface as
-    /// `CancellationError` — neither means the artwork is gone.
     static func classifyFetchError(_ error: Error) -> FetchOutcome {
         if error is CancellationError { return .transient }
         if Task.isCancelled { return .transient }
@@ -181,8 +152,6 @@ extension CoverArtStore {
         }
     }
 
-    /// Decodes image data directly at target dimensions using ImageIO downsampling,
-    /// preventing multi-megapixel full bitmaps from ever inflating in RAM.
     func decodeImage(from data: Data, requestedSize: Int?) -> NSImage? {
         let targetSide = requestedSize.map(CGFloat.init) ?? Self.maxDecodedSide
         let maxPixelSize = Int(targetSide)
@@ -202,11 +171,6 @@ extension CoverArtStore {
         return bounded(fallback, requestedSize: requestedSize)
     }
 
-    /// Downsamples artwork that exceeded its requested display size (or the
-    /// `maxDecodedSide` cap for `.original`/artist URLs, which have no server
-    /// size parameter) so the memory cache never holds multi-megapixel
-    /// bitmaps. The disk cache still stores the full-resolution data; only
-    /// the decoded in-memory representation is bounded.
     func bounded(_ image: NSImage, requestedSize: Int?) -> NSImage {
         let targetSide = requestedSize.map(CGFloat.init) ?? Self.maxDecodedSide
         let largest = max(image.size.width, image.size.height)

@@ -1,9 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// A unified status card pinned to the bottom of the sidebar.
-/// Adapts across background states: applying queued changes,
-/// scanning the media library, and offline session mode.
 struct SidebarStatusCard: View {
     @Environment(AppState.self) private var app
 
@@ -72,13 +69,13 @@ struct SidebarStatusCard: View {
     private func title(for state: StatusState) -> String {
         switch state {
         case .connecting:
-            return "Подключение…".localized
+            return "Connecting…".localized
         case .applyingChanges:
-            return "Применение изменений".localized
+            return "Applying Changes".localized
         case .scanningLibrary:
-            return "Сканирование медиатеки…".localized
+            return "Scanning media library…".localized
         case .offline:
-            return "Офлайн-режим".localized
+            return "Offline Mode".localized
         }
     }
 
@@ -99,7 +96,7 @@ struct SidebarStatusCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Подключиться к серверу".localized)
+                .help("Connect to Server".localized)
             } else {
                 Color.clear
             }
@@ -107,5 +104,4 @@ struct SidebarStatusCard: View {
     }
 }
 
-/// Backwards compatibility alias for the sidebar status card.
 typealias SidebarOfflineCard = SidebarStatusCard

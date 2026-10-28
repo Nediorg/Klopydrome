@@ -2,8 +2,6 @@ import Foundation
 import SwiftData
 import NavidromeClient
 
-// MARK: - SwiftDataOfflineRepository Playlist Persistence
-
 extension SwiftDataOfflineRepository {
 
     public func fetchPlaylistEntries(playlistID: String) throws -> [(trackID: String?, isTrackLinked: Bool)] {

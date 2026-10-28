@@ -1,18 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Apple Music-styled volume slider for the main window toolbar.
-///
-/// Pure SwiftUI implementation using `DragGesture` for mouse interaction.
-/// This avoids the AppKit event-routing issues that occur with NSControl
-/// subclasses in the unified-titlebar area, where `NSTitlebarContainerView`
-/// hijacks mouseDown events before they reach embedded `NSViewRepresentable`
-/// controls. SwiftUI's gesture system runs inside `NSHostingView` and is
-/// not affected by titlebar event interception.
-///
-/// Scroll-wheel support is provided by a thin `NSView` underlay
-/// (`ScrollWheelCaptureView`) that forwards scroll events without
-/// interfering with drag gestures.
 struct ToolbarVolumeSlider: View {
     @Binding var value: Float
 
@@ -34,7 +22,6 @@ struct ToolbarVolumeSlider: View {
             let thumbCenterX = trackInset + trackWidth * progress
 
             ZStack {
-                // Track segments
                 trackSegments(
                     trackInset: trackInset,
                     trackWidth: trackWidth,
@@ -43,7 +30,6 @@ struct ToolbarVolumeSlider: View {
                     height: height
                 )
 
-                // Thumb ring
                 Circle()
                     .strokeBorder(activeGrayColor, lineWidth: Self.ringStrokeWidth)
                     .frame(width: Self.thumbDiameter, height: Self.thumbDiameter)
@@ -82,7 +68,7 @@ struct ToolbarVolumeSlider: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Громкость")
+        .accessibilityLabel("Volume".localized)
         .accessibilityValue("\(Int(value * 100))%")
         .accessibilityAdjustableAction { direction in
             let delta: Float = direction == .increment ? 0.05 : -0.05
@@ -110,7 +96,6 @@ struct ToolbarVolumeSlider: View {
         let trackY = height / 2
 
         return ZStack {
-            // Filled segment (left of thumb)
             let filledEnd = max(trackInset, thumbCenterX - thumbRadius)
             if filledEnd > trackInset {
                 RoundedRectangle(cornerRadius: trackHeight / 2)
@@ -122,7 +107,6 @@ struct ToolbarVolumeSlider: View {
                     )
             }
 
-            // Unfilled segment (right of thumb)
             let unfilledStart = min(trackInset + trackWidth, thumbCenterX + thumbRadius)
             let unfilledEnd = trackInset + trackWidth
             if unfilledEnd > unfilledStart {

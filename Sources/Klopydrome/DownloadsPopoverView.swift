@@ -1,9 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// The anchored toolbar popover listing offline downloads:
-/// high-level active batch tasks (album, playlist, genre) with live progress,
-/// and the finished song list with full playback, selection, and context-menu controls.
 struct DownloadsPopoverView: View {
     @Environment(AppState.self) private var app
     @State private var selection = SongRowSelection()
@@ -33,14 +30,14 @@ struct DownloadsPopoverView: View {
 
     private var header: some View {
         HStack {
-            Text("Загрузки".localized)
+            Text("Downloads".localized)
                 .font(.headline)
             Spacer()
             if app.nav.selectedPlaylist != nil {
-                Button("Загрузить плейлист".localized) { app.cacheCurrentPlaylist() }
+                Button("Download Playlist".localized) { app.cacheCurrentPlaylist() }
                     .buttonStyle(.borderless)
             } else {
-                Button("Загрузить альбом".localized) { app.cacheCurrentAlbum() }
+                Button("Download Album".localized) { app.cacheCurrentAlbum() }
                     .buttonStyle(.borderless)
             }
         }
@@ -56,7 +53,7 @@ struct DownloadsPopoverView: View {
 
     private var activeSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("В процессе".localized)
+            Text("In Progress".localized)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -89,7 +86,7 @@ struct DownloadsPopoverView: View {
 
     private var downloadedSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("На устройстве".localized)
+            Text("On Device".localized)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -125,7 +122,7 @@ struct DownloadsPopoverView: View {
             Image(systemName: "square.and.arrow.down")
                 .font(.system(size: 22))
                 .foregroundStyle(.tertiary)
-            Text("Нет загруженных песен".localized)
+            Text("No Downloaded Songs".localized)
                 .font(.callout)
                 .foregroundStyle(.tertiary)
         }
@@ -171,12 +168,12 @@ private struct DownloadTaskRow: View {
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text(task.title)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AMFont.miniTitle.weight(.semibold))
                             .foregroundStyle(Color.primary)
                             .lineLimit(1)
 
                         Text(task.currentSongSubtitle)
-                            .font(.system(size: 10))
+                            .font(AMFont.miniSubtitle)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
@@ -229,7 +226,7 @@ private struct DownloadTaskRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(isExpanded ? "Свернуть треки".localized : "Показать треки".localized)
+                .help(isExpanded ? "Collapse Tracks".localized : "Show Tracks".localized)
             }
 
             Button {
@@ -242,8 +239,8 @@ private struct DownloadTaskRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Отменить".localized)
-            .accessibilityLabel("Отменить загрузку".localized)
+            .help("Undo".localized)
+            .accessibilityLabel("Cancel Download".localized)
         }
     }
 
@@ -322,14 +319,14 @@ private struct TaskTrackRow: View {
         HStack(spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(song.displayTitle)
-                    .font(.system(size: 11, weight: isCurrent ? .semibold : .regular))
-                    .foregroundStyle(Color.primary)
+                    .font(AMFont.miniTitle)
+                    .foregroundStyle(isCurrent ? AMColor.accent : Color.primary)
                     .lineLimit(1)
 
                 if let artist = song.artist, !artist.isEmpty {
                     Text(artist)
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.secondary)
+                        .font(AMFont.miniSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
             }
@@ -362,9 +359,7 @@ private struct TaskTrackRow: View {
     }
 
     private func handlePlay() {
-        if !app.isOfflineSession || isCompleted {
-            app.play([song], at: 0)
-        }
+        app.play(song)
     }
 
     @ViewBuilder
@@ -390,7 +385,7 @@ private struct TaskTrackRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Отменить трек".localized)
+                .help("Cancel Track".localized)
             }
         } else if isHovered {
             Button {
@@ -403,7 +398,7 @@ private struct TaskTrackRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Отменить трек".localized)
+            .help("Cancel Track".localized)
         } else {
             Image(systemName: "clock")
                 .font(.system(size: 9))
@@ -425,12 +420,13 @@ private struct DownloadRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             VStack(alignment: .leading, spacing: 0) {
                 Text(song.displayTitle)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AMFont.miniTitle)
+                    .foregroundStyle(app.player.currentSong?.id == song.id ? AMColor.accent : Color.primary)
                     .lineLimit(1)
                 if let artist = song.artist, !artist.isEmpty {
                     Text(artist)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
+                        .font(AMFont.miniSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
             }
@@ -450,8 +446,8 @@ private struct DownloadRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Отменить".localized)
-                .accessibilityLabel("Отменить загрузку".localized)
+                .help("Undo".localized)
+                .accessibilityLabel("Cancel Download".localized)
             }
         }
         .padding(.horizontal, 4)
@@ -471,8 +467,6 @@ private struct DownloadRow: View {
     }
 
     private func handlePlay() {
-        if !app.isOfflineSession || app.isCached(song) {
-            app.play([song], at: 0)
-        }
+        app.play(song)
     }
 }

@@ -88,7 +88,7 @@ struct DiscordRichPresenceActivity: Codable, Equatable {
     ) {
         type = 2
         details = Self.truncated(song.displayTitle)
-        state = Self.truncated(song.artist ?? "Неизвестный исполнитель")
+        state = Self.truncated(song.artist ?? "Unknown Artist".localized)
         instance = false
         if isPlaying, duration > 0 {
             let start = Int(now.timeIntervalSince1970 - max(0, currentTime))
@@ -106,9 +106,6 @@ struct DiscordRichPresenceActivity: Codable, Equatable {
         )
     }
 
-    /// Accept only an external HTTPS artwork URL supplied by album metadata.
-    /// The URL comes from getAlbumInfo2, never from a credential-bearing stream
-    /// or cover-art request built by Klopydrome.
     static func externalArtworkURL(_ rawURL: String?) -> URL? {
         guard let rawURL,
               let url = URL(string: rawURL),

@@ -41,7 +41,6 @@ public enum SubsonicError: Error, LocalizedError, Equatable {
     }
 }
 
-/// Wraps a decoding failure so callers can still surface meaningful messages.
 public enum SubsonicDecodingContext {
     public static func describe(_ error: Error, from data: Data) -> String {
         let detail = decodeDetail(for: error)

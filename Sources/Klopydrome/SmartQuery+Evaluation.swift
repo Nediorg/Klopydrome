@@ -2,34 +2,27 @@ import Foundation
 import NavidromeClient
 
 extension SmartQuery {
-    /// Evaluate the query predicate against a single song (ignores sort/limit).
     func matches(_ song: SubsonicSong) -> Bool {
         root.matches(song)
     }
 }
 
 extension JSONValue {
-    /// Human-readable form of a JSON value (for the rule summary line).
     var displayText: String {
         switch self {
         case .string(let text): return text
         case .number(let value): return value.truncatedString
-        case .bool(let isOn): return isOn ? "да" : "нет"
+        case .bool(let isOn): return isOn ? "yes".localized : "no".localized
         case .array(let items): return items.map(\.displayText).joined(separator: " … ")
         }
     }
 
-    /// Numeric value when the JSON value is a number (nil otherwise).
     var asNumber: Double? {
         if case .number(let value) = self { return value }
         return nil
     }
 }
 
-/// Parsed date used for `before`/`after`/`inTheLast` comparisons.
-/// Shared formatter — `isoDay` is called per song during smart-playlist
-/// evaluation (up to 10k songs), so a per-call `DateFormatter` alloc is
-/// measurably expensive.
 private let isoDayFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.calendar = Calendar(identifier: .gregorian)
@@ -45,9 +38,6 @@ private func isoDay(_ value: String) -> Date? {
 }
 
 extension QueryOperator {
-    /// Evaluate a rule against (field value, expected value). `actual == nil`
-    /// means the field had no value for the song; `isMissing`/`isPresent` are
-    /// the only operators that match on that.
     func matches(actual: QueryValue?, expected: QueryValue?) -> Bool {
         switch self {
         case .isMissing:
@@ -58,14 +48,10 @@ extension QueryOperator {
             break
         }
 
-        // Rules whose value the local model cannot evaluate (custom tags,
-        // album/artist annotations, playlists) never match locally — the server
-        // is the authority for those. Keep local playlists well-defined.
         guard let actual else { return false }
         return relSatisfied(actual: actual, expected: expected)
     }
 
-    /// Compares an actual vs expected value for the relational operators.
     private func relSatisfied(actual: QueryValue, expected: QueryValue?) -> Bool {
         switch self {
         case .contains, .notContains: return containsText(actual, expected)

@@ -10,15 +10,13 @@ enum ShuffleMode: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .songs: return "Песни"
-        case .albums: return "Альбомы"
-        case .groups: return "Группы"
+        case .songs: return "Songs"
+        case .albums: return "Albums"
+        case .groups: return "Groups"
         }
     }
 }
 
-/// State retained while a queue is shuffled, so disabling shuffle can restore
-/// its original order without disturbing the current track.
 @MainActor
 final class ShuffleState {
     var mode: ShuffleMode = .songs

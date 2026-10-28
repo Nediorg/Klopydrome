@@ -1,8 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-// MARK: - PlaylistDetailView Error & Action Helpers
-
 extension PlaylistDetailView {
 
     func inlineErrorNotice(_ error: String) -> some View {
@@ -40,8 +38,8 @@ extension PlaylistDetailView {
 
     func kindLine(_ detail: PlaylistDetail) -> some View {
         var parts: [String] = []
-        parts.append(detail.isSmart ? "Умный плейлист".localized : "Плейлист".localized)
-        if detail.isPublic == true { parts.append("Открытый".localized) }
+        parts.append(detail.isSmart ? "Smart Playlist".localized : "Playlist".localized)
+        if detail.isPublic == true { parts.append("Open".localized) }
         return Text(parts.joined(separator: " · "))
             .font(.title2.weight(.regular))
             .foregroundStyle(.secondary)
@@ -62,7 +60,7 @@ extension PlaylistDetailView {
     func actionRow(_ detail: PlaylistDetail) -> some View {
         HStack(spacing: 10) {
             ActionPill(
-                title: "Слушать",
+                title: "Play".localized,
                 systemImage: "play.fill",
                 filled: true
             ) {
@@ -71,7 +69,7 @@ extension PlaylistDetailView {
             .disabled(isPreparingPlayback || (app.isOfflineSession && playableSongs.isEmpty))
 
             ActionPill(
-                title: "Перемешать",
+                title: "Shuffle".localized,
                 systemImage: "shuffle",
                 filled: true
             ) {
@@ -84,7 +82,7 @@ extension PlaylistDetailView {
                 if isSyncing {
                     ProgressView()
                         .controlSize(.small)
-                        .help("Синхронизация с сервером…".localized)
+                        .help("Syncing with server…".localized)
                         .transition(.opacity)
                 }
                 RoundFavoriteButton(isStarred: app.isFollowed(detail.summary)) {
@@ -106,7 +104,7 @@ extension PlaylistDetailView {
                         onDelete: { confirmingDelete = true }
                     )
                 }
-                .help("Действия над плейлистом".localized)
+                .help("Playlist Actions".localized)
             }
             .animation(.easeInOut(duration: 0.2), value: isSyncing)
         }

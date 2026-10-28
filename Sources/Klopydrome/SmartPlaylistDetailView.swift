@@ -17,7 +17,6 @@ struct SmartPlaylistDetailView: View {
     @State private var selection = SongRowSelection()
     @State private var showingCommentModal = false
     @State private var summaryHovered = false
-    @State private var editRulesHovered = false
 
     private var songs: [SubsonicSong] {
         if case .loaded(let songs) = state { return songs }
@@ -28,22 +27,32 @@ struct SmartPlaylistDetailView: View {
         VStack(spacing: 0) {
             switch state {
             case .loading:
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        header
+                            .padding(.bottom, 28)
+                        SkeletonSongList(count: 10, showAlbum: true)
+                            .padding(.leading, -22)
+                            .padding(.trailing, 26)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 24)
+                }
             case .failed(let message):
                 ContentUnavailableView {
-                    Label("Не удалось загрузить".localized, systemImage: "exclamationmark.triangle")
+                    Label("Failed to load".localized, systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Повторить".localized) { Task { await load() } }
+                    Button("Retry".localized) { Task { await load() } }
                 }
             case .loaded where songs.isEmpty:
                 ContentUnavailableView {
-                    Label("Нет совпадений".localized, systemImage: "gearshape")
+                    Label("No Matches".localized, systemImage: "gearshape")
                 } description: {
-                    Text("Пока нет песен, подходящих под правила этого умного плейлиста.".localized)
+                    Text("There are no songs matching the rules for this smart playlist yet.".localized)
                 } actions: {
-                    Button("Изменить правила".localized) { app.openSmartPlaylistEditor(playlist: playlist) }
+                    Button("Edit Rules".localized) { app.openSmartPlaylistEditor(playlist: playlist) }
                 }
             case .loaded:
                 ScrollView {
@@ -75,9 +84,9 @@ struct SmartPlaylistDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await load() }
-        .confirmationDialog("Удалить умный плейлист?".localized, isPresented: $confirmingDelete) {
-            Button("Удалить".localized, role: .destructive) { delete() }
-            Button("Отмена".localized, role: .cancel) {}
+        .confirmationDialog("Delete Smart Playlist?".localized, isPresented: $confirmingDelete) {
+            Button("Delete".localized, role: .destructive) { delete() }
+            Button("Cancel".localized, role: .cancel) {}
         } message: {
             Text(L10n.format("format.smartPlaylist.delete.warning", playlist.name))
         }
@@ -107,24 +116,12 @@ struct SmartPlaylistDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(playlist.name)
                             .font(.largeTitle.weight(.semibold))
-                        Text("Умный плейлист".localized)
+                        Text("Smart Playlist".localized)
                             .font(.title2.weight(.regular))
                             .foregroundStyle(.secondary)
-                        Button {
+                        EditRulesButton {
                             app.openSmartPlaylistEditor(playlist: playlist)
-                        } label: {
-                            HStack(spacing: 2) {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 8.5, weight: .semibold))
-                                Text("Редактировать правила".localized)
-                                    .font(.callout.bold())
-                            }
-                            .foregroundStyle(AMColor.accent)
-                            .brightness(editRulesHovered ? 0.15 : 0)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        .onHover { editRulesHovered = $0 }
                     }
                     if hasSummary {
                         Button {
@@ -140,7 +137,7 @@ struct SmartPlaylistDetailView: View {
                         }
                         .buttonStyle(.plain)
                         .onHover { summaryHovered = $0 }
-                        .help("Показать описание полностью".localized)
+                        .help("Show full description".localized)
                     }
                 }
                 .offset(y: -6)
@@ -154,16 +151,16 @@ struct SmartPlaylistDetailView: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            ActionPill(title: "Слушать", systemImage: "play.fill", filled: true) {
-                if !songs.isEmpty { app.play(songs, at: 0, context: .smartPlaylist(playlist)) }
+            ActionPill(title: "Play".localized, systemImage: "play.fill", filled: true) {
+                app.play(songs, at: 0, context: .smartPlaylist(playlist))
             }
-            ActionPill(title: "Перемешать", systemImage: "shuffle", filled: true) {
-                if !songs.isEmpty { app.playShuffled(songs, context: .smartPlaylist(playlist)) }
+            ActionPill(title: "Shuffle".localized, systemImage: "shuffle", filled: true) {
+                app.playShuffled(songs, context: .smartPlaylist(playlist))
             }
-            ActionPill(title: "Обновить", systemImage: "arrow.clockwise", filled: false) {
+            ActionPill(title: "Refresh".localized, systemImage: "arrow.clockwise", filled: false) {
                 Task { await load() }
             }
-            .help("Пересчитать подходящие песни на сервере.".localized)
+            .help("Recalculate matching songs on server.".localized)
             Spacer()
             RoundEllipsisMenu {
                 SmartPlaylistContextMenuItems(playlist: playlist) {
@@ -174,7 +171,7 @@ struct SmartPlaylistDetailView: View {
                     confirmingDelete = true
                 }
             }
-            .help("Действия над плейлистом".localized)
+            .help("Playlist Actions".localized)
         }
     }
 

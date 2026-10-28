@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// An item displayed in the Quick Access ("Быстрый доступ") grid on the Home screen.
 enum HomeQuickAccessItem: Identifiable, Equatable {
     case playlist(PlaylistSummary)
     case artist(Artist)
@@ -20,8 +19,6 @@ enum HomeQuickAccessItem: Identifiable, Equatable {
     }
 }
 
-/// Compact Quick Access section placed at the top of the Home view.
-/// Prioritizes the user's recent activity while ensuring favorites are always accessible.
 struct HomeQuickAccessSection: View {
     @Environment(AppState.self) private var app
     var loading: Bool = false
@@ -37,7 +34,7 @@ struct HomeQuickAccessSection: View {
 
     private var skeletonSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Быстрый доступ".localized)
+            Text("Quick Access".localized)
                 .font(.title3.bold())
 
             skeletonGrid(forMask: false)
@@ -54,14 +51,14 @@ struct HomeQuickAccessSection: View {
             spacing: 8
         ) {
             ForEach(0..<8, id: \.self) { _ in
-                PillCardPlaceholder(forMask: forMask)
+                SkeletonPillCard(forMask: forMask)
             }
         }
     }
 
     private func contentSection(_ items: [HomeQuickAccessItem]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Быстрый доступ".localized)
+            Text("Quick Access".localized)
                 .font(.title3.bold())
 
             LazyVGrid(
@@ -88,10 +85,6 @@ struct HomeQuickAccessSection: View {
         }
     }
 
-    /// Selects up to 8 entities using a deterministic 2-row layout:
-    /// - Row 1 (up to 4 items): Recents (recent playlists + recently played albums).
-    /// - Row 2 (up to 4 items): Favorites & Pinned (followed playlists + starred artists + starred albums).
-    /// Backfilled with frequent and newest albums if rows are incomplete.
     private var quickAccessItems: [HomeQuickAccessItem] {
         let recents = resolveRecentItems()
         let favorites = resolveFavoriteItems()
@@ -109,17 +102,14 @@ struct HomeQuickAccessSection: View {
             return true
         }
 
-        // 1. Fill Row 1 with recents
         for item in recents {
             _ = tryAdd(to: &row1, item: item)
         }
 
-        // 2. Fill Row 2 with favorites
         for item in favorites {
             _ = tryAdd(to: &row2, item: item)
         }
 
-        // 3. Backfill pool from frequent and newest
         let backfillPool = frequent + newest
 
         for item in backfillPool where row1.count < 4 {
@@ -130,7 +120,6 @@ struct HomeQuickAccessSection: View {
             _ = tryAdd(to: &row2, item: item)
         }
 
-        // 4. If any row is still under 4, spillover from other collections
         if row1.count < 4 {
             for item in favorites where row1.count < 4 {
                 _ = tryAdd(to: &row1, item: item)
@@ -145,13 +134,11 @@ struct HomeQuickAccessSection: View {
         return row1 + row2
     }
 
-    /// Resolves recently visited playlists and server recently played albums.
     private func resolveRecentItems() -> [HomeQuickAccessItem] {
         var items: [HomeQuickAccessItem] = []
         let allPlaylists = app.library.playlists
         let recentPlayedAlbums = app.library.homeShelves[.recent] ?? []
 
-        // Recent playlists (up to 2 if recent albums are available)
         let maxPlaylists = recentPlayedAlbums.isEmpty ? 4 : 2
         var playlistCount = 0
         for id in app.recentPlaylistIDs {
@@ -162,7 +149,6 @@ struct HomeQuickAccessSection: View {
             }
         }
 
-        // Server recently played albums (AlbumListType.recent)
         for album in recentPlayedAlbums {
             items.append(.album(album))
         }
@@ -170,11 +156,9 @@ struct HomeQuickAccessSection: View {
         return items
     }
 
-    /// Resolves favorite/starred entities across the library.
     private func resolveFavoriteItems() -> [HomeQuickAccessItem] {
         var items: [HomeQuickAccessItem] = []
 
-        // Followed playlists (up to 2 if favorite artists/albums are available)
         let hasOtherFavorites = !app.library.favoritesArtists.isEmpty ||
             !app.library.favoritesAlbums.isEmpty ||
             !(app.library.homeShelves[.starred] ?? []).isEmpty
@@ -188,12 +172,10 @@ struct HomeQuickAccessSection: View {
             }
         }
 
-        // Favorite artists
         for artist in app.library.favoritesArtists {
             items.append(.artist(artist))
         }
 
-        // Favorite albums (from favoritesAlbums or homeShelves[.starred])
         let starredAlbums = !app.library.favoritesAlbums.isEmpty
             ? app.library.favoritesAlbums
             : (app.library.homeShelves[.starred] ?? [])
@@ -204,55 +186,13 @@ struct HomeQuickAccessSection: View {
         return items
     }
 
-    /// Resolves frequent server albums as a fallback.
     private func resolveFrequentItems() -> [HomeQuickAccessItem] {
         let frequent = app.library.homeShelves[.frequent] ?? []
         return frequent.map { .album($0) }
     }
 
-    /// Resolves recently added server albums as a fallback.
     private func resolveNewestItems() -> [HomeQuickAccessItem] {
         let newest = app.library.homeShelves[.newest] ?? app.library.recentAlbums
         return newest.map { .album($0) }
-    }
-}
-
-/// Placeholder card for Quick Access while library data loads.
-struct PillCardPlaceholder: View {
-    var forMask: Bool = false
-
-    var body: some View {
-        if forMask {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.black)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-        } else {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
-                    .frame(width: 40, height: 40)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(width: 90, height: 11)
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(width: 55, height: 9)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .frame(height: 56)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.05))
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityHidden(true)
-        }
     }
 }

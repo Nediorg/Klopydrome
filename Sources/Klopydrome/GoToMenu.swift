@@ -1,13 +1,6 @@
 import AppKit
 import NavidromeClient
 
-// MARK: - Shared “Go to” menu for a song (artist / album / playlist)
-
-/// Shows a small `NSMenu` at the current mouse location. Used for the
-/// left-click on a song's title/subtitle in `SongRow`, `MiniPlayerView` and
-/// `PlayerLCDView`. The menu is built on the main actor and popped
-/// synchronously, so the helper that owns the targets stays alive for the
-/// duration of the modal `popUpContextMenu` call.
 @MainActor
 func showGoToMenu(for song: SubsonicSong, app: AppState) {
     let helper = GoToMenuHelper(app: app, song: song)
@@ -50,7 +43,7 @@ private func addArtistAlbumItems(to menu: NSMenu, for song: SubsonicSong, helper
     let collaborators = SongCollaborators.parse(from: song, library: helper.appState.library)
     if collaborators.count > 1 {
         let parentItem = NSMenuItem(
-            title: "Перейти к исполнителю".localized,
+            title: "Go to Artist".localized,
             action: nil,
             keyEquivalent: ""
         )
@@ -71,7 +64,7 @@ private func addArtistAlbumItems(to menu: NSMenu, for song: SubsonicSong, helper
     } else if let singleArtist = collaborators.first {
         helper.singleArtist = singleArtist
         let item = NSMenuItem(
-            title: "Перейти к исполнителю".localized,
+            title: "Go to Artist".localized,
             action: #selector(GoToMenuHelper.goToArtist),
             keyEquivalent: ""
         )
@@ -81,7 +74,7 @@ private func addArtistAlbumItems(to menu: NSMenu, for song: SubsonicSong, helper
     }
     if song.albumId != nil {
         let item = NSMenuItem(
-            title: "Перейти к альбому".localized,
+            title: "Go to Album".localized,
             action: #selector(GoToMenuHelper.goToAlbum),
             keyEquivalent: ""
         )
@@ -96,7 +89,7 @@ private func addActivePlaybackPlaylistItem(to menu: NSMenu, helper: GoToMenuHelp
     if let current = helper.appState.player.currentPlaylist {
         helper.singlePlaylist = current
         let item = NSMenuItem(
-            title: "Перейти к плейлисту".localized,
+            title: "Go to Playlist".localized,
             action: #selector(GoToMenuHelper.goToSinglePlaylist),
             keyEquivalent: ""
         )
@@ -108,7 +101,7 @@ private func addActivePlaybackPlaylistItem(to menu: NSMenu, helper: GoToMenuHelp
     if case .smartPlaylist(let smart) = helper.appState.player.playbackContext {
         helper.singleSmartPlaylist = smart
         let item = NSMenuItem(
-            title: "Перейти к плейлисту".localized,
+            title: "Go to Playlist".localized,
             action: #selector(GoToMenuHelper.goToSmartPlaylist),
             keyEquivalent: ""
         )
@@ -130,7 +123,7 @@ private func addPlaylistItems(to menu: NSMenu, for song: SubsonicSong, helper: G
     if containing.count == 1, let playlist = containing.first {
         helper.singlePlaylist = playlist
         let item = NSMenuItem(
-            title: "Перейти к плейлисту".localized,
+            title: "Go to Playlist".localized,
             action: #selector(GoToMenuHelper.goToSinglePlaylist),
             keyEquivalent: ""
         )
@@ -139,7 +132,7 @@ private func addPlaylistItems(to menu: NSMenu, for song: SubsonicSong, helper: G
         menu.addItem(item)
     } else if containing.count > 1 {
         let parent = NSMenuItem(
-            title: "Перейти к плейлисту".localized,
+            title: "Go to Playlist".localized,
             action: nil,
             keyEquivalent: ""
         )

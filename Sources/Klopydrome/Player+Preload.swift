@@ -2,21 +2,13 @@ import Foundation
 import NavidromeClient
 
 extension Player {
-    /// Starts loading the following MPV track this many seconds before the
-    /// current track ends. The prepared engine remains paused and silent; a
-    /// later automix phase will promote it into a fade-in source.
     static let nextTrackPreloadWindow: Double = 30
 
-    /// Updates the independent next-track preload preference. Disabling it
-    /// releases any prepared source immediately without changing crossfade.
     func configureNextTrackPreloading(enabled: Bool) {
         nextTrackPreloadingEnabled = enabled
         if !enabled { resetPreloadedNext() }
     }
 
-    /// Wires the isolated, muted MPV context used exclusively for next-track
-    /// preparation. Instantiated lazily only when preloading begins, and torn
-    /// down immediately when promoted or reset.
     @discardableResult
     func preparePreloadedMPVEngine() -> MPVPlaybackEngine {
         if let existing = automix.preloadedMPVEngine {
@@ -38,9 +30,6 @@ extension Player {
         _ = preparePreloadedMPVEngine()
     }
 
-    /// Evaluates whether the queue successor should be opened in the prepared
-    /// MPV context. Called from the main MPV clock, so all queue state is read
-    /// consistently on the main actor.
     func evaluateNextTrackPreload(at seconds: Double) {
         guard nextTrackPreloadingEnabled,
               engineKind == .mpv, isPlaying, !isScrubbing,
@@ -52,9 +41,6 @@ extension Player {
         preloadNextMPVTrack(song)
     }
 
-    /// Releases the prepared context whenever it no longer matches the queue.
-    /// This is intentionally idempotent: queue edits, manual navigation, and
-    /// end-of-track processing can all invalidate preparation safely.
     func resetPreloadedNext() {
         cancelAutomixCrossfade()
         automix.preloadTask?.cancel()
@@ -70,8 +56,6 @@ extension Player {
         automix.isPreloadingNext = false
     }
 
-    /// The queue successor after applying the same repeat semantics as `next()`.
-    /// Repeating a single item intentionally has no preload target.
     var nextQueueIndexForPreloading: Int? {
         guard queue.count > 1, queue.indices.contains(currentIndex),
               repeatMode != .one else { return nil }
@@ -83,9 +67,6 @@ extension Player {
         return queue[index]
     }
 
-    /// Promotes the prepared successor without resolving its URL again. This is
-    /// the hand-off that eliminates the network gap; fade-in will later ramp
-    /// its volume instead of calling `play()` at full volume.
     func promotePreloadedMPVTrack(for song: SubsonicSong, autoPlay: Bool, recordHistory: Bool = true) -> Bool {
         guard engineKind == .mpv,
               automix.preloadedNextSongID == song.id,

@@ -1,8 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Detail page for a specific genre, presenting all songs matching the genre
-/// in a full tabular layout (`SongTable`) with play and shuffle controls.
 struct GenreDetailView: View {
     @Environment(AppState.self) private var app
 
@@ -48,24 +46,28 @@ struct GenreDetailView: View {
             Divider()
 
             if loading && songs.isEmpty {
-                ProgressView("Загрузка песен жанра…".localized)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ScrollView {
+                    SkeletonSongList(count: 10, showAlbum: true, showsArtist: true)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 16)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = loadError, songs.isEmpty {
                 ContentUnavailableView {
-                    Label("Не удалось загрузить треки".localized, systemImage: "exclamationmark.triangle")
+                    Label("Failed to load tracks".localized, systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Повторить".localized) {
+                    Button("Retry".localized) {
                         Task { await loadGenreSongs() }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if songs.isEmpty {
                 ContentUnavailableView {
-                    Label("Нет треков".localized, systemImage: "music.note")
+                    Label("No Tracks".localized, systemImage: "music.note")
                 } description: {
-                    Text("В этом жанре пока нет доступных песен.".localized)
+                    Text("There are no songs available in this genre yet.".localized)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -99,7 +101,7 @@ struct GenreDetailView: View {
                     .font(.largeTitle.bold())
                     .lineLimit(2)
 
-                Text("Жанр".localized)
+                Text("Genre".localized)
                     .font(.title3.weight(.medium))
                     .foregroundStyle(.secondary)
 
@@ -117,7 +119,7 @@ struct GenreDetailView: View {
     private var metaSection: some View {
         if !songs.isEmpty || loading {
             ZStack(alignment: .leading) {
-                Text("0 песен · 0:00:00")
+                Text("0 songs · 0:00:00")
                     .font(.callout)
                     .hidden()
 
@@ -152,57 +154,30 @@ struct GenreDetailView: View {
     private var actionRow: some View {
         HStack(spacing: 10) {
             ActionPill(
-                title: "Слушать",
+                title: "Play".localized,
                 systemImage: "play.fill",
                 filled: true
             ) {
-                if !playableSongs.isEmpty {
-                    app.play(playableSongs, at: 0)
-                }
+                app.play(songs, at: 0)
             }
             .disabled(playableSongs.isEmpty)
 
             ActionPill(
-                title: "Перемешать",
+                title: "Shuffle".localized,
                 systemImage: "shuffle",
                 filled: true
             ) {
-                if !playableSongs.isEmpty {
-                    app.playShuffled(playableSongs)
-                }
+                app.playShuffled(songs)
             }
             .disabled(playableSongs.isEmpty)
 
             Spacer()
 
             RoundEllipsisMenu {
-                genreContextMenuItems
+                GenreContextMenuItems(genreName: genreName, songs: playableSongs)
             }
             .disabled(playableSongs.isEmpty)
-            .help("Действия над жанром".localized)
-        }
-    }
-
-    @ViewBuilder
-    private var genreContextMenuItems: some View {
-        Button("Слушать следующей".localized) {
-            app.playNext(playableSongs)
-        }
-        Button("В конец очереди".localized) {
-            app.playLater(playableSongs)
-        }
-
-        Divider()
-
-        AddToPlaylistMenu(songs: playableSongs)
-
-        if !app.isOfflineSession {
-            let uncached = playableSongs.filter { !app.isCached($0) }
-            Divider()
-            Button("Загрузить".localized) {
-                app.cacheGenre(name: genreName, songs: playableSongs)
-            }
-            .disabled(uncached.isEmpty)
+            .help("Genre Actions".localized)
         }
     }
 
@@ -224,5 +199,33 @@ struct GenreDetailView: View {
             loadError = error.localizedDescription
         }
         loading = false
+    }
+}
+
+struct GenreContextMenuItems: View {
+    @Environment(AppState.self) private var app
+    let genreName: String
+    let songs: [SubsonicSong]
+
+    var body: some View {
+        Button("Play Next".localized) {
+            app.playNext(songs)
+        }
+        Button("Play Later".localized) {
+            app.playLater(songs)
+        }
+
+        Divider()
+
+        AddToPlaylistMenu(songs: songs)
+
+        if !app.isOfflineSession {
+            let uncached = songs.filter { !app.isCached($0) }
+            Divider()
+            Button("Download".localized) {
+                app.cacheGenre(name: genreName, songs: songs)
+            }
+            .disabled(uncached.isEmpty)
+        }
     }
 }

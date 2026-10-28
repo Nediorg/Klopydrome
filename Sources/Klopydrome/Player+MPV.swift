@@ -1,9 +1,5 @@
 import Foundation
 
-/// The MPV (`libmpv`) path of `Player`, kept in an extension so the main
-/// player type stays well under the lint size limits. Active whenever the
-/// user's engine setting selects MPV (the default) — every format, since
-/// mpv decodes natively and seeks HTTP streams sample-accurately.
 extension Player {
     /// Starts the async libmpv load shared by `playMPV` (a fresh track) and by
     /// live-transcode seek restarts. `mpvLoadGeneration` guards the completion:
@@ -17,24 +13,13 @@ extension Player {
                 _ = try await mpvEngine.load(url: url, streamRecordURL: streamRecordURL)
                 await MainActor.run {
                     guard self.mpvLoadGeneration == generation else { return }
-                    // Don't seed `duration` with the stale value returned by
-                    // `load` (previous track's duration or 0). `trackDuration`
-                    // falls back to `currentSong.duration` until mpv reports the
-                    // real `duration` via the property-change event.
                     self.isBuffering = self.isPlaying ? self.mpvEngine.isBuffering : false
                     if self.mpvEngine.isLoaded { self.isLoading = false }
                     if self.mpvSeekRestartActive {
-                        // A transcode seek restart: the fresh pipe is already
-                        // streaming from the target offset on the server.
-                        // Do not issue an in-pipe seek onto an unbuffered live stream;
-                        // update currentTime and let playback resume smoothly.
                         self.transcodeRestartResidual = nil
                         self.currentTime = self.heldSeekTarget ?? self.mpvStreamOffset
                         self.mpvRestartStepped = true
                     }
-                    // Respect a pause issued while the async load was in flight
-                    // (the launch-time queue restore loads the track but must
-                    // stay paused — no surprise audio on startup).
                     if self.isPlaying {
                         self.mpvEngine.play()
                     } else {
@@ -56,8 +41,6 @@ extension Player {
 // MARK: - Engine wiring
 
 extension Player {
-    /// Wires the MPV engine's callbacks into the player. Called once from
-    /// `init()`; the engine itself is shared for every track.
     func setUpMPVEngine() {
         mpvEngine.onTrackEnded = { [weak self] in
             guard let self, self.engineKind == .mpv else { return }
@@ -110,7 +93,6 @@ extension Player {
         let display = seconds + mpvStreamOffset
         if !isScrubbing && !isSeekInFlight {
             if mpvSeekRestartActive && !mpvRestartStepped {
-                // keep currentTime at the held target
             } else if let held = heldSeekTarget {
                 let elapsed = CFAbsoluteTimeGetCurrent() - heldSeekTargetTimestamp
                 if abs(display - held) <= 1.0 || display >= held || elapsed > 3.0 {

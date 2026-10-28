@@ -2,20 +2,6 @@ import SwiftUI
 import NavidromeClient
 import AppKit
 
-// MARK: - Player LCD (extracted from MainView)
-
-/// The LCD block of the player toolbar: cover + title/album text + the trailing
-/// star/«…» controls, wrapped in its own hover-driven surface.
-///
-/// This is extracted from `MainView` so the player-state reads
-/// (`currentSong`, `lastError`) are tracked at *this* view's scope rather than
-/// `MainView.body`. Previously those reads happened synchronously inside
-/// `MainView`'s `body` evaluation (via `lcdSurface` / `nowPlayingBlock` /
-/// `topTrailingControls` getters), which meant every track change — and every
-/// read of player state — invalidated the **entire** toolbar (the context menu,
-/// all the `.help` text, the generic `Menu`/`Button` metadata) and forced a full
-/// `MainView` rebuild. Now only this view (and the `MinimalScrubber`, which was
-/// already isolated) reacts to player updates.
 struct PlayerLCDView: View {
     @Environment(AppState.self) private var app
 
@@ -26,8 +12,6 @@ struct PlayerLCDView: View {
     private var nowHovered: Bool { coverHovered || hoverText || hoverTrailing || hoverScrubber }
 
     var body: some View {
-        // body-hover breaks Tahoe principal (see bisect A/B). Keep only
-        // contextMenu on the body; hover is tracked interiorly.
         lcdBlock
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
@@ -54,10 +38,6 @@ struct PlayerLCDView: View {
                             isLCDHovered: nowHovered,
                             onHover: { hoverScrubber = $0 }
                         )
-                            // Greedy GeometryReader would span the whole LCD and its
-                            // tracking would shadow every zone beneath (seen as s1
-                            // everywhere). Constrain to the real strip: heights must
-                            // mirror MinimalScrubber.hitHeight (18 hovered / 12 idle).
                             .frame(maxWidth: .infinity, alignment: .bottom)
                             .frame(height: nowHovered ? 18 : 12)
                             .padding(.leading, 42)
@@ -95,13 +75,8 @@ struct PlayerLCDView: View {
         }
     }
 
-    /// Hover/tap/menu sit directly on the artwork content: Tahoe principal
-    /// installs tracking only for views with real rendered content, while
-    /// transparent Color.clear layers never fire there.
     private var coverButton: some View {
         ZStack {
-            // Concrete ZStack (NOT Group): hover/tap/menu tracking does not
-            // install on Group with conditional branches on Tahoe principal.
             ZStack {
                 if let song = app.player.displaySong {
                     CoverArtView(coverArt: song.coverArt, size: 42, cornerRadius: 0, shadow: false)
@@ -155,8 +130,6 @@ struct PlayerLCDView: View {
                 )
             }
         }
-        // No song = nothing to show in the mini-player: an empty panel is
-        // worse than no panel, so the placeholder cover is not actionable.
         .onTapGesture {
             guard app.player.displaySong != nil else { return }
             MiniPlayerPanelController.shared.show(app: app)
@@ -167,9 +140,9 @@ struct PlayerLCDView: View {
             }
         }
         .animation(.snappy(duration: 0.15), value: coverHovered)
-        .help(Text(verbatim: "Открыть мини-плеер"))
+        .help("Open MiniPlayer".localized)
         .accessibilityLabel(app.player.displaySong == nil
-            ? String(localized: "Нет воспроизведения") : "Открыть мини-плеер")
+            ? "Not Playing".localized : "Open MiniPlayer".localized)
     }
 
     private var textColumn: some View {
@@ -190,12 +163,9 @@ struct PlayerLCDView: View {
                 minTrailing: nowHovered ? 38 : 24
             )
         }
-        // Full LCD height: content stays vertically centered, left aligned.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .leading)
         .clipped()
         .contentShape(Rectangle())
-        // Directly on the VStack (real Text content): transparent layers do
-        // not install tracking on Tahoe principal.
         .onHover { hoverText = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(app.player.displaySong?.displayTitle ?? "")
@@ -213,10 +183,6 @@ struct PlayerLCDView: View {
     }
 }
 
-/// Star + ellipsis controls overlaid at the LCD's trailing edge. Their common
-/// square hitbox drives the text's reserved trailing area. Reads only the
-/// `song` passed in, so it re-evaluates when the track changes, not on every
-/// unrelated `MainView` invalidation.
 struct TopTrailingControlsView: View {
     static let actionButtonSide: CGFloat = 18
 
@@ -257,8 +223,8 @@ struct TopTrailingControlsView: View {
             .buttonStyle(.plain)
             .contentShape(Rectangle())
             .disabled(song == nil)
-            .help(isCurrentStarred ? "Убрать из избранного".localized : "В избранное".localized)
-            .accessibilityLabel(isCurrentStarred ? "Убрать из избранного".localized : "В избранное".localized)
+            .help(isCurrentStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
+            .accessibilityLabel(isCurrentStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
             .opacity(song == nil ? 0 : 1)
             .allowsHitTesting(song != nil)
         }
@@ -268,9 +234,6 @@ struct TopTrailingControlsView: View {
     }
 }
 
-/// Apple Music-style context menu for the currently playing song. Built from
-/// the same canonical `SongActionItems` used by every song surface, so the
-/// playback-bar actions match the rows' right-click and hover menus.
 struct NowPlayingEllipsisMenu: View {
     let song: SubsonicSong
 
@@ -290,14 +253,11 @@ struct NowPlayingEllipsisMenu: View {
         )
         .padding(.trailing, 3)
         .contentShape(Rectangle())
-        .help(Text(verbatim: "Ещё"))
-        .accessibilityLabel("Действия для песни")
+        .help("More".localized)
+        .accessibilityLabel("Song Actions".localized)
     }
 }
 
-/// Canonical action content for a now-playing song, shared by the LCD and the
-/// mini-player. Surfaces can provide their own visual button without actions
-/// drifting apart.
 struct NowPlayingActionMenuItems: View {
     @Environment(AppState.self) private var app
 
@@ -308,9 +268,6 @@ struct NowPlayingActionMenuItems: View {
     }
 }
 
-/// Standalone downloads icon — an independent toolbar control anchored to its
-/// own arrowed popover. Extracted from `MainView` so the frequently-updating
-/// `overallDownloadProgress` invalidates only this view, not the whole toolbar.
 struct DownloadsToolbarButton: View {
     @Environment(AppState.self) private var app
     @Binding var showDownloads: Bool
@@ -344,8 +301,8 @@ struct DownloadsToolbarButton: View {
                     .hoverFill()
                 }
                 .buttonStyle(.plain)
-                .help("Загрузки")
-                .accessibilityLabel("Загрузки")
+                .help("Downloads".localized)
+                .accessibilityLabel("Downloads".localized)
                 .popover(isPresented: $showDownloads, arrowEdge: .bottom) {
                     DownloadsPopoverView()
                 }

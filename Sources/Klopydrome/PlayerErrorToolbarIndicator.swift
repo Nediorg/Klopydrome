@@ -1,8 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Error indicator button shown in the toolbar next to the LCD when playback fails.
-/// Displays an alert triangle icon with a popover revealing the failure message.
 struct PlayerErrorToolbarIndicator: View {
     @Environment(AppState.self) private var app
     @State private var showPopover = false
@@ -23,7 +21,7 @@ struct PlayerErrorToolbarIndicator: View {
             .accessibilityLabel(error)
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Ошибка воспроизведения".localized, systemImage: "exclamationmark.triangle.fill")
+                    Label("Playback Error".localized, systemImage: "exclamationmark.triangle.fill")
                         .font(.headline)
                         .foregroundStyle(.orange)
                     Text(error)

@@ -1,11 +1,8 @@
 import Foundation
 import CryptoKit
 
-/// How credentials are sent to the server.
 public enum AuthMode: String, Codable, CaseIterable, Sendable {
-    /// Recommended by OpenSubsonic: `t` = MD5(password+salt), `s` = salt.
     case token
-    /// Legacy: `p` = hex-encoded MD5 of the password.
     case passwordMD5
 }
 
@@ -30,7 +27,6 @@ public struct SubsonicConfig: Equatable, Sendable {
     }
 }
 
-/// Thread-safe, stateless HTTP client for the Subsonic (Navidrome) API.
 public final class SubsonicClient: @unchecked Sendable {
     public let config: SubsonicConfig
     let session: URLSession
@@ -194,8 +190,6 @@ public final class SubsonicClient: @unchecked Sendable {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var comp = URLComponents()
         comp.queryItems = bodyParams
-        // URLComponents encodes space as %20 but leaves + unescaped. In application/x-www-form-urlencoded,
-        // + represents space, so literal + must be encoded as %2B to prevent server corruption.
         let bodyString = comp.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         request.httpBody = bodyString?.data(using: .utf8)
 
@@ -222,13 +216,11 @@ public final class SubsonicClient: @unchecked Sendable {
         throw lastError ?? SubsonicError.server(code: 0, message: "Request failed")
     }
 
-    /// Performs a request and decodes the common envelope, validating `status == "ok"`.
     func requestEnvelope(endpoint: String, params: [URLQueryItem] = []) async throws -> SubsonicEnvelope {
         let data = try await requestData(endpoint: endpoint, params: params)
         return try decodeEnvelope(from: data)
     }
 
-    /// Performs a POST request and decodes the common envelope, validating `status == "ok"`.
     func requestPostEnvelope(
         endpoint: String,
         params: [URLQueryItem] = [],

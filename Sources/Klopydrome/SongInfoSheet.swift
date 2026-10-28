@@ -1,9 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Native macOS Apple Music-style "Get Info" (Свойства) sheet. Displays
-/// comprehensive metadata, large artwork preview, audio technical details,
-/// and synchronized/plain lyrics.
 struct SongInfoSheet: View {
     let song: SubsonicSong
     var onDismiss: (() -> Void)?
@@ -33,9 +30,9 @@ struct SongInfoSheet: View {
 
         var title: String {
             switch self {
-            case .details: return "Сведения".localized
-            case .file: return "Файл".localized
-            case .lyrics: return "Слова".localized
+            case .details: return "Details".localized
+            case .file: return "File".localized
+            case .lyrics: return "Lyrics".localized
             }
         }
     }
@@ -91,7 +88,7 @@ struct SongInfoSheet: View {
                 title: song.album ?? song.displayTitle
             )
             .frame(width: 64, height: 64)
-                .help("Быстрый просмотр обложки".localized)
+                .help("Quick Look artwork".localized)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(song.displayTitle)
@@ -117,17 +114,17 @@ struct SongInfoSheet: View {
     private var detailsTab: some View {
         ScrollView {
             VStack(spacing: 12) {
-                metaRow("Название".localized, value: song.displayTitle)
-                metaRow("Артист".localized, value: song.artist)
-                metaRow("Альбом".localized, value: song.album)
-                metaRow("Исполнитель альбома".localized, value: song.albumArtist)
-                metaRow("Композитор".localized, value: song.composer)
-                metaRow("Жанр".localized, value: song.genre)
-                metaRow("Год".localized, value: song.year.map(String.init))
-                metaRow("Номер дорожки".localized, value: song.track.map(String.init))
-                metaRow("Диск".localized, value: song.discNumber.map(String.init))
+                metaRow("Title".localized, value: song.displayTitle)
+                metaRow("Artist".localized, value: song.artist)
+                metaRow("Album".localized, value: song.album)
+                metaRow("Album artist".localized, value: song.albumArtist)
+                metaRow("Composer".localized, value: song.composer)
+                metaRow("Genre".localized, value: song.genre)
+                metaRow("Year".localized, value: song.year.map(String.init))
+                metaRow("Track Number".localized, value: song.track.map(String.init))
+                metaRow("Disc".localized, value: song.discNumber.map(String.init))
                 HStack(alignment: .top) {
-                    Text("Рейтинг".localized)
+                    Text("Rating".localized)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .frame(width: 140, alignment: .trailing)
@@ -142,17 +139,17 @@ struct SongInfoSheet: View {
     private var fileTab: some View {
         ScrollView {
             VStack(spacing: 12) {
-                metaRow("Формат".localized, value: song.suffix?.uppercased())
-                metaRow("Битрейт".localized, value: song.bitRate.map { "\($0) kbps" })
-                metaRow("Длительность".localized, value: song.duration.map { Player.format(seconds: Double($0)) })
-                metaRow("Размер".localized, value: song.size.map {
+                metaRow("Format".localized, value: song.suffix?.uppercased())
+                metaRow("Bitrate".localized, value: song.bitRate.map { "\($0) kbps" })
+                metaRow("Duration".localized, value: song.duration.map { Player.format(seconds: Double($0)) })
+                metaRow("Size".localized, value: song.size.map {
                     ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file)
                 })
-                metaRow("Добавлено".localized, value: SubsonicDate.longDate(song.created))
-                metaRow("Прослушиваний".localized, value: song.playCount.map(String.init) ?? "0")
+                metaRow("Added".localized, value: SubsonicDate.longDate(song.created))
+                metaRow("Plays".localized, value: song.playCount.map(String.init) ?? "0")
                 if let path = song.path {
                     HStack(alignment: .top, spacing: 8) {
-                        Text("Расположение".localized)
+                        Text("Location".localized)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .frame(width: 140, alignment: .trailing)
@@ -166,7 +163,7 @@ struct SongInfoSheet: View {
                                 NSPasteboard.general.setString(path, forType: .string)
                                 copiedPath = true
                             } label: {
-                                Label(copiedPath ? "Путь скопирован".localized : "Скопировать путь".localized,
+                                Label(copiedPath ? "Path Copied".localized : "Copy Path".localized,
                                       systemImage: copiedPath ? "checkmark" : "doc.on.doc")
                                     .font(.caption)
                             }
@@ -200,9 +197,9 @@ struct SongInfoSheet: View {
                     .padding(.vertical, 12)
                 }
             } else {
-                ContentUnavailableView("Нет текста песни".localized,
+                ContentUnavailableView("No lyrics available".localized,
                                        systemImage: "quote.bubble",
-                                       description: Text("Для этой песни текст не найден на сервере.".localized))
+                                       description: Text("No lyrics found on the server for this song.".localized))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -270,7 +267,7 @@ struct SongInfoSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button("Готово".localized) {
+            Button("Done".localized) {
                 close()
             }
             .keyboardShortcut(.defaultAction)

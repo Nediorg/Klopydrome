@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Playback preferences separated from general server and appearance settings.
 struct PlaybackSettingsView: View {
     @Environment(AppState.self) private var app
 
@@ -23,30 +22,30 @@ struct PlaybackSettingsView: View {
         @Bindable var app = app
         Form {
             Section {
-                Picker("Движок".localized, selection: $app.serverConfig.playbackEngine.default(.mpv)) {
+                Picker("Engine".localized, selection: $app.serverConfig.playbackEngine.default(.mpv)) {
                     ForEach(PlaybackEngine.allCases) { engine in
                         Text(engine.label.localized).tag(engine)
                     }
                 }
             } header: {
-                Text("Плеер".localized)
+                Text("Player".localized)
             } footer: {
                 if app.serverConfig.effectivePlaybackEngine == .avFoundation {
-                    Text("В режиме AVFoundation часть функций воспроизведения недоступна.".localized)
+                    Text("Some playback features are unavailable with AVFoundation.".localized)
                 }
             }
 
             Section {
-                Picker("Кодек".localized, selection: $app.serverConfig.format) {
-                    Text("Оригинал".localized).tag(String?.none)
+                Picker("Codec".localized, selection: $app.serverConfig.format) {
+                    Text("Original".localized).tag(String?.none)
                     Text("Opus").tag(String?.some("opus"))
                     Text("MP3").tag(String?.some("mp3"))
                     Text("M4A (AAC)").tag(String?.some("m4a"))
                     Text("FLAC").tag(String?.some("flac"))
                 }
 
-                Picker("Битрейт".localized, selection: $app.serverConfig.maxBitRate) {
-                    Text("Оригинал".localized).tag(0)
+                Picker("Bitrate".localized, selection: $app.serverConfig.maxBitRate) {
+                    Text("Original".localized).tag(0)
                     Text("320 kbps").tag(320)
                     Text("256 kbps").tag(256)
                     Text("192 kbps").tag(192)
@@ -55,42 +54,42 @@ struct PlaybackSettingsView: View {
                 }
 
                 Toggle(
-                    "Кэшировать транскодированные треки".localized,
+                    "Cache transcoded tracks".localized,
                     isOn: $app.serverConfig.downloadTranscoded.orTrue
                 )
             } header: {
-                Text("Стриминг".localized)
+                Text("Streaming".localized)
             } footer: {
-                Text("Параметры транскодирования на стороне сервера для стриминга.".localized)
+                Text("Server-side transcoding parameters for streaming.".localized)
             }
 
             Section {
                 Toggle(
-                    "Предзагружать следующую песню".localized,
+                    "Preload next song".localized,
                     isOn: $app.serverConfig.nextTrackPreloadingEnabled.orTrue
                 )
             } header: {
-                Text("Предзагрузка".localized)
+                Text("Preloading".localized)
             } footer: {
-                Text("Заранее открывает следующий трек для воспроизведения без задержки.".localized)
+                Text("Pre-opens the next track to eliminate pauses between songs.".localized)
             }
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
-                Toggle("Авто-скробблинг".localized, isOn: $app.scrobblingEnabled)
-                Toggle("Запоминать очередь".localized, isOn: $app.queuePersistenceEnabled)
+                Toggle("Auto-scrobbling".localized, isOn: $app.scrobblingEnabled)
+                Toggle("Remember queue".localized, isOn: $app.queuePersistenceEnabled)
             } header: {
-                Text("Поведение".localized)
+                Text("Look and Feel".localized)
             } footer: {
-                Text("Сохраняет позицию и список воспроизведения между запусками приложения.".localized)
+                Text("Saves playback position and queue across app launches.".localized)
             }
 
             Section {
-                Toggle("Включить плавный переход".localized, isOn: $app.serverConfig.automixEnabled.orFalse)
-                Toggle("Включать в альбомах".localized, isOn: $app.serverConfig.automixApplyToAlbums.orFalse)
+                Toggle("Enable Crossfade".localized, isOn: $app.serverConfig.automixEnabled.orFalse)
+                Toggle("Enable in Albums".localized, isOn: $app.serverConfig.automixApplyToAlbums.orFalse)
                     .disabled(!app.serverConfig.effectiveAutomixEnabled)
                 HStack {
-                    Text("Длительность".localized)
+                    Text("Duration".localized)
                     Slider(value: crossfadeDuration, in: 1...12)
                     Text(L10n.format("format.duration.seconds", Int(app.serverConfig.effectiveAutomixFadeDuration)))
                         .monospacedDigit()
@@ -98,15 +97,15 @@ struct PlaybackSettingsView: View {
                 }
                 .disabled(!app.serverConfig.effectiveAutomixEnabled)
             } header: {
-                Text("Плавный переход".localized)
+                Text("Crossfade".localized)
             } footer: {
-                Text("Следующая песня начинает звучать до окончания текущей.".localized)
+                Text("Fades into the next song before the current one ends.".localized)
             }
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
                 Picker(
-                    "Коррекция громкости (ReplayGain)".localized,
+                    "Volume Correction (ReplayGain)".localized,
                     selection: $app.serverConfig.replayGainMode.default(.off)
                 ) {
                     ForEach(ReplayGainMode.allCases) { mode in
@@ -114,31 +113,31 @@ struct PlaybackSettingsView: View {
                     }
                 }
                 HStack {
-                    Text("Предусиление".localized)
+                    Text("Preamp".localized)
                     Slider(value: replayGainPreamp, in: AutomixLoudness.preampRange)
                     Text(L10n.format("format.gain.decibels", Double(app.serverConfig.effectiveReplayGainPreampDB)))
                         .monospacedDigit()
                         .frame(width: 56, alignment: .trailing)
                 }
                 .disabled(app.serverConfig.effectiveReplayGainMode == .off)
-                Picker("Обрезка тишины в конце".localized, selection: $app.serverConfig.silenceTrimMode.default(.off)) {
+                Picker("Trim Trailing Silence".localized, selection: $app.serverConfig.silenceTrimMode.default(.off)) {
                     ForEach(SilenceTrimMode.allCases) { mode in
                         Text(mode.label.localized).tag(mode)
                     }
                 }
             } header: {
-                Text("Обработка звука".localized)
+                Text("Audio Processing".localized)
             } footer: {
-                Text("Выравнивание громкости приводит треки с тегами ReplayGain к единому уровню.".localized)
+                Text("Normalizes playback volume using ReplayGain tags.".localized)
             }
             .disabled(app.serverConfig.effectivePlaybackEngine != .mpv)
 
             Section {
                 HStack {
-                    Text("Смещение времени".localized)
+                    Text("Time Offset".localized)
                     Spacer()
                     let currentOffsetMs = Int((app.serverConfig.effectiveLyricsDefaultOffset * 1000).rounded())
-                    Text(String(format: "%+d мс".localized, currentOffsetMs))
+                    Text(String(format: "%+d ms".localized, currentOffsetMs))
                         .font(.body.monospacedDigit())
                         .foregroundStyle(.secondary)
 
@@ -153,14 +152,14 @@ struct PlaybackSettingsView: View {
                 }
 
                 if app.serverConfig.effectiveLyricsDefaultOffset != 0 {
-                    Button("Сбросить смещение".localized) {
+                    Button("Reset Offset".localized) {
                         app.serverConfig.lyricsDefaultOffset = nil
                     }
                 }
             } header: {
-                Text("Синхронизация".localized)
+                Text("Synchronization".localized)
             } footer: {
-                Text("Смещение применяется ко всем песням для компенсации задержки звука.".localized)
+                Text("Applied to all songs to compensate for audio latency.".localized)
             }
         }
         .formStyle(.grouped)

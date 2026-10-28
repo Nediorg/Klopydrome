@@ -12,7 +12,7 @@ extension AppState {
         guard serverConfig.url.isEmpty == false else { return }
         guard let password = passwordForLoginPrefill() else {
             if await beginOfflineSession() {
-                connectionError = "Нет сети. Доступны сохранённые песни.".localized
+                connectionError = "No network. Saved songs available.".localized
             }
             return
         }
@@ -25,14 +25,14 @@ extension AppState {
             )
             await self.flushOfflineMutations(promptUser: true, context: .previousSession)
         } catch is CancellationError {
-            connectionError = "Нет соединения с сервером.".localized
+            connectionError = "No connection to server.".localized
             if await beginOfflineSession() {
-                connectionError = "Нет сети. Доступны сохранённые песни.".localized
+                connectionError = "No network. Saved songs available.".localized
             }
         } catch {
             connectionError = error.localizedDescription
             if await beginOfflineSession() {
-                connectionError = "Нет сети. Доступны сохранённые песни.".localized
+                connectionError = "No network. Saved songs available.".localized
             }
         }
     }
@@ -211,15 +211,12 @@ extension AppState {
         var string = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
         while string.hasSuffix("/") { string.removeLast() }
         let isExplicit = string.hasPrefix("http://") || string.hasPrefix("https://")
-        // Default to HTTPS: credentials (password/token) travel in the query
-        // string, so a schemeless host should never silently downgrade to plain HTTP.
         if !isExplicit {
             string = "https://" + string
         }
         guard let url = URL(string: string) else {
             throw SubsonicError.invalidURL
         }
-        // Block plain HTTP unless the user explicitly confirmed it.
         if url.scheme == "http" && !allowInsecureHTTP {
             throw SubsonicError.insecureConnection
         }

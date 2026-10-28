@@ -8,8 +8,6 @@ struct KlopydromeApp: App {
     @State private var app = AppState()
 
     init() {
-        // Fixes keyboard input when running as a bare SPM executable: without an
-        // app bundle the process may never become the active/key-window app.
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -66,8 +64,6 @@ private final class KlopydromeApplicationDelegate: NSObject, NSApplicationDelega
 struct ContentView: View {
     @Environment(AppState.self) private var app
 
-    /// Token returned by `addLocalMonitorForEvents`; kept so the monitor is
-    /// removed (once) when this view's lifetime ends instead of stacking.
     @State private var spaceBarMonitor: Any?
 
     var body: some View {
@@ -97,11 +93,6 @@ struct ContentView: View {
                         adaptiveCellularDataEnabled: app.serverConfig.effectiveAdaptiveCellularDataEnabled
                     )
                 }
-            // Non-sheet dim: a sheet disables the whole window chrome
-            // (the toolbar items look "hidden" until it dismisses).
-            // Hidden during background reconnect, offline transitions, or offline sessions.
-            // MainView stays mounted (toolbar registration untouched); the
-            // opaque backdrop hides its unloaded tabs behind the login card.
             if app.shouldShowLoginView {
                 AMColor.background.ignoresSafeArea()
                 Image(systemName: "music.note.list")
@@ -126,22 +117,14 @@ struct ContentView: View {
         .background(AMColor.background)
         .preferredColorScheme(app.appearance)
         .onReceive(NotificationCenter.default.publisher(for: .mainWindowJoined)) { note in
-            // Window exists by definition here: apply the transparent-titlebar
-            // policy deterministically (the onAppear attempt can miss when
-            // mainWindow is still nil).
             configureWindowToolbar(target: note.object as? NSWindow)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeMainNotification)) { note in
-            // SwiftUI can stomp window chrome (and re-create the toolbar) on
-            // later syncs — re-apply on activation with the real window.
             if let window = note.object as? NSWindow {
                 configureWindow(window)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // A long background strands failed covers, errored grids and a
-            // dropped connection — none of which retry on their own. One
-            // debounced handler revives all three (see AppState+Foreground).
             Task { await app.handleForegroundActivation() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
@@ -160,28 +143,12 @@ struct ContentView: View {
         }
     }
 
-    /// Full-screen content + transparent titlebar: the sidebar material runs up
-    /// to the very top of the window (traffic lights float over it) and the
-    /// unified toolbar caps the window, Finder/Music-style.
-    ///
-    /// The window-size floor is set HERE (AppKit level) and also enforced by
-    /// `WindowMinSizeConfigurator` in `.background`. Both run because neither
-    /// alone is guaranteed: this one can miss when `NSApp.mainWindow` is nil at
-    /// `.onAppear` time, and the representable's `viewDidMoveToWindow` fires on
-    /// every window join. Setting `minSize` in ADDITION to `contentMinSize` is
-    /// deliberate: the split-view divider's drag-to-resize path can bypass the
-    /// content floor, and `minSize` is the clamp AppKit applies to every frame
-    /// change, no matter where it comes from.
     private func configureWindowToolbar(target: NSWindow? = nil) {
         let window = target ?? NSApp.mainWindow ?? NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible })
         guard let window else { return }
         configureWindow(window)
     }
 
-    /// Returns `true` only for the main player window. The marker is
-    /// `WindowMinSizeView`, which lives in `ContentView.background` and
-    /// therefore exists solely in the player window's hierarchy — never in
-    /// Settings or the mini-player panel.
     private func isMainPlayerWindow(_ window: NSWindow) -> Bool {
         guard !(window is NSPanel) else { return false }
         if window.isMainPlayerWindow { return true }
@@ -239,9 +206,6 @@ struct ContentView: View {
         }
     }
 
-    /// Music.app behaviour: space toggles play/pause unless typing in a text field
-    /// or a focusable control (button, slider, menu item) is active — under Full
-    /// Keyboard Access those are activated with Space, so we must not steal it.
     private func installSpaceBarMonitor() {
         spaceBarMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -256,23 +220,10 @@ struct ContentView: View {
     }
 }
 
-/// Posted on every window join (see `WindowMinSizeView`), the first moment
-/// the main window is guaranteed to exist. Lets `ContentView` apply the
-/// transparent-titlebar policy deterministically — event-driven, no
-/// fixed-delay guessing.
 extension Notification.Name {
     static let mainWindowJoined = Notification.Name("MainWindowJoined")
 }
 
-/// Guaranteed hard floor for the window size, applied the moment this view
-/// joins a window hierarchy.
-///
-/// `configureWindowToolbar()` runs from `.onAppear`, when `NSApp.mainWindow` /
-/// `NSApp.keyWindow` can still be nil — a one-shot chance that silently misses.
-/// This representable instead uses `viewDidMoveToWindow`, the AppKit hook
-/// AppKit fires every time the view gains a window, so the floor is re-applied
-/// no matter when (or how often) the window appears. Backs up the AppKit-level
-/// `window.minSize` floor from `configureWindowToolbar`.
 struct WindowMinSizeConfigurator: NSViewRepresentable {
     let minSize: NSSize
 
@@ -286,10 +237,6 @@ struct WindowMinSizeConfigurator: NSViewRepresentable {
     }
 }
 
-/// Applies the floor on every window join. `viewDidMoveToWindow` is the only
-/// AppKit hook guaranteed to run once the view is actually inside a window —
-/// `makeNSView`/`updateNSView` observe SwiftUI's update schedule, not the
-/// window lifecycle.
 private final class WindowMinSizeView: NSView {
     var minSize: NSSize {
         didSet { apply() }
@@ -310,8 +257,6 @@ private final class WindowMinSizeView: NSView {
             window.isMainPlayerWindow = true
         }
         apply()
-        // Pass the window itself: at join time it may not be main/key/visible
-        // yet, so looking it up via NSApp races and silently misses.
         if let window {
             NotificationCenter.default.post(name: .mainWindowJoined, object: window)
         }

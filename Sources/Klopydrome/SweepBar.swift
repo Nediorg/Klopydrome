@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Indeterminate loading sweep shown in the mini-player scrubber while the
-/// track buffers. The animation is owned by this subview and therefore exists
-/// only for its lifetime: it starts on appear and is torn down automatically
-/// when the parent stops showing it (i.e. when loading ends). This avoids the
-/// previous bug where a `repeatForever` launched from the parent kept mutating
-/// a `@State` on the scrubber forever, re-laying-out the toolbar ~60 fps and
-/// saturating the main thread.
 struct SweepBar: View {
     let width: CGFloat
     let trackHeight: CGFloat

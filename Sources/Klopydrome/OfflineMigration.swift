@@ -38,7 +38,6 @@ struct OfflineMigration {
             try? fileManager.removeItem(at: songsURL)
             try? fileManager.removeItem(at: snapshotURL)
         } catch {
-            // Retain legacy files if migration errors
         }
     }
 }

@@ -1,12 +1,7 @@
 import Foundation
 import MediaPlayer
 
-// MARK: Now Playing info / media remote
-
 extension Player {
-    /// Publishes the current track and elapsed time to the system media
-    /// remote (Control Center, lock screen) and refreshes the Discord
-    /// presence. Called on every meaningful transport transition.
     func updateNowPlayingInfo() {
         onDiscordPresenceUpdate?()
         guard let song = displaySong else {
@@ -45,8 +40,6 @@ extension Player {
         }
     }
 
-    /// Pushes the elapsed-seconds field of the media-remote Now Playing panel,
-    /// throttled to a new integer second (shared by both engines).
     @inline(__always)
     func reportNowPlayingSecond(_ seconds: Double) {
         let second = Int(seconds)
@@ -57,13 +50,8 @@ extension Player {
             updated[MPNowPlayingInfoPropertyElapsedPlaybackTime] = seconds
             MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
         } else if displaySong != nil {
-            // The system can clear the dictionary while the app is inactive.
-            // Rebuild it on the next clock tick instead of losing media keys
-            // until another explicit playback action occurs.
             updateNowPlayingInfo()
         }
-        // Discord can restart independently. Refresh periodically so an active
-        // presence reconnects without waiting for the next playback action.
         if isPlaying, second > 0, second.isMultiple(of: 15) {
             onDiscordPresenceUpdate?()
         }

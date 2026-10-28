@@ -1,17 +1,7 @@
 import Foundation
 import NavidromeClient
 
-/// A queryable field in the smart-playlist DSL. Covers the canonical server
-/// field set (song, album and artist columns plus MusicBrainz IDs and tag/role
-/// names), so server-side Navidrome rules round-trip losslessly through the
-/// local editor.
-///
-/// `rawValue` is the server DSL key. `custom` is a placeholder for fields the
-/// app does not know (e.g. user-defined tags); its real DSL name is kept in
-/// `QueryRule.customField`.
 enum QueryField: String, CaseIterable, Identifiable, Hashable {
-
-    // MARK: Text
 
     case title = "title"
     case album = "album"
@@ -40,8 +30,6 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
     case lyricist = "lyricist"
     case albumType = "albumtype"
 
-    // MARK: Numeric
-
     case trackNumber = "tracknumber"
     case discNumber = "discnumber"
     case year = "year"
@@ -69,8 +57,6 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
     case rgaTrackGain = "rgtrackgain"
     case rgaTrackPeak = "rgtrackpeak"
 
-    // MARK: Boolean
-
     case loved = "loved"
     case albumLoved = "albumloved"
     case artistLoved = "artistloved"
@@ -78,8 +64,6 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
     case compilation = "compilation"
     case explicit = "explicit"
     case missing = "missing"
-
-    // MARK: Dates
 
     case date = "date"
     case originalDate = "originaldate"
@@ -98,8 +82,6 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
     case artistDateRated = "artistdaterated"
     case artistLastPlayed = "artistlastplayed"
 
-    // MARK: References
-
     case mbzAlbumID = "mbz_album_id"
     case mbzAlbumArtistID = "mbz_album_artist_id"
     case mbzArtistID = "mbz_artist_id"
@@ -108,18 +90,13 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
     case mbzReleaseGroupID = "mbz_release_group_id"
     case libraryID = "library_id"
 
-    /// Value is the id of another playlist (operator `inPlaylist`/`notInPlaylist`).
     case playlistID = "id"
 
-    /// Sort-only pseudo-field ("случайный порядок"), never a rule field.
     case random = "random"
 
-    /// Fallback for unknown fields; kept using `QueryRule.customField`.
     case custom
 
     var id: String { rawValue }
-
-    // MARK: Category / style
 
     enum Style { case string, number, date, boolean, playlist, sort }
 
@@ -154,105 +131,99 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
     var isBoolean: Bool { style == .boolean }
     var isDate: Bool { style == .date }
 
-    // MARK: Label
-
     var label: String {
         switch self {
-        case .title: return "Название"
-        case .album: return "Альбом"
-        case .artist: return "Исполнитель"
-        case .artistRole: return "Исполнитель альбома"
-        case .genre: return "Жанр"
-        case .mood: return "Настроение"
-        case .comment: return "Комментарий"
-        case .lyrics: return "Текст песни"
-        case .albumComment: return "Комментарий альбома"
-        case .catalogNumber: return "Каталожный номер"
-        case .discSubtitle: return "Подзаголовок диска"
-        case .filePath: return "Путь к файлу"
-        case .fileType: return "Тип файла"
-        case .codec: return "Кодек"
-        case .sortTitle: return "Сорт. название"
-        case .sortAlbum: return "Сорт. альбом"
-        case .sortArtist: return "Сорт. исполнитель"
-        case .sortAlbumArtist: return "Сорт. исполнитель альбома"
-        case .composer: return "Композитор"
-        case .conductor: return "Дирижёр"
-        case .performer: return "Исполнитель (роль)"
-        case .producer: return "Продюсер"
-        case .remixer: return "Ремиксер"
-        case .writer: return "Автор"
-        case .lyricist: return "Автор слов"
-        case .albumType: return "Тип альбома"
-        case .trackNumber: return "Номер трека"
-        case .discNumber: return "Номер диска"
-        case .year: return "Год"
-        case .originalYear: return "Оригинальный год"
-        case .releaseYear: return "Год релиза"
-        case .duration: return "Длительность (сек)"
-        case .size: return "Размер (байт)"
-        case .bitrate: return "Битрейт"
-        case .bitDepth: return "Битовая глубина"
-        case .sampleRate: return "Частота дискретизации"
-        case .bpm: return "Темп (BPM)"
-        case .channels: return "Каналов"
-        case .playCount: return "Прослушиваний"
-        case .rating: return "Моя оценка"
-        case .averageRating: return "Средняя оценка"
-        case .albumRating: return "Оценка альбома"
-        case .albumPlayCount: return "Прослушиваний альбома"
-        case .albumSongCount: return "Песен в альбоме"
-        case .albumSize: return "Размер альбома"
-        case .albumDuration: return "Длительность альбома"
-        case .artistRating: return "Оценка исполнителя"
-        case .artistPlayCount: return "Прослушиваний исполнителя"
-        case .rgaAlbumGain: return "Реигейн альбома (гейн)"
-        case .rgaAlbumPeak: return "Реигейн альбома (пик)"
-        case .rgaTrackGain: return "Реигейн трека (гейн)"
-        case .rgaTrackPeak: return "Реигейн трека (пик)"
-        case .loved: return "Люблю (избранное)"
-        case .albumLoved: return "Люблю альбом"
-        case .artistLoved: return "Люблю исполнителя"
-        case .hasCoverArt: return "Есть обложка"
-        case .compilation: return "Сборник"
-        case .explicit: return "18+ (explicit)"
-        case .missing: return "Файл отсутствует"
-        case .date: return "Дата"
-        case .originalDate: return "Оригинальная дата"
-        case .releaseDate: return "Дата релиза"
-        case .dateAdded: return "Добавлено"
-        case .dateModified: return "Изменено"
-        case .lastPlayed: return "Последнее прослушивание"
-        case .dateLoved: return "Когда добавлено в избранное"
-        case .dateRated: return "Когда оценено"
-        case .albumDateAdded: return "Альбом добавлен"
-        case .albumDateModified: return "Альбом изменён"
-        case .albumDateLoved: return "Альбом добавлен в избранное"
-        case .albumDateRated: return "Альбом оценён"
-        case .albumLastPlayed: return "Альбом прослушан"
-        case .artistDateLoved: return "Исполнитель в избранном"
-        case .artistDateRated: return "Исполнитель оценён"
-        case .artistLastPlayed: return "Исполнитель прослушан"
-        case .mbzAlbumID: return "MusicBrainz альбом"
-        case .mbzAlbumArtistID: return "MusicBrainz исполнитель альбома"
-        case .mbzArtistID: return "MusicBrainz исполнитель"
-        case .mbzRecordingID: return "MusicBrainz запись"
-        case .mbzReleaseTrackID: return "MusicBrainz трек релиза"
-        case .mbzReleaseGroupID: return "MusicBrainz группа релизов"
-        case .libraryID: return "Библиотека"
-        case .playlistID: return "Плейлист"
-        case .random: return "Случайно"
-        case .custom: return "Прочее"
+        case .title: return "Name"
+        case .album: return "Album"
+        case .artist: return "Artist"
+        case .artistRole: return "Album Artist"
+        case .genre: return "Genre"
+        case .mood: return "Mood"
+        case .comment: return "Comment"
+        case .lyrics: return "Song lyrics"
+        case .albumComment: return "Album Comment"
+        case .catalogNumber: return "Catalog Number"
+        case .discSubtitle: return "Disc subtitle"
+        case .filePath: return "File path"
+        case .fileType: return "File Type"
+        case .codec: return "Codec"
+        case .sortTitle: return "Sort by title"
+        case .sortAlbum: return "Sort by album"
+        case .sortArtist: return "Sort by artist"
+        case .sortAlbumArtist: return "Sort by album artist"
+        case .composer: return "Composer"
+        case .conductor: return "Conductor"
+        case .performer: return "Artist (role)"
+        case .producer: return "Producer"
+        case .remixer: return "Remixer"
+        case .writer: return "Author"
+        case .lyricist: return "Lyricist"
+        case .albumType: return "Album Type"
+        case .trackNumber: return "Track Number"
+        case .discNumber: return "Disc Number"
+        case .year: return "Year"
+        case .originalYear: return "Original Year"
+        case .releaseYear: return "Release Year"
+        case .duration: return "Duration (sec)"
+        case .size: return "Size (bytes)"
+        case .bitrate: return "Bitrate"
+        case .bitDepth: return "Bit Depth"
+        case .sampleRate: return "Sample Rate"
+        case .bpm: return "Tempo (BPM)"
+        case .channels: return "Channels"
+        case .playCount: return "Plays"
+        case .rating: return "My Rating"
+        case .averageRating: return "Average rating"
+        case .albumRating: return "Album Rating"
+        case .albumPlayCount: return "Album plays"
+        case .albumSongCount: return "Songs in Album"
+        case .albumSize: return "Album size"
+        case .albumDuration: return "Album Duration"
+        case .artistRating: return "Artist Rating"
+        case .artistPlayCount: return "Artist plays"
+        case .rgaAlbumGain: return "Album ReplayGain (gain)"
+        case .rgaAlbumPeak: return "Album ReplayGain (peak)"
+        case .rgaTrackGain: return "Track ReplayGain (gain)"
+        case .rgaTrackPeak: return "Track ReplayGain (peak)"
+        case .loved: return "Loved (Favorites)"
+        case .albumLoved: return "Loved Album"
+        case .artistLoved: return "Loved Artist"
+        case .hasCoverArt: return "Has Artwork"
+        case .compilation: return "Compilation"
+        case .explicit: return "Explicit (18+)"
+        case .missing: return "File Missing"
+        case .date: return "Date"
+        case .originalDate: return "Original Date"
+        case .releaseDate: return "Release Date"
+        case .dateAdded: return "Added"
+        case .dateModified: return "Modified"
+        case .lastPlayed: return "Last played"
+        case .dateLoved: return "When Added to Favorites"
+        case .dateRated: return "When Rated"
+        case .albumDateAdded: return "Album added"
+        case .albumDateModified: return "Album changed"
+        case .albumDateLoved: return "Album added to favorites"
+        case .albumDateRated: return "Album rated"
+        case .albumLastPlayed: return "Album played"
+        case .artistDateLoved: return "Favorite artist"
+        case .artistDateRated: return "Artist rated"
+        case .artistLastPlayed: return "Artist played"
+        case .mbzAlbumID: return "MusicBrainz album"
+        case .mbzAlbumArtistID: return "MusicBrainz album artist"
+        case .mbzArtistID: return "MusicBrainz artist"
+        case .mbzRecordingID: return "MusicBrainz recording"
+        case .mbzReleaseTrackID: return "MusicBrainz release track"
+        case .mbzReleaseGroupID: return "MusicBrainz release group"
+        case .libraryID: return "Library"
+        case .playlistID: return "Playlist"
+        case .random: return "Random"
+        case .custom: return "Other"
         }
     }
 
-    /// Fields the rule editor offers. Excludes the custom fallback and the
-    /// sort-only random row.
     static var pickerCases: [QueryField] {
         allCases.filter { $0 != .custom && $0 != .random }
     }
-
-    // MARK: DSL
 
     var dsl: String {
         if self == .custom { return "custom" }
@@ -263,27 +234,18 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
         if let field = QueryField(rawValue: dsl) {
             self = field
         } else if dsl == "playCount" {
-            // Legacy local queries used a capitalised alias; accept it.
             self = .playCount
         } else if dsl == "starred" {
-            // Legacy local queries used the Subsonic "starred" name.
             self = .loved
         } else {
             return nil
         }
     }
 
-    // MARK: Local evaluation
-
-    /// Reads the song's field value for local (client-side) evaluation.
-    /// Returns nil for fields the local model does not carry — rules using them
-    /// simply match nothing locally, while the server still evaluates them.
     func value(from song: SubsonicSong) -> QueryValue? {
         Self.readers[self]?(song)
     }
 
-    /// Per-field local readers. Kept as a static table so two dozen mappings
-    /// don't blow past the cyclomatic budget of a single switch.
     private static let readers: [QueryField: (SubsonicSong) -> QueryValue?] = [
         .title: { $0.title.map(QueryValue.init(text:)) },
         .album: { $0.album.map(QueryValue.init(text:)) },
@@ -308,7 +270,6 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
         .dateAdded: { $0.created.flatMap(QueryField.datePart(of:)).flatMap(QueryValue.init(text:)) }
     ]
 
-    /// Normalises a Subsonic timestamp to its `YYYY-MM-DD` date component.
     static func datePart(of value: String) -> String? {
         let prefix = String(value.prefix(10))
         return prefix.count == 10 ? prefix : nil
@@ -316,7 +277,6 @@ enum QueryField: String, CaseIterable, Identifiable, Hashable {
 }
 
 extension QueryField {
-    /// Operators offered for a field, grouped by its value style, mirroring
     var allowedOperators: [QueryOperator] {
         switch style {
         case .playlist: return [.inPlaylist, .notInPlaylist]

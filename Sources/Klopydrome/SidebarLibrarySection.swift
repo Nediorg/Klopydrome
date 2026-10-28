@@ -29,10 +29,10 @@ struct SidebarLibrarySection: View {
 
     private var librarySectionHeader: some View {
         HStack {
-            Text("Медиатека".localized)
+            Text("Library".localized)
             Spacer()
             if isEditingLibrary {
-                Button("Готово".localized) {
+                Button("Done".localized) {
                     isEditingLibrary = false
                 }
                 .buttonStyle(.plain)
@@ -41,7 +41,7 @@ struct SidebarLibrarySection: View {
                 .padding(.trailing, 8)
                 .contentShape(Rectangle())
             } else if isLibraryHeaderHovered {
-                Button("Править".localized) {
+                Button("Edit".localized) {
                     isEditingLibrary = true
                 }
                 .buttonStyle(.plain)

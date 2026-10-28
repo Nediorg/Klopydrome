@@ -2,7 +2,6 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
-/// Circular 32x32 info button matching RoundFavoriteButton and RoundEllipsisMenu.
 struct RoundInfoButton: View {
     var size: CGFloat = 32
     let action: () -> Void
@@ -26,16 +25,11 @@ struct RoundInfoButton: View {
         }
         .buttonStyle(.plain)
         .frame(width: size, height: size)
-        .help("Сведения об исполнителе".localized)
-        .accessibilityLabel("Сведения об исполнителе".localized)
+        .help("Artist Information".localized)
+        .accessibilityLabel("Artist Information".localized)
     }
 }
 
-/// Full-bleed hero banner for the artist page matching Apple Music macOS Sequoia.
-///
-/// Spans edge-to-edge with a charcoal gray background, a centered circular avatar,
-/// a bottom-left cluster with a red Play button + artist title/details, and
-/// right-aligned action buttons (favorite, ellipsis menu, and details).
 struct ArtistHeroBanner: View {
     let artist: Artist
     let detail: ArtistDetail
@@ -54,7 +48,6 @@ struct ArtistHeroBanner: View {
         detail.name ?? artist.name
     }
 
-    /// Dynamic charcoal gray background matching Apple Music dark appearance.
     private var bannerBackground: Color {
         Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
             if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
@@ -65,7 +58,6 @@ struct ArtistHeroBanner: View {
         }))
     }
 
-    /// Unique genres collected from albums and tracks.
     private var genresSummary: String? {
         let set = Set(albums.compactMap(\.genre) + allSongs.compactMap(\.genre))
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -74,9 +66,6 @@ struct ArtistHeroBanner: View {
         return sorted.prefix(3).joined(separator: ", ")
     }
 
-    /// Concatenated summary subtitle (role, albums/songs count, total time).
-    /// Genres are omitted here — they can be arbitrarily long and crowd out the
-    /// counts. Full genre list is always available in the artist info sheet.
     private var detailsText: String? {
         var parts: [String] = []
         if let roleLabel, !roleLabel.isEmpty {
@@ -115,8 +104,6 @@ struct ArtistHeroBanner: View {
         .frame(height: 250)
     }
 
-    // MARK: Avatar
-
     private var avatarView: some View {
         let imageURL = detail.artistImageUrl ?? artist.artistImageUrl
         return Group {
@@ -132,8 +119,6 @@ struct ArtistHeroBanner: View {
         .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
         .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
     }
-
-    // MARK: Bottom Bar
 
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -196,7 +181,7 @@ struct ArtistHeroBanner: View {
         }
         .buttonStyle(.plain)
         .onHover { playHovered = $0 }
-        .help("Слушать исполнителя".localized)
-        .accessibilityLabel("Слушать исполнителя".localized)
+        .help("Play Artist".localized)
+        .accessibilityLabel("Play Artist".localized)
     }
 }

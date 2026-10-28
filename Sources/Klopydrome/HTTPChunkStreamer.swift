@@ -1,22 +1,9 @@
 import Foundation
 
-/// Streams an HTTP response body as `Data` chunks through a
-/// `URLSessionDataDelegate`-backed `AsyncThrowingStream`.
-///
-/// `URLSession.AsyncBytes` yields one `UInt8` per `await`, so consuming a
-/// 15 MB track costs ~15M suspensions plus 15M single-byte appends. This
-/// streamer yields the raw network chunks (typically 16–64 KB) instead —
-/// the same bytes in ~1/1000 of the iterations, with `Content-Length`
-/// delivered up front for progress reporting.
-///
-/// Reuses a single shared `URLSession` to preserve TCP/TLS and HTTP/2
-/// connections across sequential track requests.
 enum HTTPChunkStreamer {
 
     enum Chunk {
-        /// Response headers arrived; carries `Content-Length` when known (-1 when chunked).
         case head(expectedContentLength: Int64)
-        /// A body chunk as delivered by the URL loading system.
         case body(Data)
     }
 

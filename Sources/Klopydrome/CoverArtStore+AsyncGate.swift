@@ -1,7 +1,5 @@
 import Foundation
 
-/// A semaphore usable from Swift concurrency without blocking a thread:
-/// callers over capacity suspend in continuations instead of spinning.
 actor AsyncGate {
     private let capacity: Int
     private var active = 0
@@ -14,9 +12,6 @@ actor AsyncGate {
 
     init(capacity: Int) { self.capacity = capacity }
 
-    /// Blocks until a slot is free, then takes it and returns `true`. If the
-    /// task is cancelled while queued, the waiter is removed without ever
-    /// consuming a slot and `false` is returned.
     func acquire() async -> Bool {
         if active < capacity {
             active += 1
@@ -38,15 +33,12 @@ actor AsyncGate {
         }
     }
 
-    /// Executes work within a granted gate slot, guaranteeing slot release on
-    /// completion or cancellation. Returns `nil` if cancelled before acquisition.
     func execute<T>(_ work: () async -> T) async -> T? {
         guard await acquire() else { return nil }
         defer { release() }
         return await work()
     }
 
-    /// Frees a slot, handing it to the next non-cancelled waiter.
     func release() {
         active -= 1
         while let waiter = waiters.first {

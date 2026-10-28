@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Single-line text label that centers when fitting, docks to leading when overflowing,
-/// and smoothly shifts right on hover when overflowing to clear time markers above the scrubber.
-///
-/// Text remains centered and fully visible when it fits. When overflowing,
-/// it aligns to the leading edge with 100% solid opacity (no gradient masks),
-/// smoothly clears the lower-left time marker on hover, and after a 3-second
-/// reading pause, marquee scrolls across the available width.
 struct FadeTruncatedLabel: View {
     let text: String
     var font: Font = .system(size: 12)

@@ -2,9 +2,6 @@ import Foundation
 import NavidromeClient
 
 extension Player {
-    /// The remaining overlap time, exposed only while both MPV contexts are
-    /// audibly playing. The UI observes `currentTime`, which advances during
-    /// the transition and naturally refreshes this value.
     var crossfadeRemainingTime: Double? {
         guard isCrossfading, let active = automix.activeCrossfade else { return nil }
         return max(0, active.duration - (currentTime - active.startTime))
@@ -15,9 +12,6 @@ extension Player {
         return L10n.format("format.crossfade.remaining", Int(ceil(remaining)))
     }
 
-    /// Starts and advances an ordinary crossfade only after the successor has
-    /// been fully prepared. The active MPV context remains the timeline source,
-    /// so the operation never adds a timer to the audio callback path.
     func evaluateAutomixCrossfade(at seconds: Double) {
         guard engineKind == .mpv,
               automix.enabled,
@@ -64,9 +58,6 @@ extension Player {
         advanceAutomixCrossfade(active, at: seconds)
     }
 
-    /// Restores the outgoing track to the user's volume and silences the
-    /// prepared successor. Call this before a seek, queue mutation or setting
-    /// change invalidates the prepared transition.
     func cancelAutomixCrossfade() {
         guard automix.activeCrossfade != nil else {
             isCrossfading = false
@@ -127,11 +118,6 @@ extension Player {
         onTrackCrossfaded?(outgoing)
     }
 
-    // MARK: - Album Detection
-
-    /// Determines whether two tracks belong to the same album.
-    /// Prefers matching unified ID (`albumId` or `parent`), falling back to matching
-    /// album title and compatible artist metadata.
     static func isSameAlbum(_ first: SubsonicSong, _ second: SubsonicSong) -> Bool {
         let firstID = (first.albumId?.isEmpty == false ? first.albumId : nil) ?? first.parent
         let secondID = (second.albumId?.isEmpty == false ? second.albumId : nil) ?? second.parent
@@ -195,8 +181,6 @@ extension Player {
         return lowerFirst.contains(lowerSecond) || lowerSecond.contains(lowerFirst)
     }
 
-    /// Checks if two tracks form an in-sequence transition within an album
-    /// (same disc track N -> N+1).
     static func isConsecutiveAlbumTrack(outgoing: SubsonicSong, incoming: SubsonicSong) -> Bool {
         guard let outTrack = outgoing.track, let inTrack = incoming.track,
               outTrack > 0, inTrack > 0 else {
@@ -207,8 +191,6 @@ extension Player {
         return inDisc == outDisc && inTrack == outTrack + 1
     }
 
-    /// Determines whether the transition between outgoing and incoming tracks
-    /// is an intra-album transition where crossfade should be suppressed.
     static func isIntraAlbumTransition(
         outgoing: SubsonicSong,
         incoming: SubsonicSong,

@@ -1,26 +1,15 @@
 import Foundation
 import NavidromeClient
 
-/// A locally-stored, rule-based playlist. Subsonic/Navidrome can't store these
-/// server-side, so they live in UserDefaults and their tracks are recomputed on
-/// demand from the server.
 struct SmartPlaylist: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var name: String
-    /// Genre to match (exact, case-insensitive). nil/empty = all genres.
     var genre: String?
-    /// Only songs the user has starred (favorited).
     var starredOnly = false
-    /// Only songs played at least this many times. nil = any.
     var minPlayCount: Int?
-    /// Only songs rated at least this many stars (1...5). nil = any.
     var minRating: Int?
-    /// Maximum number of tracks to include. nil = no limit (all matches).
     var limit: Int?
-    /// Randomize the resulting order instead of sorting by title.
     var shuffleOrder = false
-    /// Optional full query-tree (the DSL AST), set by the visual rule editor.
-    /// When present it takes precedence over the legacy single-field rules above.
     var query: SmartQuery?
 
     var trimmedGenre: String? {
@@ -28,7 +17,6 @@ struct SmartPlaylist: Codable, Identifiable, Hashable {
         return genre
     }
 
-    /// True if the playlist uses the full query-tree editor (not legacy fields).
     var hasQueryRules: Bool { query != nil }
 
     func matches(_ song: SubsonicSong) -> Bool {
@@ -45,7 +33,6 @@ struct SmartPlaylist: Codable, Identifiable, Hashable {
         return true
     }
 
-    /// Human-readable description of the rules, for list rows and detail headers.
     var ruleSummary: String {
         if let query {
             let expr = query.root
@@ -57,20 +44,19 @@ struct SmartPlaylist: Codable, Identifiable, Hashable {
                     : "format.smartPlaylist.any"
                 return L10n.format(formatKey, "\(head)\(extra)")
             }
-            return L10n.text("Вся музыка")
+            return "All Music".localized
         }
         var parts: [String] = []
         if let trimmedGenre { parts.append(L10n.format("format.genre", trimmedGenre)) }
-        if starredOnly { parts.append(L10n.text("Только избранное")) }
+        if starredOnly { parts.append("Favorites only".localized) }
         if let minPlayCount { parts.append(L10n.format("format.smartPlaylist.playCount", minPlayCount)) }
         if let minRating { parts.append(L10n.format("format.smartPlaylist.rating", minRating)) }
-        if shuffleOrder { parts.append(L10n.text("Перемешивать")) }
-        return parts.isEmpty ? L10n.text("Вся музыка") : parts.joined(separator: " · ")
+        if shuffleOrder { parts.append("Shuffle".localized) }
+        return parts.isEmpty ? "All Music".localized : parts.joined(separator: " · ")
     }
 }
 
 extension QueryExpr {
-    /// A short, human-readable description used in playlist tiles.
     var shortSummary: String {
         if isGroup, let logic = groupLogic {
             let joined = children.prefix(2).map { $0.shortSummary }.joined(separator: " · ")

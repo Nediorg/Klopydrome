@@ -1,10 +1,6 @@
 import Foundation
 
-// MARK: - Endpoints
-
 public extension SubsonicClient {
-
-    // MARK: System
 
     func ping() async throws {
         _ = try await requestEnvelope(endpoint: "ping")
@@ -16,8 +12,6 @@ public extension SubsonicClient {
         self.setSupportedExtensions(Set(exts.map(\.name)))
         return exts
     }
-
-    // MARK: Browsing
 
     func getArtists() async throws -> [ArtistIndex] {
         let envelope = try await requestEnvelope(endpoint: "getArtists")
@@ -67,8 +61,6 @@ public extension SubsonicClient {
         return album
     }
 
-    // MARK: Album / song lists
-
     func getAlbumList2(type: AlbumListType, size: Int = 100, offset: Int = 0,
                        musicFolderId: String? = nil) async throws -> [SubsonicAlbum] {
         var params = [
@@ -82,7 +74,6 @@ public extension SubsonicClient {
         return try await requestEnvelope(endpoint: "getAlbumList2", params: params).albumList2?.album ?? []
     }
 
-    /// All songs of a genre, paginated. Used by smart playlists.
     func getSongsByGenre(genre: String, count: Int = 50, offset: Int = 0) async throws -> [SubsonicSong] {
         let params = [
             URLQueryItem(name: "genre", value: genre),
@@ -92,7 +83,6 @@ public extension SubsonicClient {
         return try await requestEnvelope(endpoint: "getSongsByGenre", params: params).songsByGenre?.song ?? []
     }
 
-    /// All genres on the server, best-effort (sorted by song count, then name).
     func getGenres() async throws -> [Genre] {
         let genres = try await requestEnvelope(endpoint: "getGenres").genres?.genre ?? []
         return genres.sorted {
@@ -102,8 +92,6 @@ public extension SubsonicClient {
             return ($0.value ?? "").localizedCaseInsensitiveCompare($1.value ?? "") == .orderedAscending
         }
     }
-
-    // MARK: Search
 
     func search3(query: String, artistCount: Int = 20, albumCount: Int = 20,
                  songCount: Int = 50, songOffset: Int = 0) async throws -> (artists: [Artist], albums: [SubsonicAlbum], songs: [SubsonicSong]) {
@@ -119,8 +107,6 @@ public extension SubsonicClient {
         let payload = try await requestEnvelope(endpoint: "search3", params: params).searchResult3
         return (payload?.artist ?? [], payload?.album ?? [], payload?.song ?? [])
     }
-
-    // MARK: Starred / favorites
 
     func getStarred2() async throws -> (artists: [Artist], albums: [SubsonicAlbum], songs: [SubsonicSong]) {
         let payload = try await requestEnvelope(endpoint: "getStarred2").starred2
@@ -160,8 +146,6 @@ public extension SubsonicClient {
         _ = try await requestEnvelope(endpoint: "setRating", params: params)
     }
 
-    // MARK: Scrobble
-
     func scrobble(id: String, time: Date? = nil, submission: Bool = true) async throws {
         var params = [
             URLQueryItem(name: "id", value: id),
@@ -173,17 +157,10 @@ public extension SubsonicClient {
         _ = try await requestEnvelope(endpoint: "scrobble", params: params)
     }
 
-    // MARK: Playlists
-
     func getPlaylists() async throws -> [PlaylistSummary] {
         try await requestEnvelope(endpoint: "getPlaylists").playlists?.playlist ?? []
     }
 
-    /// Streaming load of a playlist. The server returns header + all songs in one
-    /// JSON, so we decode it twice: first the small header envelope for instant
-    /// display, then the `entry` array in bounded chunks so huge playlists paint
-    /// progressively instead of waiting for one giant decode. Yields the header
-    /// first, then one `PlaylistChunk.songs` per slice.
     func getPlaylistChunked(id: String, chunkSize: Int = 200) -> AsyncThrowingStream<PlaylistChunk, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -191,8 +168,6 @@ public extension SubsonicClient {
                     let data = try await requestData(
                         endpoint: "getPlaylist",
                         params: [URLQueryItem(name: "id", value: id)])
-                    // First decode the thin envelope to get header + the raw entry array
-                    // without decoding every song yet.
                     let envelope = try JSONDecoder().decode(SubsonicResponse.self, from: data).subsonicResponse
                     guard envelope.status == "ok" else {
                         if let error = envelope.error {
@@ -204,7 +179,6 @@ public extension SubsonicClient {
                         continuation.finish()
                         return
                     }
-                    // Drive the header through without the whole song list.
                     let header = PlaylistDetail(
                         id: playlist.id,
                         name: playlist.name,
@@ -220,7 +194,6 @@ public extension SubsonicClient {
                         validUntil: playlist.validUntil)
                     continuation.yield(.header(header))
 
-                    // Stream already-decoded entries in bounded chunks to paint progressively
                     let allEntries = playlist.entry ?? []
                     var offset = 0
                     while offset < allEntries.count {
@@ -273,14 +246,6 @@ public extension SubsonicClient {
         _ = try await requestEnvelope(endpoint: "deletePlaylist", params: params)
     }
 
-    // MARK: Native REST API — playlist cover upload
-
-    /// Uploads a custom playlist cover via Navidrome's native REST API
-    /// (`POST /api/playlist/{id}/image`, multipart field `image`). This route
-    /// is not part of the Subsonic API, so it authenticates with the same
-    /// account via a short-lived JWT obtained from `POST /auth/login`.
-    /// The server requires `EnableArtworkUpload` (default on) unless the user
-    /// is an admin.
     func uploadPlaylistCover(playlistId: String, imageData: Data) async throws {
         let token = try await nativeLoginToken()
         let path = "api/playlist/\(playlistId)/image"
@@ -309,8 +274,6 @@ public extension SubsonicClient {
         _ = data
     }
 
-    /// Logs in to Navidrome's native API and returns the JWT used for the
-    /// `X-ND-Authorization` header.
     private func nativeLoginToken() async throws -> String {
         let url = config.baseURL.appendingPathComponent("auth/login")
         var request = URLRequest(url: url)
@@ -332,25 +295,16 @@ public extension SubsonicClient {
         return login.token
     }
 
-    // MARK: Lyrics
-
-    /// OpenSubsonic endpoint; returns potentially synced lyric blocks. The
-    /// `enhanced=true` parameter makes the server attach word-level `cueLine`
-    /// blocks (karaoke) — without it the word timing is dropped from the
-    /// response (Navidrome defaults `enhanced=false`).
     func getLyricsBySongId(id: String) async throws -> [LyricsEntry] {
         let params = [
             URLQueryItem(name: "id", value: id),
             URLQueryItem(name: "enhanced", value: "true")
         ]
         let list = try await requestEnvelope(endpoint: "getLyricsBySongId", params: params).lyricsList
-        // Navidrome returns synced lyrics as `structuredLyrics` (preferred), but
-        // some servers still use the legacy `lyrics` array. Prefer synced entries.
         let entries = list?.structuredLyrics ?? list?.lyrics ?? []
         return entries
     }
 
-    /// Classic endpoint keyed by artist/title; returns plain text lyrics.
     func getLyrics(artist: String, title: String) async throws -> LyricsResult? {
         let params = [
             URLQueryItem(name: "artist", value: artist),
@@ -358,8 +312,6 @@ public extension SubsonicClient {
         ]
         return try await requestEnvelope(endpoint: "getLyrics", params: params).lyrics
     }
-
-    // MARK: Play queue
 
     func savePlayQueue(songIds: [String], currentId: String? = nil, position: Double? = nil) async throws {
         var params: [URLQueryItem] = songIds.map { URLQueryItem(name: "id", value: $0) }
@@ -375,8 +327,6 @@ public extension SubsonicClient {
     func getPlayQueue() async throws -> PlayQueuePayload? {
         try await requestEnvelope(endpoint: "getPlayQueue").playQueue
     }
-
-    // MARK: Binary URLs (cover art, stream, download)
 
     func coverArtURL(id: String, size: Int? = nil) -> URL? {
         var params = [URLQueryItem(name: "id", value: id)]
@@ -410,16 +360,10 @@ public extension SubsonicClient {
         return try? buildURL(endpoint: "download", params: params, json: false)
     }
 
-    // MARK: Info (require external integrations)
-
     func getAlbumInfo2(id: String) async throws -> AlbumInfoPayload? {
         let params = [URLQueryItem(name: "id", value: id)]
-        // Note: the getAlbumInfo2 response nests its payload under the
-        // `albumInfo` element (OpenSubsonic), not `albumInfo2`.
         return try await requestEnvelope(endpoint: "getAlbumInfo2", params: params).albumInfo
     }
-
-    // MARK: Media library scanning
 
     func getScanStatus() async throws -> ScanStatus {
         let envelope = try await requestEnvelope(endpoint: "getScanStatus")
@@ -437,8 +381,6 @@ public extension SubsonicClient {
         }
         return status
     }
-
-    // MARK: Sharing
 
     func getShares() async throws -> [SubsonicShare] {
         let envelope = try await requestEnvelope(endpoint: "getShares")

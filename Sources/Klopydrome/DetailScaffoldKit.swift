@@ -1,13 +1,7 @@
 import SwiftUI
 
-// MARK: - Detail Scaffold Kit
-
-/// Canonical building blocks for detail screens (AlbumDetailView, PlaylistDetailView, etc.).
-/// Eliminates duplicated error states, retry banners, and empty screens across detail views.
-
-/// Full-screen or section-level empty error state with a retry button.
 struct DetailUnavailableView: View {
-    var title: String = "Не удалось загрузить треки".localized
+    var title: String = "Failed to load tracks".localized
     let message: String
     var systemImage: String = "exclamationmark.triangle"
     let onRetry: () -> Void
@@ -18,7 +12,7 @@ struct DetailUnavailableView: View {
         } description: {
             Text(message)
         } actions: {
-            Button("Повторить".localized) {
+            Button("Retry".localized) {
                 onRetry()
             }
             .buttonStyle(.bordered)
@@ -30,7 +24,6 @@ struct DetailUnavailableView: View {
     }
 }
 
-/// Compact inline error notice with warning icon and retry action.
 struct DetailInlineErrorBanner: View {
     let message: String
     let onRetry: () -> Void
@@ -44,7 +37,7 @@ struct DetailInlineErrorBanner: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             Spacer()
-            Button("Повторить".localized) {
+            Button("Retry".localized) {
                 onRetry()
             }
             .buttonStyle(.bordered)

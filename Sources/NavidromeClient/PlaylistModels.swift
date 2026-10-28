@@ -1,7 +1,5 @@
 import Foundation
 
-// MARK: - Playlists
-
 public struct PlaylistSummary: Codable, Hashable, Identifiable {
     public let id: String
     public let name: String?
@@ -13,20 +11,11 @@ public struct PlaylistSummary: Codable, Hashable, Identifiable {
     public let created: String?
     public let changed: String?
     public let isPublic: Bool?
-    /// OpenSubsonic: `true` when the current user cannot edit the playlist's
-    /// tracks. Navidrome sets it for smart playlists (always) and for playlists
-    /// owned by another user. Do NOT use this to detect a smart playlist.
     public let isReadonly: Bool?
-    /// OpenSubsonic: present only on server-side smart playlists (rules
-    /// evaluated by the server). This is the reliable smart-playlist marker —
-    /// unlike `isReadonly`, which also marks shared playlists.
     public let validUntil: String?
 
     public var displayName: String { name?.isEmpty == false ? name! : id }
 
-    /// True for server-side smart playlists (rules stored/evaluated on the
-    /// server). Navidrome emits `validUntil` only for those, so its presence is
-    /// the discriminator — `isReadonly` alone would also match shared playlists.
     public var isSmart: Bool { validUntil != nil }
 
     public init(id: String, name: String? = nil, comment: String? = nil, owner: String? = nil,
@@ -71,7 +60,6 @@ public struct PlaylistDetail: Codable, Hashable, Identifiable {
 
     public var displayName: String { name?.isEmpty == false ? name! : id }
 
-    /// True for server-side smart playlists (see `PlaylistSummary.isSmart`).
     public var isSmart: Bool { validUntil != nil }
 
     public init(id: String, name: String? = nil, comment: String? = nil, owner: String? = nil,
@@ -101,11 +89,6 @@ public struct PlaylistDetail: Codable, Hashable, Identifiable {
     }
 }
 
-/// A slice of a playlist load: either the header metadata or a chunk of songs.
-/// `getPlaylist` returns the entire playlist in one payload, but for huge
-/// playlists decoding the whole `entry` list in a single shot blocks the first
-/// paint. The streaming client decodes header first, then yields songs in
-/// bounded chunks so the UI can render as soon as the first chunk arrives.
 public enum PlaylistChunk {
     case header(PlaylistDetail)
     case songs([SubsonicSong])

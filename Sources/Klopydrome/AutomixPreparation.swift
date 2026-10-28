@@ -1,8 +1,6 @@
 import Foundation
 import NavidromeClient
 
-/// Mutable state of the prepared automix successor. Kept outside `Player` so
-/// queue and transport remain focused on the active playback path.
 @MainActor
 final class AutomixPreparation {
     var preloadedMPVEngine: MPVPlaybackEngine?

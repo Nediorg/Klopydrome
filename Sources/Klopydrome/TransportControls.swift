@@ -1,11 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Transport buttons (shuffle / previous / play-pause / next / repeat) shared
-/// by the window toolbar and the mini-player, so the actions, labels, and the
-/// repeat-icon mapping have a single source of truth. Each surface keeps its
-/// own geometry via `Style`: `.toolbar` is the compact toolbar row, `.miniPlayer`
-/// the mini-player row with the large circle play button.
 struct TransportControls: View {
     enum Style {
         case toolbar
@@ -25,15 +20,12 @@ struct TransportControls: View {
         }
     }
 
-    /// Repeat-mode glyph: one-song repeat shows the "1" badge.
     private var repeatIcon: String {
         switch app.player.repeatMode {
         case .one: return "repeat.1"
         default: return "repeat"
         }
     }
-
-    // MARK: Toolbar (compact)
 
     private var toolbarRow: some View {
         HStack(spacing: 5) {
@@ -54,13 +46,13 @@ struct TransportControls: View {
             .buttonStyle(.plain)
             .disabled(!app.player.hasQueue)
             .onHover { shuffleHover = $0 }
-            .accessibilityLabel("Перемешать".localized)
-            .help("Перемешать".localized)
+            .accessibilityLabel("Shuffle".localized)
+            .help("Shuffle".localized)
 
             sideButton("backward.fill",
                         fontSize: 16,
                         color: .secondary,
-                        help: "Назад") {
+                        help: "Previous Track".localized) {
                 app.player.previous()
             }
             .frame(width: 30, height: 24)
@@ -80,13 +72,13 @@ struct TransportControls: View {
             .hoverFill(fill: Color.primary.opacity(0.12))
             .foregroundStyle(Color.primary)
             .animation(.snappy(duration: 0.14, extraBounce: 0), value: app.player.isPlaying)
-            .help("Играть/Пауза".localized)
-            .accessibilityLabel((app.player.isPlaying ? "Пауза" : "Играть").localized)
+            .help("Play/Pause".localized)
+            .accessibilityLabel((app.player.isPlaying ? "Pause" : "Play").localized)
 
             sideButton("forward.fill",
                         fontSize: 16,
                         color: .secondary,
-                        help: "Вперёд") {
+                        help: "Next Track".localized) {
                 app.player.next()
             }
             .frame(width: 30, height: 24)
@@ -109,19 +101,17 @@ struct TransportControls: View {
             .buttonStyle(.plain)
             .disabled(!app.player.hasQueue)
             .onHover { repeatHover = $0 }
-            .accessibilityLabel("Повтор".localized)
-            .help("Повтор".localized)
+            .accessibilityLabel("Repeat".localized)
+            .help("Repeat".localized)
         }
     }
-
-    // MARK: Mini-player
 
     private var miniPlayerRow: some View {
         HStack(spacing: 28) {
             sideButton("shuffle",
                        fontSize: 16,
                        accent: app.player.shuffle,
-                       help: "Перемешать") {
+                       help: "Shuffle".localized) {
                 app.player.toggleShuffle()
             }
             .frame(width: 24, height: 24)
@@ -130,7 +120,7 @@ struct TransportControls: View {
             sideButton("backward.fill",
                        fontSize: 18,
                        color: nil,
-                       help: "Назад") {
+                       help: "Previous Track".localized) {
                 app.player.previous()
             }
             .frame(width: 30, height: 30)
@@ -153,13 +143,13 @@ struct TransportControls: View {
             .buttonStyle(.plain)
             .disabled(!app.player.hasQueue)
             .animation(.snappy(duration: 0.14, extraBounce: 0), value: app.player.isPlaying)
-            .help("Играть/Пауза".localized)
-            .accessibilityLabel((app.player.isPlaying ? "Пауза" : "Играть").localized)
+            .help("Play/Pause".localized)
+            .accessibilityLabel((app.player.isPlaying ? "Pause" : "Play").localized)
 
             sideButton("forward.fill",
                        fontSize: 18,
                        color: nil,
-                       help: "Вперёд") {
+                       help: "Next Track".localized) {
                 app.player.next()
             }
             .frame(width: 30, height: 30)
@@ -168,7 +158,7 @@ struct TransportControls: View {
             sideButton(repeatIcon,
                        fontSize: 15,
                        accent: app.player.repeatMode != .off,
-                       help: "Повтор") {
+                       help: "Repeat".localized) {
                 app.player.cycleRepeat()
             }
             .frame(width: 24, height: 24)
@@ -176,13 +166,6 @@ struct TransportControls: View {
         }
     }
 
-    /// One of the four uniform transport buttons. `color` applies only when the
-    /// button is not accent-tinted; `nil` keeps the system default (as the mini
-    /// player's prev/next do). `disabled` overrides the queue-empty disable for
-    /// controls that stay enabled (the toolbar's repeat). The label is framed to
-    /// the standard 30×30 hit target INSIDE the button: a frame applied outside
-    /// the button only resizes the container, leaving the clickable zone stuck
-    /// on the icon glyph.
     @ViewBuilder
     private func sideButton(_ symbol: String,
                              fontSize: CGFloat,

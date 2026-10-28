@@ -2,20 +2,6 @@ import AppKit
 import ObjectiveC
 import SwiftUI
 
-/// Resolves titlebar event occlusion in unified-toolbar windows.
-///
-/// Under `.windowToolbarStyle(.unified)` + `.fullSizeContentView`, AppKit's
-/// `NSThemeFrame` places `NSTitlebarContainerView` (height 52 pt) *above*
-/// `contentView` in the z-order. Because Klopydrome renders `PlayerHeaderBar`
-/// in `contentView` rather than inside `NSToolbarItem`s, `NSToolbarView` treats
-/// the entire header region as empty toolbar background and intercepts single-click
-/// `mouseDown` events to move the window.
-///
-/// This helper swizzles `hitTest(_:)` on `NSTitlebarContainerView` so that any hit
-/// on empty titlebar/toolbar background outside the traffic lights (window x > 80 pt)
-/// returns `nil`. This lets `NSThemeFrame` fall through to `contentView`, giving
-/// controls in `PlayerHeaderBar` (volume slider, scrubber, transport buttons)
-/// direct single-click and drag events without interference.
 enum TitlebarPassThrough {
     private static var isInstalled = false
 
@@ -78,8 +64,6 @@ enum TitlebarPassThrough {
             guard let event = eventObj as? NSEvent, let frameView = selfObj as? NSView else {
                 return oldDragFn(selfObj, dragSel, eventObj)
             }
-            // If the view directly under the cursor explicitly disallows window moving
-            // (e.g. volume sliders, scrubbers, interactive controls), do NOT initiate a window drag.
             if let hit = frameView.hitTest(event.locationInWindow), !hit.mouseDownCanMoveWindow {
                 return false
             }
@@ -148,12 +132,10 @@ enum TitlebarPassThrough {
 
 extension NSView {
     @objc func klopydrome_titlebarHitTest(_ point: NSPoint) -> NSView? {
-        // Calls the original hitTest implementation (swizzled)
         guard let hit = self.klopydrome_titlebarHitTest(point) else {
             return nil
         }
 
-        // Always keep actual interactive controls (close/minimize/zoom buttons, toolbar buttons)
         if hit is NSButton || hit is NSControl {
             return hit
         }
@@ -166,9 +148,6 @@ extension NSView {
             return hit
         }
 
-        // Traffic lights are on the leading edge (x < 80 pt in window space).
-        // Clicks past traffic lights belong to PlayerHeaderBar in contentView.
-        // Returning nil lets NSThemeFrame fall through to contentView.
         if point.x > 80 {
             return nil
         }
@@ -179,8 +158,6 @@ extension NSView {
 
 // MARK: - Header Bar Window Drag Region
 
-/// A native hit-test region that allows dragging the window when clicking on
-/// empty background space in PlayerHeaderBar, matching Apple Music behavior.
 struct HeaderBarWindowDragRegion: NSViewRepresentable {
     func makeNSView(context: Context) -> HeaderBarWindowDragView {
         HeaderBarWindowDragView()

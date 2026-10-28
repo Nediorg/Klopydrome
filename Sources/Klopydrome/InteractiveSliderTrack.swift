@@ -2,22 +2,6 @@ import AppKit
 import ObjectiveC
 import SwiftUI
 
-/// A transparent AppKit overlay that provides direct mouse interaction for sliders
-/// and scrubbers in unified-toolbar titlebar regions.
-///
-/// In unified titlebar windows (`.windowToolbarStyle(.unified)`), pure SwiftUI views
-/// cannot reliably intercept single-click drag gestures because AppKit hit-testing
-/// returns `NSHostingView`, which defaults to `mouseDownCanMoveWindow = true` and
-/// triggers `performWindowDragWithEvent:` on single-click mouse movements.
-///
-/// `InteractiveSliderTrack` solves this by placing a native `NSView` overlay on top of
-/// the SwiftUI visuals:
-/// 1. Overrides `mouseDownCanMoveWindow { false }` so AppKit never initiates window drag.
-/// 2. Overrides `acceptsFirstMouse { true }` for immediate response on click.
-/// 3. In `viewDidMoveToSuperview()`, enables hit-testing on its enclosing
-///    `AppKitPlatformViewHost` so AppKit routes clicks directly to this view.
-/// 4. In `mouseDown(with:)`, executes a modal tracking loop via `window.nextEvent`
-///    for smooth single-click jumping and real-time dragging.
 struct InteractiveSliderTrack: NSViewRepresentable {
     var onDragStarted: (() -> Void)?
     var onDragChanged: ((CGFloat) -> Void)?
