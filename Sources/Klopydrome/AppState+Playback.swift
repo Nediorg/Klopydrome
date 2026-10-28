@@ -178,11 +178,31 @@ extension AppState {
         player.queue.append(contentsOf: songs)
     }
 
-    func play(_ songs: [SubsonicSong], at index: Int = 0) {
+    func play(
+        _ songs: [SubsonicSong],
+        at index: Int = 0,
+        contextTitle: String? = nil,
+        context: PlaybackContext? = nil
+    ) {
+        if let context {
+            player.playbackContext = context
+        } else {
+            player.queueContextTitle = contextTitle
+        }
         player.play(songs, startAt: index)
     }
 
-    func play(_ song: SubsonicSong, in queue: [SubsonicSong]) {
+    func play(
+        _ song: SubsonicSong,
+        in queue: [SubsonicSong],
+        contextTitle: String? = nil,
+        context: PlaybackContext? = nil
+    ) {
+        if let context {
+            player.playbackContext = context
+        } else {
+            player.queueContextTitle = contextTitle
+        }
         if let index = queue.firstIndex(where: { $0.id == song.id }) {
             player.play(queue, startAt: index)
         } else {
@@ -190,22 +210,31 @@ extension AppState {
         }
     }
 
-    func playShuffled(_ songs: [SubsonicSong]) {
+    func playShuffled(
+        _ songs: [SubsonicSong],
+        contextTitle: String? = nil,
+        context: PlaybackContext? = nil
+    ) {
         guard !songs.isEmpty else { return }
+        if let context {
+            player.playbackContext = context
+        } else {
+            player.queueContextTitle = contextTitle
+        }
         player.play(songs.shuffled(), startAt: 0)
     }
 
     func play(_ album: SubsonicAlbum) {
         let localTracks = downloadedSongs.filter { ($0.albumId ?? $0.parent) == album.id }
         if !localTracks.isEmpty {
-            play(localTracks)
+            play(localTracks, context: .album(album))
             return
         }
         guard let client else { return }
         Task {
             let songs = (try? await client.getAlbum(id: album.id))?.song ?? []
             guard !songs.isEmpty else { return }
-            await MainActor.run { play(songs) }
+            await MainActor.run { play(songs, context: .album(album)) }
         }
     }
 

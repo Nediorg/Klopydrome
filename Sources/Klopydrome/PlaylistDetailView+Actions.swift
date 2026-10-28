@@ -23,16 +23,8 @@ extension PlaylistDetailView {
 
     func remove(at index: Int, from detail: PlaylistDetail) {
         guard app.confirmOfflineAction() else { return }
-        guard let client = app.client else { return }
         Task {
-            try? await client.updatePlaylist(id: detail.id, removeIndexes: [index])
-            app.invalidatePlaylistDetail(for: detail.id)
-            await app.refreshPlaylists()
-            if let updated = app.library.playlists.first(where: { $0.id == detail.id }) {
-                await app.reloadPlaylist(updated)
-            } else {
-                app.loadPlaylistIfNeeded(playlist, forceReload: true)
-            }
+            await app.removeSongFromPlaylist(playlistID: detail.id, at: index)
         }
     }
 

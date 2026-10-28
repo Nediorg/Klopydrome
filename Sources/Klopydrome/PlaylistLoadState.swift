@@ -7,8 +7,8 @@ import NavidromeClient
 /// screen and for playback. Rows can therefore remain windowed in SwiftUI while
 /// the completed song array is handed to Player as soon as it is available.
 struct PlaylistLoadState {
-    let changed: String?
-    let songCount: Int?
+    var changed: String?
+    var songCount: Int?
     var detail: PlaylistDetail?
     var songs: [SubsonicSong] = []
     var isLoading = false

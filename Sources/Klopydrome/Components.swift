@@ -281,6 +281,8 @@ struct SongEllipsisMenu: View {
     var resolveSelection: (() -> [SubsonicSong])?
     var foregroundStyle: Color = .secondary
     var app: AppState?
+    var playlist: PlaylistSummary?
+    var playlistIndex: Int?
     var extraActions: [SongMenuExtraAction] = []
     var compact: Bool = false
     var side: CGFloat?
@@ -310,6 +312,8 @@ struct SongEllipsisMenu: View {
                     for: song,
                     app: resolvedApp,
                     selection: targets,
+                    playlist: playlist,
+                    playlistIndex: playlistIndex,
                     extraActions: extraActions
                 )
             }

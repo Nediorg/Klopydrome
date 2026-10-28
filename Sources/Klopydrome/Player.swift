@@ -77,6 +77,41 @@ final class Player {
     /// Tracks that have been started, most recent last (used by the queue panel History tab).
     var history: [SubsonicSong] = []
 
+    /// Originating playlist, album, or general context for playback.
+    var playbackContext: PlaybackContext?
+
+    var currentPlaylist: PlaylistSummary? {
+        if case .playlist(let summary) = playbackContext { return summary }
+        return nil
+    }
+
+    /// Originating playlist or album title for contextual display.
+    var queueContextTitle: String? {
+        get {
+            switch playbackContext {
+            case .playlist(let summary):
+                return summary.displayName
+            case .smartPlaylist(let smart):
+                return smart.name
+            case .album(let album):
+                return album.name
+            case .artist(let artist):
+                return artist.name
+            case .general(let title):
+                return title
+            case nil:
+                return nil
+            }
+        }
+        set {
+            if let newValue {
+                playbackContext = .general(title: newValue)
+            } else {
+                playbackContext = nil
+            }
+        }
+    }
+
     /// Called when the player needs the app to resolve and start a track.
     var onTrackRequest: ((SubsonicSong) -> Void)?
     /// Notifies the app after a meaningful playback-state transition.

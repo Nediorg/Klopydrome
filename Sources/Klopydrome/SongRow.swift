@@ -11,6 +11,8 @@ struct SongRow: View {
     /// Lets parents pass a snapshot and enables `Equatable` skipping when
     /// `AppState` ticks for unrelated reasons (progress, downloads).
     var isCurrentOverride: Bool?
+    var playlist: PlaylistSummary?
+    var playlistIndex: Int?
     var extraActions: [SongMenuExtraAction] = []
     var onPlay: ((Int) -> Void)?
     /// Whether this row is part of the current selection.
@@ -79,6 +81,8 @@ struct SongRow: View {
                 SongActionItems(
                     app: app,
                     song: song,
+                    playlist: playlist,
+                    playlistIndex: playlistIndex,
                     selection: actionTargets,
                     onPlay: onPlay.map { play in { play(index ?? 0) } }
                 )
@@ -220,6 +224,8 @@ struct SongRow: View {
                 resolveSelection: isSelected ? resolveSelection : nil,
                 foregroundStyle: isCurrent ? .white : .secondary,
                 app: app,
+                playlist: playlist,
+                playlistIndex: playlistIndex,
                 extraActions: extraActions,
                 compact: isNarrow
             )
@@ -241,6 +247,8 @@ extension SongRow: Equatable {
             && lhs.showsArtist == rhs.showsArtist
             && lhs.isCurrentOverride == rhs.isCurrentOverride
             && lhs.isSelected == rhs.isSelected
+            && lhs.playlist?.id == rhs.playlist?.id
+            && lhs.playlistIndex == rhs.playlistIndex
     }
 }
 

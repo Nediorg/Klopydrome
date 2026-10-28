@@ -10,7 +10,7 @@ extension AppState {
     func playShuffled(_ album: SubsonicAlbum) async {
         let songs = await albumsSongs(album)
         guard !songs.isEmpty else { return }
-        playShuffled(songs)
+        playShuffled(songs, context: .album(album))
     }
 
     func playLater(_ album: SubsonicAlbum) async {

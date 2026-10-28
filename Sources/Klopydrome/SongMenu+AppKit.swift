@@ -269,6 +269,26 @@ enum SongActionMenuBuilder {
                 app.openArtistInLibrary(singleArtist)
             })
         }
+
+        addPlaylistNavigationItem(to: menu, app: app)
+    }
+
+    private static func addPlaylistNavigationItem(to menu: NSMenu, app: AppState) {
+        if let playerPlaylist = app.player.currentPlaylist {
+            menu.addItem(SongMenuActionItem(
+                title: "Перейти к плейлисту".localized,
+                systemImage: "music.note.list"
+            ) {
+                app.openPlaylist(playerPlaylist)
+            })
+        } else if case .smartPlaylist(let smart) = app.player.playbackContext {
+            menu.addItem(SongMenuActionItem(
+                title: "Перейти к плейлисту".localized,
+                systemImage: "gearshape"
+            ) {
+                app.openSmartPlaylist(smart)
+            })
+        }
     }
 
     static func addMetadataItems(
@@ -299,7 +319,11 @@ enum SongActionMenuBuilder {
             app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
         })
     }
+}
 
+// MARK: - Secondary & Playlist Actions
+
+extension SongActionMenuBuilder {
     static func addExtraActions(to menu: NSMenu, extraActions: [SongMenuExtraAction]) {
         guard !extraActions.isEmpty else { return }
         for extra in extraActions {
@@ -311,6 +335,50 @@ enum SongActionMenuBuilder {
         }
         menu.addItem(.separator())
     }
+    static func addPlaylistRemovalItem(
+        to menu: NSMenu,
+        song: SubsonicSong,
+        playlist: PlaylistSummary?,
+        playlistIndex: Int?,
+        app: AppState
+    ) {
+        let targetPlaylist: PlaylistSummary? = {
+            if let playlist { return playlist }
+            if song.id == app.player.currentSong?.id {
+                return app.player.currentPlaylist
+            }
+            return nil
+        }()
+        guard let targetPlaylist,
+              !(targetPlaylist.isReadonly ?? false),
+              !targetPlaylist.isSmart else { return }
+
+        menu.addItem(SongMenuActionItem(
+            title: "Убрать из плейлиста".localized,
+            systemImage: "trash"
+        ) {
+            guard app.confirmOfflineAction() else { return }
+            Task {
+                await app.removeSong(song, from: targetPlaylist, at: playlistIndex)
+            }
+        })
+    }
+    static func addPlaylistActions(
+        to menu: NSMenu,
+        song: SubsonicSong,
+        targets: [SubsonicSong],
+        playlistContext: (playlist: PlaylistSummary?, index: Int?),
+        app: AppState
+    ) {
+        addPlaylistSubmenu(to: menu, targets: targets, app: app)
+        addPlaylistRemovalItem(
+            to: menu,
+            song: song,
+            playlist: playlistContext.playlist,
+            playlistIndex: playlistContext.index,
+            app: app
+        )
+    }
 }
 
 /// Constructs the canonical set of song actions as an `NSMenu` for synchronous display.
@@ -320,6 +388,8 @@ func buildSongActionMenu(
     for song: SubsonicSong,
     app: AppState,
     selection: [SubsonicSong] = [],
+    playlist: PlaylistSummary? = nil,
+    playlistIndex: Int? = nil,
     onPlay: (() -> Void)? = nil,
     extraActions: [SongMenuExtraAction] = []
 ) -> NSMenu {
@@ -342,9 +412,11 @@ func buildSongActionMenu(
 
     menu.addItem(.separator())
 
-    SongActionMenuBuilder.addPlaylistSubmenu(
+    SongActionMenuBuilder.addPlaylistActions(
         to: menu,
+        song: song,
         targets: targets,
+        playlistContext: (playlist, playlistIndex),
         app: app
     )
 
@@ -387,6 +459,8 @@ func showSongActionMenu(
     for song: SubsonicSong,
     app: AppState,
     selection: [SubsonicSong] = [],
+    playlist: PlaylistSummary? = nil,
+    playlistIndex: Int? = nil,
     onPlay: (() -> Void)? = nil,
     extraActions: [SongMenuExtraAction] = []
 ) {
@@ -394,6 +468,8 @@ func showSongActionMenu(
         for: song,
         app: app,
         selection: selection,
+        playlist: playlist,
+        playlistIndex: playlistIndex,
         onPlay: onPlay,
         extraActions: extraActions
     )

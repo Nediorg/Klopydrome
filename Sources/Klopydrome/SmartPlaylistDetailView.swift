@@ -56,7 +56,9 @@ struct SmartPlaylistDetailView: View {
                                 index: item.index,
                                 showAlbum: true,
                                 isCurrentOverride: currentSongID == item.song.id,
-                                onPlay: { playIndex in app.play(songs, at: playIndex) },
+                                onPlay: { playIndex in
+                                    app.play(songs, at: playIndex, context: .smartPlaylist(playlist))
+                                },
                                 isSelected: selection.isSelected(item.song.id),
                                 resolveSelection: { selection.selectedSongs(from: songs) },
                                 onSelect: { selection.toggle(item.song.id, allSongs: songs) }
@@ -153,10 +155,10 @@ struct SmartPlaylistDetailView: View {
     private var actionRow: some View {
         HStack(spacing: 10) {
             ActionPill(title: "Слушать", systemImage: "play.fill", filled: true) {
-                if !songs.isEmpty { app.play(songs, at: 0) }
+                if !songs.isEmpty { app.play(songs, at: 0, context: .smartPlaylist(playlist)) }
             }
             ActionPill(title: "Перемешать", systemImage: "shuffle", filled: true) {
-                if !songs.isEmpty { app.playShuffled(songs) }
+                if !songs.isEmpty { app.playShuffled(songs, context: .smartPlaylist(playlist)) }
             }
             ActionPill(title: "Обновить", systemImage: "arrow.clockwise", filled: false) {
                 Task { await load() }

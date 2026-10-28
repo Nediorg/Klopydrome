@@ -92,7 +92,40 @@ private func addArtistAlbumItems(to menu: NSMenu, for song: SubsonicSong, helper
 }
 
 @MainActor
+private func addActivePlaybackPlaylistItem(to menu: NSMenu, helper: GoToMenuHelper) -> Bool {
+    if let current = helper.appState.player.currentPlaylist {
+        helper.singlePlaylist = current
+        let item = NSMenuItem(
+            title: "Перейти к плейлисту".localized,
+            action: #selector(GoToMenuHelper.goToSinglePlaylist),
+            keyEquivalent: ""
+        )
+        item.target = helper
+        item.image = NSImage(systemSymbolName: "music.note.list", accessibilityDescription: nil)
+        menu.addItem(item)
+        return true
+    }
+    if case .smartPlaylist(let smart) = helper.appState.player.playbackContext {
+        helper.singleSmartPlaylist = smart
+        let item = NSMenuItem(
+            title: "Перейти к плейлисту".localized,
+            action: #selector(GoToMenuHelper.goToSmartPlaylist),
+            keyEquivalent: ""
+        )
+        item.target = helper
+        item.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+        menu.addItem(item)
+        return true
+    }
+    return false
+}
+
+@MainActor
 private func addPlaylistItems(to menu: NSMenu, for song: SubsonicSong, helper: GoToMenuHelper) {
+    if addActivePlaybackPlaylistItem(to: menu, helper: helper) {
+        return
+    }
+
     let containing = helper.appState.playlistsContaining(song)
     if containing.count == 1, let playlist = containing.first {
         helper.singlePlaylist = playlist
@@ -133,6 +166,7 @@ private final class GoToMenuHelper: NSObject {
     let track: SubsonicSong
     var singleArtist: Artist?
     var singlePlaylist: PlaylistSummary?
+    var singleSmartPlaylist: SmartPlaylist?
 
     init(app: AppState, song: SubsonicSong) {
         self.appState = app
@@ -162,6 +196,11 @@ private final class GoToMenuHelper: NSObject {
     @objc func goToSinglePlaylist() {
         guard let playlist = singlePlaylist else { return }
         appState.openPlaylist(playlist)
+    }
+
+    @objc func goToSmartPlaylist() {
+        guard let playlist = singleSmartPlaylist else { return }
+        appState.openSmartPlaylist(playlist)
     }
 
     @objc func goToPlaylistFromSubmenu(_ sender: NSMenuItem) {

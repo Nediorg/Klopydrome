@@ -41,6 +41,7 @@ struct AlbumDetailView: View {
                         inlineErrorNotice(loadError)
                     }
                     AlbumTrackListSection(
+                        album: album,
                         detail: displayedDetail,
                         songs: songs,
                         app: app,
@@ -176,11 +177,11 @@ struct AlbumDetailView: View {
     private var actionRow: some View {
         HStack(spacing: 10) {
             ActionPill(title: "Слушать", systemImage: "play.fill", filled: true) {
-                if !playableSongs.isEmpty { app.play(playableSongs, at: 0) }
+                if !playableSongs.isEmpty { app.play(playableSongs, at: 0, context: .album(album)) }
             }
             .disabled(playableSongs.isEmpty)
             ActionPill(title: "Перемешать", systemImage: "shuffle", filled: true) {
-                if !playableSongs.isEmpty { app.playShuffled(playableSongs) }
+                if !playableSongs.isEmpty { app.playShuffled(playableSongs, context: .album(album)) }
             }
             .disabled(playableSongs.isEmpty)
             Spacer()
@@ -208,6 +209,7 @@ struct AlbumDetailView: View {
 // MARK: - Album Track List Section
 
 private struct AlbumTrackListSection: View {
+    let album: SubsonicAlbum
     let detail: AlbumDetail
     let songs: [SubsonicSong]
     let app: AppState
@@ -234,9 +236,9 @@ private struct AlbumTrackListSection: View {
         if app.isOfflineSession {
             let playable = songs.filter { app.isCached($0) }
             let playIndex = playable.firstIndex(where: { $0.id == song.id }) ?? 0
-            app.play(playable, at: playIndex)
+            app.play(playable, at: playIndex, context: .album(album))
         } else {
-            app.play(ordered, at: globalIndex)
+            app.play(ordered, at: globalIndex, context: .album(album))
         }
     }
 

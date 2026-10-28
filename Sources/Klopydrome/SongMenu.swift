@@ -13,12 +13,24 @@ struct SongActionItems: View {
     let app: AppState
     /// The song whose state drives the labels (starred / downloaded / rating).
     let song: SubsonicSong
+    /// When rendered inside a playlist row, provides the enclosing playlist context.
+    var playlist: PlaylistSummary?
+    /// Concrete position within the playlist, ensuring accurate duplicate removal.
+    var playlistIndex: Int?
     /// Songs the actions apply to (e.g. a table multi-selection). Defaults to
     /// just `song`.
     var selection: [SubsonicSong] = []
     /// When set, adds «Слушать» on top. Let the host choose: rows with a
     /// double-click already play, and the now-playing song is already playing.
     var onPlay: (() -> Void)?
+
+    private var effectivePlaylist: PlaylistSummary? {
+        if let playlist { return playlist }
+        if song.id == app.player.currentSong?.id {
+            return app.player.currentPlaylist
+        }
+        return nil
+    }
 
     private var targets: [SubsonicSong] { selection.isEmpty ? [song] : selection }
     private var primaryCached: Bool {
@@ -46,6 +58,18 @@ struct SongActionItems: View {
             .disabled(!isPlayableOffline)
         Divider()
         AddToPlaylistMenu(app: app, songs: targets)
+        if let targetPlaylist = effectivePlaylist,
+           !(targetPlaylist.isReadonly ?? false),
+           !targetPlaylist.isSmart {
+            Button(role: .destructive) {
+                guard app.confirmOfflineAction() else { return }
+                Task {
+                    await app.removeSong(song, from: targetPlaylist, at: playlistIndex)
+                }
+            } label: {
+                Label("Убрать из плейлиста".localized, systemImage: "trash")
+            }
+        }
         Button((app.isStarred(song) ? "Убрать из избранного" : "В избранное").localized) {
             guard app.confirmOfflineAction() else { return }
             targets.forEach { app.toggleStar($0, skipOfflineConfirm: true) }
@@ -97,6 +121,21 @@ struct SongActionItems: View {
             }
         }
         CollaboratorsMenuItem(song: song, app: app)
+        if playlist == nil {
+            if let targetPlaylist = effectivePlaylist {
+                Button {
+                    app.openPlaylist(targetPlaylist)
+                } label: {
+                    Label("Перейти к плейлисту".localized, systemImage: "music.note.list")
+                }
+            } else if case .smartPlaylist(let smart) = app.player.playbackContext {
+                Button {
+                    app.openSmartPlaylist(smart)
+                } label: {
+                    Label("Перейти к плейлисту".localized, systemImage: "gearshape")
+                }
+            }
+        }
 
         Divider()
         Button {

@@ -303,4 +303,66 @@ final class PlaylistCacheTests: XCTestCase {
             "Repeated reads of cachedPlaylistDetail must be pure and not trigger Observation onChange"
         )
     }
+
+    // MARK: - Optimistic Song Removal & Playback Context
+
+    func testOptimisticSongRemovalUpdatesStateImmediatelyWithoutReload() async {
+        let app = AppState()
+        let playlist = summary(count: 2)
+        let playlistDetail = detail(count: 2)
+        app.cachePlaylistDetail(playlistDetail)
+        app.loadPlaylistIfNeeded(playlist)
+
+        let initialLoadState = app.playlistLoadState(for: playlist)
+        XCTAssertEqual(initialLoadState?.songs.count, 2)
+        XCTAssertTrue(initialLoadState?.isComplete == true)
+        XCTAssertFalse(initialLoadState?.isLoading == true)
+
+        // Optimistically remove the first song
+        await app.removeSongFromPlaylist(playlistID: playlist.id, at: 0)
+
+        // Load state must immediately reflect removal without resetting to loading / empty state
+        let updatedState = app.playlistLoadState(for: playlist)
+        XCTAssertNotNil(updatedState)
+        XCTAssertEqual(updatedState?.songs.map(\.id), ["second"])
+        XCTAssertEqual(updatedState?.songCount, 1)
+        XCTAssertTrue(updatedState?.isComplete == true)
+        XCTAssertFalse(updatedState?.isLoading == true)
+    }
+
+    func testOptimisticSongRemovalSyncsActivePlayerQueueWhenPlayingPlaylist() async {
+        let app = AppState()
+        let playlist = summary(count: 2)
+        let playlistDetail = detail(count: 2)
+        app.cachePlaylistDetail(playlistDetail)
+        app.loadPlaylistIfNeeded(playlist)
+
+        app.player.playbackContext = .playlist(playlist)
+        app.player.queue = playlistDetail.entry ?? []
+        app.player.currentIndex = 0
+
+        XCTAssertEqual(app.player.currentPlaylist?.id, playlist.id)
+        XCTAssertEqual(app.player.queue.count, 2)
+
+        // Remove first song at index 0
+        await app.removeSongFromPlaylist(playlistID: playlist.id, at: 0)
+
+        // Player queue should also have removed the song
+        XCTAssertEqual(app.player.queue.map(\.id), ["second"])
+    }
+
+    func testPlaybackContextTracksPlaylistAndProvidesContextTitle() {
+        let player = Player()
+        let playlist = summary()
+        player.playbackContext = .playlist(playlist)
+
+        XCTAssertEqual(player.currentPlaylist?.id, playlist.id)
+        XCTAssertEqual(player.queueContextTitle, playlist.name)
+
+        // Overriding queueContextTitle resets to general context
+        player.queueContextTitle = "Custom Context"
+        XCTAssertNil(player.currentPlaylist)
+        XCTAssertEqual(player.queueContextTitle, "Custom Context")
+        XCTAssertEqual(player.playbackContext, .general(title: "Custom Context"))
+    }
 }

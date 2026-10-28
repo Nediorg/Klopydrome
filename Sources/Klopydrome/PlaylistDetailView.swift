@@ -112,10 +112,11 @@ struct PlaylistDetailView: View {
                         ForEach(identifiedSongs) { item in
                             SongRow(
                                 song: item.song,
-                                index: item.index,
+                                index: item.displayIndex,
                                 showAlbum: true,
                                 isCurrentOverride: currentSongID == item.song.id,
-                                extraActions: rowExtraActions(index: item.index),
+                                playlist: currentDetail.summary,
+                                playlistIndex: item.playlistIndex,
                                 onPlay: { rowIndex in
                                     if app.isOfflineSession {
                                         guard rowIndex < displayedSongs.count else { return }
@@ -123,9 +124,9 @@ struct PlaylistDetailView: View {
                                         let playIndex = playableSongs.firstIndex {
                                             $0.id == clickedSong.id
                                         } ?? 0
-                                        app.play(playableSongs, at: playIndex)
+                                        app.play(playableSongs, at: playIndex, context: .playlist(playlist))
                                     } else {
-                                        app.play(filteredRows, at: rowIndex)
+                                        app.play(filteredRows, at: rowIndex, context: .playlist(playlist))
                                     }
                                 },
                                 isSelected: selection.isSelected(item.song.id),
@@ -304,31 +305,44 @@ struct PlaylistDetailView: View {
 
 extension PlaylistDetailView {
     private struct IdentifiedSong: Identifiable {
-        let index: Int
+        let displayIndex: Int
+        let playlistIndex: Int
         let song: SubsonicSong
         let id: String
     }
 
     private var identifiedSongs: [IdentifiedSong] {
         var counts: [String: Int] = [:]
-        return displayedSongs.enumerated().map { index, song in
+        let query = filterText.localizedLowercase
+        var result: [IdentifiedSong] = []
+        var displayIdx = 0
+
+        for (playlistIdx, song) in rows.enumerated() {
+            if !query.isEmpty {
+                let matches = song.displayTitle.localizedLowercase.contains(query) ||
+                    (song.artist?.localizedLowercase.contains(query) ?? false) ||
+                    (song.album?.localizedLowercase.contains(query) ?? false)
+                guard matches else { continue }
+            }
+
+            guard displayIdx < displayedCount else { break }
+
             let occ = counts[song.id, default: 0]
             counts[song.id] = occ + 1
             let id = occ == 0 ? song.id : "\(song.id)_\(occ)"
-            return IdentifiedSong(index: index, song: song, id: id)
+
+            result.append(IdentifiedSong(
+                displayIndex: displayIdx,
+                playlistIndex: playlistIdx,
+                song: song,
+                id: id
+            ))
+            displayIdx += 1
         }
+        return result
     }
 
     private var currentSongID: String? {
         app.player.currentSong?.id
-    }
-
-    private func rowExtraActions(index: Int) -> [SongMenuExtraAction] {
-        guard canEditTracks else { return [] }
-        return [SongMenuExtraAction(
-            title: "Убрать из плейлиста".localized,
-            systemImage: "trash",
-            action: { remove(at: index, from: currentDetail) }
-        )]
     }
 }

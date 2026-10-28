@@ -21,6 +21,15 @@ extension SubsonicSong: Starable { var starKind: StarKind { .song } }
 extension SubsonicAlbum: Starable { var starKind: StarKind { .album } }
 extension Artist: Starable { var starKind: StarKind { .artist } }
 
+/// Structured origin context for playback (playlist, album, artist, or query).
+enum PlaybackContext: Equatable {
+    case playlist(PlaylistSummary)
+    case smartPlaylist(SmartPlaylist)
+    case album(SubsonicAlbum)
+    case artist(Artist)
+    case general(title: String?)
+}
+
 /// Appearance preference (GUIDELINES §16): follow the system or force dark/light.
 enum AppTheme: String, Codable, CaseIterable, Identifiable {
     case system, dark, light

@@ -105,7 +105,7 @@ extension AppState {
             songs = songs.filter { isCached($0) }
         }
         guard !songs.isEmpty else { return }
-        play(songs, at: 0)
+        play(songs, at: 0, context: .playlist(playlist))
     }
 
     /// Shuffles a playlist's tracks through the shared detail request.
@@ -115,7 +115,7 @@ extension AppState {
             songs = songs.filter { isCached($0) }
         }
         guard !songs.isEmpty else { return }
-        playShuffled(songs)
+        playShuffled(songs, context: .playlist(playlist))
     }
 
     /// Queues a playlist's tracks to play immediately after the current song.
@@ -299,6 +299,9 @@ extension AppState {
             if case .playlist(let summary) = destination, summary.id == id {
                 nav.history[index] = .playlist(fresh)
             }
+        }
+        if case .playlist(let summary) = player.playbackContext, summary.id == id {
+            player.playbackContext = .playlist(fresh)
         }
     }
 

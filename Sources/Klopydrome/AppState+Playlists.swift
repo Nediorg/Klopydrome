@@ -110,9 +110,191 @@ extension AppState {
     func invalidatePlaylistDetail(for playlistID: String) {
         cancelPlaylistLoad(for: playlistID)
         library.playlistDetails[playlistID] = nil
+        if player.currentPlaylist?.id == playlistID {
+            player.playbackContext = nil
+        }
         Task { [weak self] in
             await self?.cache?.removeFile(for: .metadata, key: "detail_playlist_\(playlistID)")
         }
+    }
+
+    /// Optimistically removes songs at the given indices from a playlist,
+    /// synchronizing local state instantly before updating the server.
+    func removeSongsFromPlaylist(playlistID: String, at indices: [Int]) async {
+        guard confirmOfflineAction() else { return }
+        guard !indices.isEmpty else { return }
+        guard let removedPairs = await applyOptimisticPlaylistRemoval(
+            playlistID: playlistID,
+            indices: indices
+        ) else { return }
+
+        guard let client else { return }
+
+        do {
+            try await client.updatePlaylist(id: playlistID, removeIndexes: indices)
+            await refreshPlaylists()
+            if let serverSummary = library.playlists.first(where: { $0.id == playlistID }) {
+                await applyServerPlaylistRemoval(playlistID: playlistID, serverSummary: serverSummary)
+            }
+        } catch {
+            rollbackPlaylistRemoval(playlistID: playlistID, removedPairs: removedPairs, error: error)
+        }
+    }
+
+    private func applyOptimisticPlaylistRemoval(
+        playlistID: String,
+        indices: [Int]
+    ) async -> [(index: Int, song: SubsonicSong)]? {
+        guard var state = playlistLoadStates[playlistID] else { return nil }
+
+        let sortedIndices = indices.sorted(by: >).filter { state.songs.indices.contains($0) }
+        guard !sortedIndices.isEmpty else { return nil }
+
+        var removedPairs: [(index: Int, song: SubsonicSong)] = []
+        var totalDurationRemoved = 0
+
+        for idx in sortedIndices {
+            let removed = state.songs.remove(at: idx)
+            removedPairs.append((index: idx, song: removed))
+            totalDurationRemoved += (removed.duration ?? 0)
+        }
+
+        let newCount = state.songs.count
+        state.songCount = newCount
+        let newDuration = max(0, (state.detail?.duration ?? 0) - totalDurationRemoved)
+
+        if let oldDetail = state.detail {
+            let updatedDetail = PlaylistDetail(
+                id: oldDetail.id,
+                name: oldDetail.name,
+                comment: oldDetail.comment,
+                owner: oldDetail.owner,
+                coverArt: oldDetail.coverArt,
+                songCount: newCount,
+                duration: newDuration,
+                created: oldDetail.created,
+                changed: oldDetail.changed,
+                isPublic: oldDetail.isPublic,
+                isReadonly: oldDetail.isReadonly,
+                validUntil: oldDetail.validUntil,
+                entry: state.songs
+            )
+            state.detail = updatedDetail
+            cachePlaylistDetail(updatedDetail)
+            await persistPlaylistDetailToDisk(updatedDetail)
+            let repo = offlineRepository
+            Task.detached(priority: .utility) {
+                try? await repo?.savePlaylistDetail(updatedDetail)
+            }
+            syncPlaylistSummaryWithDetail(updatedDetail)
+        }
+
+        playlistLoadStates[playlistID] = state
+
+        if player.currentPlaylist?.id == playlistID {
+            let removedIDs = Set(removedPairs.map(\.song.id))
+            for (qIdx, qSong) in player.queue.enumerated().reversed() where removedIDs.contains(qSong.id) {
+                player.remove(at: qIdx)
+            }
+        }
+
+        return removedPairs
+    }
+
+    private func applyServerPlaylistRemoval(playlistID: String, serverSummary: PlaylistSummary) async {
+        guard var current = playlistLoadStates[playlistID] else { return }
+        current.changed = serverSummary.changed
+        if let oldDetail = current.detail {
+            let syncedDetail = PlaylistDetail(
+                id: oldDetail.id,
+                name: oldDetail.name,
+                comment: oldDetail.comment,
+                owner: oldDetail.owner,
+                coverArt: oldDetail.coverArt,
+                songCount: serverSummary.songCount ?? oldDetail.songCount,
+                duration: serverSummary.duration ?? oldDetail.duration,
+                created: oldDetail.created,
+                changed: serverSummary.changed,
+                isPublic: oldDetail.isPublic,
+                isReadonly: oldDetail.isReadonly,
+                validUntil: oldDetail.validUntil,
+                entry: current.songs
+            )
+            current.detail = syncedDetail
+            cachePlaylistDetail(syncedDetail)
+            await persistPlaylistDetailToDisk(syncedDetail)
+        }
+        playlistLoadStates[playlistID] = current
+    }
+
+    private func rollbackPlaylistRemoval(
+        playlistID: String,
+        removedPairs: [(index: Int, song: SubsonicSong)],
+        error: Error
+    ) {
+        guard var rollbackState = playlistLoadStates[playlistID] else { return }
+        for pair in removedPairs.reversed() {
+            let insertIdx = min(pair.index, rollbackState.songs.count)
+            rollbackState.songs.insert(pair.song, at: insertIdx)
+        }
+        rollbackState.songCount = rollbackState.songs.count
+        if let oldDetail = rollbackState.detail {
+            let totalDurationRemoved = removedPairs.reduce(0) { $0 + ($1.song.duration ?? 0) }
+            let rolledBackDetail = PlaylistDetail(
+                id: oldDetail.id,
+                name: oldDetail.name,
+                comment: oldDetail.comment,
+                owner: oldDetail.owner,
+                coverArt: oldDetail.coverArt,
+                songCount: rollbackState.songs.count,
+                duration: (oldDetail.duration ?? 0) + totalDurationRemoved,
+                created: oldDetail.created,
+                changed: oldDetail.changed,
+                isPublic: oldDetail.isPublic,
+                isReadonly: oldDetail.isReadonly,
+                validUntil: oldDetail.validUntil,
+                entry: rollbackState.songs
+            )
+            rollbackState.detail = rolledBackDetail
+            cachePlaylistDetail(rolledBackDetail)
+            syncPlaylistSummaryWithDetail(rolledBackDetail)
+        }
+        rollbackState.error = error.localizedDescription
+        playlistLoadStates[playlistID] = rollbackState
+    }
+
+    func removeSongFromPlaylist(playlistID: String, at index: Int) async {
+        await removeSongsFromPlaylist(playlistID: playlistID, at: [index])
+    }
+
+    func removeSong(
+        _ song: SubsonicSong,
+        from playlist: PlaylistSummary,
+        at specificIndex: Int? = nil
+    ) async {
+        let playlistID = playlist.id
+        var state = playlistLoadStates[playlistID]
+        if state == nil || state?.songs.isEmpty == true {
+            _ = await playlistSongs(for: playlist)
+            state = playlistLoadStates[playlistID]
+        }
+        guard let songs = state?.songs, !songs.isEmpty else { return }
+
+        let targetIndex: Int
+        if let specificIndex, songs.indices.contains(specificIndex), songs[specificIndex].id == song.id {
+            targetIndex = specificIndex
+        } else if let found = songs.firstIndex(where: { $0.id == song.id }) {
+            targetIndex = found
+        } else {
+            return
+        }
+
+        await removeSongFromPlaylist(playlistID: playlistID, at: targetIndex)
+    }
+
+    func removeSongFromCurrentPlaylist(_ song: SubsonicSong) async {
+        guard let playlist = player.currentPlaylist else { return }
+        await removeSong(song, from: playlist)
     }
 
     /// Duplicates a playlist under a new name.
