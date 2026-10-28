@@ -17,14 +17,78 @@ final class LibraryCache {
     var favoritesAlbums: [SubsonicAlbum] = []
     var favoritesSongs: [SubsonicSong] = []
     var playlists: [PlaylistSummary] = []
+    private static let maxDetailCacheCapacity = 25
+
     /// Full entries for playlists visited during this session. A manifest refresh
     /// invalidates a detail only when Navidrome reports a changed timestamp or
     /// song count, so returning to a large playlist avoids another full payload.
-    var playlistDetails: [String: PlaylistDetail] = [:]
+    @ObservationIgnored private var playlistDetailOrder: [String] = []
+    var playlistDetails: [String: PlaylistDetail] = [:] {
+        didSet {
+            let currentKeys = Set(playlistDetails.keys)
+            playlistDetailOrder.removeAll { !currentKeys.contains($0) }
+            for key in playlistDetails.keys where !playlistDetailOrder.contains(key) {
+                playlistDetailOrder.append(key)
+            }
+            while playlistDetailOrder.count > Self.maxDetailCacheCapacity {
+                let oldest = playlistDetailOrder.removeFirst()
+                playlistDetails.removeValue(forKey: oldest)
+            }
+        }
+    }
+
+    func recordPlaylistDetailAccess(_ id: String) {
+        if let index = playlistDetailOrder.firstIndex(of: id) {
+            playlistDetailOrder.remove(at: index)
+            playlistDetailOrder.append(id)
+        }
+    }
+
     /// Full entries for albums visited during this session.
-    var albumDetails: [String: AlbumDetail] = [:]
+    @ObservationIgnored private var albumDetailOrder: [String] = []
+    var albumDetails: [String: AlbumDetail] = [:] {
+        didSet {
+            let currentKeys = Set(albumDetails.keys)
+            albumDetailOrder.removeAll { !currentKeys.contains($0) }
+            for key in albumDetails.keys where !albumDetailOrder.contains(key) {
+                albumDetailOrder.append(key)
+            }
+            while albumDetailOrder.count > Self.maxDetailCacheCapacity {
+                let oldest = albumDetailOrder.removeFirst()
+                albumDetails.removeValue(forKey: oldest)
+            }
+        }
+    }
+
+    func recordAlbumDetailAccess(_ id: String) {
+        if let index = albumDetailOrder.firstIndex(of: id) {
+            albumDetailOrder.remove(at: index)
+            albumDetailOrder.append(id)
+        }
+    }
+
     /// Full entries for artists visited during this session.
-    var artistDetails: [String: ArtistDetail] = [:]
+    @ObservationIgnored private var artistDetailOrder: [String] = []
+    var artistDetails: [String: ArtistDetail] = [:] {
+        didSet {
+            let currentKeys = Set(artistDetails.keys)
+            artistDetailOrder.removeAll { !currentKeys.contains($0) }
+            for key in artistDetails.keys where !artistDetailOrder.contains(key) {
+                artistDetailOrder.append(key)
+            }
+            while artistDetailOrder.count > Self.maxDetailCacheCapacity {
+                let oldest = artistDetailOrder.removeFirst()
+                artistDetails.removeValue(forKey: oldest)
+            }
+        }
+    }
+
+    func recordArtistDetailAccess(_ id: String) {
+        if let index = artistDetailOrder.firstIndex(of: id) {
+            artistDetailOrder.remove(at: index)
+            artistDetailOrder.append(id)
+        }
+    }
     var songs: [SubsonicSong] = []
     var homeShelves: [AlbumListType: [SubsonicAlbum]] = [:]
     var homeShelfErrors: [AlbumListType: String] = [:]

@@ -32,9 +32,30 @@ final class AppState {
     var lyrics = LyricsStore()
     var nav = NavigationState()
     var library = LibraryCache()
+    private static let maxPlaylistLoadStatesCapacity = 25
+    @ObservationIgnored private var playlistLoadOrder: [String] = []
     /// Shared progress for detail views and playback actions loading the same
     /// playlist. SwiftUI observes snapshots while task identity stays private.
-    var playlistLoadStates: [String: PlaylistLoadState] = [:]
+    var playlistLoadStates: [String: PlaylistLoadState] = [:] {
+        didSet {
+            let currentKeys = Set(playlistLoadStates.keys)
+            playlistLoadOrder.removeAll { !currentKeys.contains($0) }
+            for key in playlistLoadStates.keys where !playlistLoadOrder.contains(key) {
+                playlistLoadOrder.append(key)
+            }
+            while playlistLoadOrder.count > Self.maxPlaylistLoadStatesCapacity {
+                let oldest = playlistLoadOrder.removeFirst()
+                playlistLoadStates.removeValue(forKey: oldest)
+            }
+        }
+    }
+
+    func recordPlaylistAccess(_ id: String) {
+        if let index = playlistLoadOrder.firstIndex(of: id) {
+            playlistLoadOrder.remove(at: index)
+            playlistLoadOrder.append(id)
+        }
+    }
     @ObservationIgnored var playlistLoadTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored var playlistLoadTokens: [String: UUID] = [:]
 
@@ -237,6 +258,30 @@ final class AppState {
                 await self?.handleNetworkRestored()
             }
         }
+        setupMemoryPressureMonitoring()
+    }
+
+    private func setupMemoryPressureMonitoring() {
+        MemoryPressureMonitor.shared.start { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.handleMemoryPressure()
+            }
+        }
+    }
+
+    func handleMemoryPressure() {
+        CoverArtStore.shared.clearMemoryCache()
+        clearInMemoryCaches()
+    }
+
+    func clearInMemoryCaches() {
+        library.albumDetails = [:]
+        library.artistDetails = [:]
+        library.playlistDetails = [:]
+        playlistLoadStates = [:]
+        library.songs = []
+        library.songsLoaded = false
+        smartPlaylistEngine?.clearMemoryCache()
     }
 
     // MARK: Persistence
@@ -890,6 +935,7 @@ final class AppState {
 
     func cachePlaylistDetail(_ detail: PlaylistDetail) {
         library.playlistDetails[detail.id] = detail
+        library.recordPlaylistDetailAccess(detail.id)
     }
 
     func invalidatePlaylistDetail(for playlistID: String) {

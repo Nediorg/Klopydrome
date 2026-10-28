@@ -43,6 +43,7 @@ final class CachedLibraryRepo: SongRepo {
         self.client = client
         self.diskCache = cache
         self.cache.countLimit = 32
+        self.cache.totalCostLimit = 16 << 20
     }
 
     func fetchPool(genre: String?) async throws -> [SubsonicSong] {
@@ -53,7 +54,7 @@ final class CachedLibraryRepo: SongRepo {
         // A still-fresh pool written by a previous run (e.g. before relaunch)
         // avoids a full-library crawl on the first compute of a new session.
         if let persisted = await loadDisk(genre: genre) {
-            cache.setObject(persisted as NSArray, forKey: key)
+            cache.setObject(persisted as NSArray, forKey: key, cost: persisted.count * 1024)
             return persisted
         }
         let pool: [SubsonicSong]
@@ -62,9 +63,13 @@ final class CachedLibraryRepo: SongRepo {
         } else {
             pool = try await crawlAllAlbums()
         }
-        cache.setObject(pool as NSArray, forKey: key)
+        cache.setObject(pool as NSArray, forKey: key, cost: pool.count * 1024)
         await persist(pool: pool, genre: genre)
         return pool
+    }
+
+    func clearMemoryCache() {
+        cache.removeAllObjects()
     }
 
     func clearCache() async {
@@ -207,6 +212,14 @@ final class SmartPlaylistEngine {
             let sorted = SmartQueryMath.sort(matched, sort: query.sort, order: query.order, shuffle: false)
             return SmartQueryMath.window(sorted, offset: query.offset, limit: query.limit)
         }.value
+    }
+
+    func clearMemoryCache() {
+        (repo as? CachedLibraryRepo)?.clearMemoryCache()
+    }
+
+    func clearCache() async {
+        await (repo as? CachedLibraryRepo)?.clearCache()
     }
 }
 

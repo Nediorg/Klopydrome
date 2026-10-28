@@ -1,6 +1,8 @@
 import XCTest
 @testable import Klopydrome
 import NavidromeClient
+import Observation
+import os
 
 @MainActor
 final class PlaylistCacheTests: XCTestCase {
@@ -247,5 +249,58 @@ final class PlaylistCacheTests: XCTestCase {
         app.cancelPlaylistTask(for: "playlist")
 
         XCTAssertFalse(app.playlistLoadStates["playlist"]?.isSyncing ?? true)
+    }
+
+    func testPlaylistLoadStateGetterIsPureAndIdempotent() {
+        let app = AppState()
+        let playlist = summary()
+        var state = PlaylistLoadState(summary: playlist)
+        state.isComplete = true
+        app.playlistLoadStates[playlist.id] = state
+
+        let notificationCount = OSAllocatedUnfairLock(initialState: 0)
+        withObservationTracking {
+            _ = app.playlistLoadState(for: playlist)
+        } onChange: {
+            notificationCount.withLock { $0 += 1 }
+        }
+
+        // Reading state multiple times must NOT mutate state or trigger Observation notifications
+        _ = app.playlistLoadState(for: playlist)
+        _ = app.playlistLoadState(for: playlist)
+        _ = app.playlistLoadState(for: playlist)
+
+        let finalCount = notificationCount.withLock { $0 }
+        XCTAssertEqual(
+            finalCount,
+            0,
+            "Repeated reads of playlistLoadState must be pure and not trigger Observation onChange"
+        )
+    }
+
+    func testCachedPlaylistDetailGetterIsPureAndIdempotent() {
+        let app = AppState()
+        let playlist = summary()
+        let detail = PlaylistDetail(id: playlist.id, name: playlist.name, songCount: playlist.songCount, entry: [])
+        app.cachePlaylistDetail(detail)
+
+        let notificationCount = OSAllocatedUnfairLock(initialState: 0)
+        withObservationTracking {
+            _ = app.cachedPlaylistDetail(for: playlist)
+        } onChange: {
+            notificationCount.withLock { $0 += 1 }
+        }
+
+        // Multiple reads must not mutate LRU order or fire observation onChange
+        _ = app.cachedPlaylistDetail(for: playlist)
+        _ = app.cachedPlaylistDetail(for: playlist)
+        _ = app.cachedPlaylistDetail(for: playlist)
+
+        let finalCount = notificationCount.withLock { $0 }
+        XCTAssertEqual(
+            finalCount,
+            0,
+            "Repeated reads of cachedPlaylistDetail must be pure and not trigger Observation onChange"
+        )
     }
 }

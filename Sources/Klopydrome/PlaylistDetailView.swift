@@ -91,20 +91,57 @@ struct PlaylistDetailView: View {
                         inlineErrorNotice(loadError)
                             .padding(.bottom, 16)
                     }
-                    PlaylistSongListSection(
-                        detail: currentDetail,
-                        displayedSongs: displayedSongs,
-                        filteredRows: filteredRows,
-                        playableSongs: playableSongs,
-                        loading: loading,
-                        loadError: loadError,
-                        canEditTracks: canEditTracks,
-                        displayedCount: $displayedCount,
-                        pageSize: pageSize,
-                        selection: $selection,
-                        app: app,
-                        onRemove: { index in remove(at: index, from: currentDetail) }
-                    )
+
+                    if displayedSongs.isEmpty && loading {
+                        SkeletonSongList(count: 10, showAlbum: true)
+                            .padding(.leading, -22)
+                    } else if displayedSongs.isEmpty, let loadError {
+                        DetailUnavailableView(message: loadError) {
+                            app.loadPlaylistIfNeeded(currentDetail.summary, forceReload: true)
+                        }
+                    } else if filteredRows.isEmpty && !displayedSongs.isEmpty {
+                        ContentUnavailableView(
+                            "Ничего не найдено".localized,
+                            systemImage: "magnifyingglass",
+                            description: Text("Попробуйте изменить запрос.".localized)
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
+                    } else {
+                        ForEach(identifiedSongs) { item in
+                            SongRow(
+                                song: item.song,
+                                index: item.index,
+                                showAlbum: true,
+                                isCurrentOverride: currentSongID == item.song.id,
+                                extraActions: rowExtraActions(index: item.index),
+                                onPlay: { rowIndex in
+                                    if app.isOfflineSession {
+                                        guard rowIndex < displayedSongs.count else { return }
+                                        let clickedSong = displayedSongs[rowIndex]
+                                        let playIndex = playableSongs.firstIndex {
+                                            $0.id == clickedSong.id
+                                        } ?? 0
+                                        app.play(playableSongs, at: playIndex)
+                                    } else {
+                                        app.play(filteredRows, at: rowIndex)
+                                    }
+                                },
+                                isSelected: selection.isSelected(item.song.id),
+                                resolveSelection: { selection.selectedSongs(from: filteredRows) },
+                                onSelect: { selection.toggle(item.song.id, allSongs: filteredRows) }
+                            )
+                            .equatable()
+                            .padding(.leading, -22)
+                        }
+                        if displayedCount < filteredRows.count {
+                            Color.clear.frame(height: 80)
+                                .id("sentinel_\(displayedCount)")
+                                .onAppear {
+                                    displayedCount = min(displayedCount + pageSize, filteredRows.count)
+                                }
+                        }
+                    }
                 }
                 .padding(.horizontal, 28)
                 .padding(.vertical, 24)
@@ -136,12 +173,8 @@ struct PlaylistDetailView: View {
             app.cancelPlaylistTask(for: playlist.id)
         }
         .onChange(of: rows.count) { _, count in
-            if displayedCount == 0, count > 0 {
+            if displayedCount < pageSize, count > 0 {
                 displayedCount = min(count, pageSize)
-            } else if displayedCount > 0, displayedCount < count {
-                // Rows are still streaming in; grow the window so songs that
-                // arrived after the first page are visible without a scroll.
-                displayedCount = min(displayedCount + pageSize, count)
             } else if displayedCount > count {
                 displayedCount = count
             }
@@ -267,20 +300,7 @@ struct PlaylistDetailView: View {
 
 // MARK: - Playlist Song List Section
 
-private struct PlaylistSongListSection: View {
-    let detail: PlaylistDetail
-    let displayedSongs: [SubsonicSong]
-    let filteredRows: [SubsonicSong]
-    let playableSongs: [SubsonicSong]
-    let loading: Bool
-    let loadError: String?
-    let canEditTracks: Bool
-    @Binding var displayedCount: Int
-    let pageSize: Int
-    @Binding var selection: SongRowSelection
-    let app: AppState
-    let onRemove: (Int) -> Void
-
+extension PlaylistDetailView {
     private struct IdentifiedSong: Identifiable {
         let index: Int
         let song: SubsonicSong
@@ -297,56 +317,8 @@ private struct PlaylistSongListSection: View {
         }
     }
 
-    var body: some View {
-        let currentID = app.player.currentSong?.id
-        let allSongs = filteredRows
-        if displayedSongs.isEmpty && loading {
-            SkeletonSongList(count: 10, showAlbum: true)
-                .padding(.leading, -22)
-        } else if displayedSongs.isEmpty, let loadError {
-            DetailUnavailableView(message: loadError) {
-                app.loadPlaylistIfNeeded(detail.summary, forceReload: true)
-            }
-        } else if filteredRows.isEmpty && !displayedSongs.isEmpty {
-            ContentUnavailableView(
-                "Ничего не найдено".localized,
-                systemImage: "magnifyingglass",
-                description: Text("Попробуйте изменить запрос.".localized)
-            )
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
-        } else {
-            ForEach(identifiedSongs) { item in
-                SongRow(
-                    song: item.song,
-                    index: item.index,
-                    showAlbum: true,
-                    isCurrentOverride: currentID == item.song.id,
-                    extraActions: rowExtraActions(index: item.index),
-                    onPlay: { rowIndex in
-                        if app.isOfflineSession {
-                            guard rowIndex < displayedSongs.count else { return }
-                            let clickedSong = displayedSongs[rowIndex]
-                            let playIndex = playableSongs.firstIndex(where: { $0.id == clickedSong.id }) ?? 0
-                            app.play(playableSongs, at: playIndex)
-                        } else {
-                            app.play(filteredRows, at: rowIndex)
-                        }
-                    },
-                    isSelected: selection.isSelected(item.song.id),
-                    resolveSelection: { selection.selectedSongs(from: allSongs) },
-                    onSelect: { selection.toggle(item.song.id, allSongs: allSongs) }
-                )
-                .equatable()
-            }
-            .padding(.leading, -22)
-            if displayedCount < filteredRows.count {
-                Color.clear.frame(height: 80)
-                    .onAppear {
-                        displayedCount = min(displayedCount + pageSize, filteredRows.count)
-                    }
-            }
-        }
+    private var currentSongID: String? {
+        app.player.currentSong?.id
     }
 
     private func rowExtraActions(index: Int) -> [SongMenuExtraAction] {
@@ -354,7 +326,7 @@ private struct PlaylistSongListSection: View {
         return [SongMenuExtraAction(
             title: "Убрать из плейлиста".localized,
             systemImage: "trash",
-            action: { onRemove(index) }
+            action: { remove(at: index, from: currentDetail) }
         )]
     }
 }

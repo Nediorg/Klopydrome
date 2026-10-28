@@ -33,6 +33,7 @@ extension AppState {
     /// Caches AlbumDetail both in memory and to disk metadata store.
     func persistAlbumDetail(_ detail: AlbumDetail) async {
         library.albumDetails[detail.id] = detail
+        library.recordAlbumDetailAccess(detail.id)
         guard let cache else { return }
         if let data = try? JSONEncoder().encode(detail) {
             _ = try? await cache.write(data: data, to: .metadata, key: Self.albumDetailMetadataKey(for: detail.id))
@@ -76,6 +77,7 @@ extension AppState {
     /// Caches ArtistDetail both in memory and to disk metadata store.
     func persistArtistDetail(_ detail: ArtistDetail) async {
         library.artistDetails[detail.id] = detail
+        library.recordArtistDetailAccess(detail.id)
         guard let cache else { return }
         if let data = try? JSONEncoder().encode(detail) {
             _ = try? await cache.write(data: data, to: .metadata, key: Self.artistDetailMetadataKey(for: detail.id))

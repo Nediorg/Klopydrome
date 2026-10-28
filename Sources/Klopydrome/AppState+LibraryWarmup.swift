@@ -69,8 +69,12 @@ extension AppState {
            let items: [Genre] = await readCachedArray(cache: cache, key: Self.genresMetadataKey) {
             availableGenres = items
         }
-        if library.songs.isEmpty,
-           let items: [SubsonicSong] = await readCachedArray(cache: cache, key: Self.songsMetadataKey) {
+    }
+
+    /// Lazily restores cached songs from disk when the Songs tab is first visited.
+    func restoreCachedSongsIfNeeded() async {
+        guard library.songs.isEmpty, let cache else { return }
+        if let items: [SubsonicSong] = await readCachedArray(cache: cache, key: Self.songsMetadataKey) {
             var seen = Set<String>()
             library.songs = items.filter { seen.insert($0.id).inserted }
             library.songsLoaded = true

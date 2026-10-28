@@ -11,6 +11,7 @@ extension AppState {
     /// playback actions. Revalidates from the server on entry while showing cached
     /// data immediately without a layout jump or loading flicker.
     func loadPlaylistIfNeeded(_ playlist: PlaylistSummary, forceReload: Bool = false) {
+        recordPlaylistAccess(playlist.id)
         let existing = playlistLoadStates[playlist.id]
         if forceReload {
             playlistLoadTasks[playlist.id]?.cancel()
@@ -271,12 +272,16 @@ extension AppState {
         state.isComplete = true
         state.error = nil
         playlistLoadStates[id] = state
+        recordPlaylistAccess(id)
 
         guard !isUnchanged else { return }
 
         cachePlaylistDetail(detail)
         await persistPlaylistDetailToDisk(detail)
-        await persistOfflinePlaylistDetail(detail)
+        let repo = offlineRepository
+        Task.detached(priority: .utility) {
+            try? await repo?.savePlaylistDetail(detail)
+        }
         syncPlaylistSummaryWithDetail(detail)
     }
 
@@ -298,6 +303,7 @@ extension AppState {
     }
 
     private func installCompletedPlaylist(_ detail: PlaylistDetail, for playlist: PlaylistSummary) {
+        recordPlaylistAccess(playlist.id)
         var state = PlaylistLoadState(summary: playlist)
         state.detail = detail
         state.songs = detail.entry ?? []

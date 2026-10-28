@@ -50,7 +50,20 @@ struct SmartPlaylistDetailView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
                             .padding(.bottom, 28)
-                        songList
+                        ForEach(identifiedSongs) { item in
+                            SongRow(
+                                song: item.song,
+                                index: item.index,
+                                showAlbum: true,
+                                isCurrentOverride: currentSongID == item.song.id,
+                                onPlay: { playIndex in app.play(songs, at: playIndex) },
+                                isSelected: selection.isSelected(item.song.id),
+                                resolveSelection: { selection.selectedSongs(from: songs) },
+                                onSelect: { selection.toggle(item.song.id, allSongs: songs) }
+                            )
+                            .equatable()
+                            .padding(.leading, -22)
+                        }
                     }
                     .padding(.horizontal, 28)
                     .padding(.vertical, 24)
@@ -178,24 +191,8 @@ struct SmartPlaylistDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private var songList: some View {
-        let currentID = app.player.currentSong?.id
-        let allSongs = songs
-        ForEach(identifiedSongs) { item in
-            SongRow(
-                song: item.song,
-                index: item.index,
-                showAlbum: true,
-                isCurrentOverride: currentID == item.song.id,
-                onPlay: { playIndex in app.play(songs, at: playIndex) },
-                isSelected: selection.isSelected(item.song.id),
-                resolveSelection: { selection.selectedSongs(from: allSongs) },
-                onSelect: { selection.toggle(item.song.id, allSongs: allSongs) }
-            )
-            .equatable()
-        }
-        .padding(.leading, -22)
+    private var currentSongID: String? {
+        app.player.currentSong?.id
     }
 
     private func load() async {

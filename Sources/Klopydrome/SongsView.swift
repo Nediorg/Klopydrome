@@ -44,9 +44,6 @@ struct SongsView: View {
     /// on every body evaluation) — avoids re-sorting the whole library on each
     /// render and giving `Table` a fresh array identity every frame.
     @State private var processedSongs: [SubsonicSong] = []
-    /// Lowercased searchable text per song id, built once per song so typing
-    /// doesn't re-join/lowercase the whole library on every keystroke.
-    @State private var searchable: [String: String] = [:]
     /// Debounced reprocess task for the search field.
     @State private var searchTask: Task<Void, Never>?
     /// Off-main reprocess task (filter + sort of the whole library).
@@ -137,6 +134,9 @@ struct SongsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
+            if !app.library.songsLoaded {
+                await app.restoreCachedSongsIfNeeded()
+            }
             reprocess()
             if !app.library.songsLoaded {
                 await load()
@@ -206,10 +206,7 @@ struct SongsView: View {
                     }
                     return
                 }
-                processedSongs = result.processed
-                if !result.searchable.isEmpty {
-                    searchable.merge(result.searchable) { _, new in new }
-                }
+                processedSongs = result
                 reprocessing = false
                 if reprocessDirty {
                     reprocessDirty = false
@@ -219,44 +216,39 @@ struct SongsView: View {
         }
     }
 
-    /// Pure, off-main filter + sort. Builds the lowercased searchable string
-    /// cache as a side effect so it is reused across keystrokes. Applies the
+    /// Pure, off-main filter + sort. Filters on-the-fly directly across song
+    /// fields without pinning duplicate searchable strings in memory. Applies the
     /// column comparators in `sortOrder` so the array handed to `SongTable` is
     /// already ordered — the table never re-sorts (and never swaps) the whole
     /// library itself.
     nonisolated private static func compute(
         _ source: [SubsonicSong], favoritesOnly: Bool, starredIDs: Set<String>?,
         query: String, sortOrder: [KeyPathComparator<SubsonicSong>]
-    ) -> (processed: [SubsonicSong], searchable: [String: String]) {
+    ) -> [SubsonicSong] {
         var seenIDs = Set<String>()
         var list = source.filter { seenIDs.insert($0.id).inserted }
         if favoritesOnly, let starred = starredIDs {
             list = list.filter { starred.contains($0.id) }
         }
-        guard !Task.isCancelled else { return ([], [:]) }
-        var searchable: [String: String] = [:]
+        guard !Task.isCancelled else { return [] }
         if !query.isEmpty {
+            let terms = query.split(separator: " ")
             list = list.filter { song in
-                searchableText(song, cache: &searchable).contains(query)
+                let title = song.title ?? ""
+                let artist = song.artist ?? ""
+                let album = song.album ?? ""
+                return terms.allSatisfy { term in
+                    title.localizedCaseInsensitiveContains(term) ||
+                    artist.localizedCaseInsensitiveContains(term) ||
+                    album.localizedCaseInsensitiveContains(term)
+                }
             }
         }
-        guard !Task.isCancelled else { return ([], [:]) }
+        guard !Task.isCancelled else { return [] }
         if !sortOrder.isEmpty {
             list.sort(using: sortOrder)
         }
-        return (list, searchable)
-    }
-
-    /// Builds (and caches) a lowercased searchable string for a song so a
-    /// search doesn't rebuild text for the whole library every keystroke.
-    nonisolated private static func searchableText(_ song: SubsonicSong, cache: inout [String: String]) -> String {
-        if let cached = cache[song.id] { return cached }
-        let text = [song.title, song.artist, song.album]
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .lowercased()
-        cache[song.id] = text
-        return text
+        return list
     }
 
     /// Debounces search-field reprocessing so fast typing doesn't re-sort the
@@ -283,7 +275,6 @@ struct SongsView: View {
         if isRefresh {
             app.library.songs = []
             app.library.songsLoaded = false
-            searchable.removeAll(keepingCapacity: true)
             loading = true
         } else {
             loading = songs.isEmpty
@@ -304,7 +295,6 @@ struct SongsView: View {
                 break
             }
             if appendBatch(batch, seen: &seen) {
-                searchable.removeAll(keepingCapacity: true)
                 reprocess()
             }
             if batch.isEmpty || batch.count < chunkSize {

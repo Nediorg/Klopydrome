@@ -45,6 +45,9 @@ extension AppState {
         cachedStreamKeysSeeded = true
         replaceDownloadedSongs([])
         await clearOfflineCatalog()
+        CoverArtStore.shared.clearMemoryCache()
+        clearInMemoryCaches()
+        await smartPlaylistEngine?.clearCache()
         guard let cache else { return }
         await cache.clear()
     }
