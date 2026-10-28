@@ -50,7 +50,7 @@ brew install nasm meson ninja cmake pkg-config wget git
 Затем соберите приложение:
 
 ```sh
-./scripts/build-app.sh # vX.Y.Z --release (а также --no-lint --no-test)
+./scripts/build-app.sh # или: make app
 ```
 
 Скрипт запускает линтер и нужный тест, собирает debug-версию и подписывает её ad-hoc. Готовое приложение будет лежать в `.build/app/Klopydrome.app`.
@@ -58,19 +58,19 @@ brew install nasm meson ninja cmake pkg-config wget git
 Для release-версии:
 
 ```sh
-./scripts/build-app.sh --release
+./scripts/build-app.sh --release # или: make release
 ```
 
-Релиз целиком (тесты, сборка, тег, публикация):
+Сборка zip-архива для релиза (в `dist/`):
 
 ```sh
-./scripts/release.sh vX.Y.Z
+make dist # или: ./scripts/package-release.sh
 ```
 
 Отдельно:
 
 ```sh
-swift test # все тесты
+swift test # все тесты (или: make test)
 ./scripts/lint.sh # линтер
 ```
 
