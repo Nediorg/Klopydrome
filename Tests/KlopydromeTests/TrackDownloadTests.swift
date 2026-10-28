@@ -30,8 +30,8 @@ final class TrackDownloadTests: XCTestCase {
 
         let panel = TrackDownload.savePanel(for: song)
 
-        XCTAssertEqual(panel.title, "Скачать трек".localized)
-        XCTAssertEqual(panel.prompt, "Скачать".localized)
+        XCTAssertEqual(panel.title, "Save File As…".localized)
+        XCTAssertEqual(panel.prompt, "Save".localized)
         XCTAssertEqual(panel.nameFieldStringValue, "Artist – Track.flac")
         XCTAssertTrue(panel.canCreateDirectories)
         XCTAssertFalse(panel.isExtensionHidden)
@@ -272,7 +272,7 @@ final class TrackDownloadTests: XCTestCase {
 
         XCTAssertEqual(app.activeDownloadTasks.count, 1)
         guard let task = app.activeDownloadTasks.first else { return }
-        XCTAssertEqual(task.kind, .batch(title: "Песни".localized))
+        XCTAssertEqual(task.kind, .batch(title: "Songs".localized))
         XCTAssertEqual(task.songs.map(\.id), ["multi-1", "multi-2", "multi-3"])
         XCTAssertTrue(app.downloadingSongIDs.contains("multi-1"))
         XCTAssertTrue(app.downloadingSongIDs.contains("multi-2"))
