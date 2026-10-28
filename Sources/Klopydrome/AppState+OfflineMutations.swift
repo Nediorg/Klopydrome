@@ -98,6 +98,9 @@ extension AppState {
                 Self.offlineMutationLog.error(
                     "star push failed \(id, privacy: .public): \(String(describing: error), privacy: .public)"
                 )
+                await MainActor.run {
+                    _ = self.queueOfflineStar(id: id, kind: kind, isStarred: willStar)
+                }
             }
         }
     }
@@ -142,6 +145,9 @@ extension AppState {
                 Self.offlineMutationLog.error(
                     "rating push failed \(id, privacy: .public): \(String(describing: error), privacy: .public)"
                 )
+                await MainActor.run {
+                    _ = self.queueOfflineRating(songID: id, rating: rating)
+                }
             }
         }
     }

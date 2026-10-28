@@ -323,4 +323,63 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
         let reloadedMutations = await reloaded.currentMutations()
         XCTAssertEqual(reloadedMutations.playlists.first?.isPublic, true)
     }
+
+    func testOnlineStarFailureFallsBackToQueue() async {
+        let app = AppState()
+        app.serverConfig.url = "http://127.0.0.1:65534"
+        let config = SubsonicConfig(
+            baseURL: URL(string: "http://127.0.0.1:65534")!,
+            username: "a",
+            password: "b"
+        )
+        let client = SubsonicClient(config: config)
+        app.client = client
+        guard let store = app.ensureOfflineMutationStore() else {
+            XCTFail("OfflineMutationStore could not be created")
+            return
+        }
+        await store.clear()
+
+        app.pushStarToServer(client: client, id: "fail-star-1", kind: .song, willStar: true)
+
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(50))
+            let mutations = await store.currentMutations()
+            if mutations.stars["fail-star-1"] != nil { break }
+        }
+
+        let mutations = await store.currentMutations()
+        XCTAssertEqual(mutations.stars["fail-star-1"]?.isStarred, true)
+        XCTAssertEqual(mutations.stars["fail-star-1"]?.kind, .song)
+        await store.clear()
+    }
+
+    func testOnlineRatingFailureFallsBackToQueue() async {
+        let app = AppState()
+        app.serverConfig.url = "http://127.0.0.1:65534"
+        let config = SubsonicConfig(
+            baseURL: URL(string: "http://127.0.0.1:65534")!,
+            username: "a",
+            password: "b"
+        )
+        let client = SubsonicClient(config: config)
+        app.client = client
+        guard let store = app.ensureOfflineMutationStore() else {
+            XCTFail("OfflineMutationStore could not be created")
+            return
+        }
+        await store.clear()
+
+        app.pushRatingToServer(client: client, id: "fail-rating-1", rating: 5)
+
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(50))
+            let mutations = await store.currentMutations()
+            if mutations.ratings["fail-rating-1"] != nil { break }
+        }
+
+        let mutations = await store.currentMutations()
+        XCTAssertEqual(mutations.ratings["fail-rating-1"]?.rating, 5)
+        await store.clear()
+    }
 }
