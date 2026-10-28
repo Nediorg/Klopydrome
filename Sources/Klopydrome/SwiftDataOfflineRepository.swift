@@ -13,10 +13,7 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
     public func removeTrack(id: String) async throws {
         let descriptor = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.id == id })
         if let track = try modelContext.fetch(descriptor).first {
-            track.isDownloaded = false
-            if track.playlistEntries.isEmpty && track.album == nil {
-                modelContext.delete(track)
-            }
+            modelContext.delete(track)
             try modelContext.save()
         }
     }
@@ -30,6 +27,10 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
         return tracks.map { mapTrackToSong($0) }
     }
 
+    public func fetchTrackCount() throws -> Int {
+        try modelContext.fetch(FetchDescriptor<OfflineTrack>()).count
+    }
+
     public func saveAlbumDetail(_ detail: AlbumDetail) async throws {
         let albumID = detail.id
         let descriptor = FetchDescriptor<OfflineAlbum>(predicate: #Predicate { $0.id == albumID })
@@ -40,8 +41,15 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
         updateAlbumMetadata(album, from: detail)
 
         if let songs = detail.song {
-            for song in songs {
-                let track = try findOrCreateTrack(from: song, isExplicitDownload: false)
+            let minimalTracks = songs.map { MinimalAlbumTrack(from: $0) }
+            album.tracksSummaryData = try? JSONEncoder().encode(minimalTracks)
+
+            let songIDs = Set(songs.map(\.id))
+            let downloadedDesc = FetchDescriptor<OfflineTrack>(
+                predicate: #Predicate { $0.isDownloaded }
+            )
+            let downloadedTracks = try modelContext.fetch(downloadedDesc)
+            for track in downloadedTracks where songIDs.contains(track.id) {
                 track.album = album
                 if track.albumID == nil {
                     track.albumID = album.id
@@ -57,15 +65,33 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
         let descriptor = FetchDescriptor<OfflineAlbum>(predicate: #Predicate { $0.id == id })
         guard let album = try modelContext.fetch(descriptor).first else { return nil }
 
-        let tracksDesc = FetchDescriptor<OfflineTrack>(
-            predicate: #Predicate { $0.albumID == id },
-            sortBy: [
-                SortDescriptor(\.discNumber, order: .forward),
-                SortDescriptor(\.trackNumber, order: .forward)
-            ]
-        )
-        let tracks = try modelContext.fetch(tracksDesc)
-        let songs = tracks.map { mapTrackToSong($0) }
+        let songs: [SubsonicSong]
+        if let data = album.tracksSummaryData,
+           let minimalTracks = try? JSONDecoder().decode([MinimalAlbumTrack].self, from: data) {
+            let downloadedDesc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
+            let downloadedTracks = try modelContext.fetch(downloadedDesc)
+            let downloadedByID = Dictionary(
+                downloadedTracks.map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+
+            songs = minimalTracks.map { minimal in
+                if let downloaded = downloadedByID[minimal.id] {
+                    return mapTrackToSong(downloaded)
+                }
+                return minimal.toSubsonicSong(album: album)
+            }
+        } else {
+            let tracksDesc = FetchDescriptor<OfflineTrack>(
+                predicate: #Predicate { $0.albumID == id },
+                sortBy: [
+                    SortDescriptor(\.discNumber, order: .forward),
+                    SortDescriptor(\.trackNumber, order: .forward)
+                ]
+            )
+            let tracks = try modelContext.fetch(tracksDesc)
+            songs = tracks.map { mapTrackToSong($0) }
+        }
 
         return AlbumDetail(
             id: album.id,
@@ -73,7 +99,7 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
             artist: album.artistName,
             artistId: album.artistID,
             coverArt: album.coverArt,
-            songCount: album.songCount ?? tracks.count,
+            songCount: album.songCount ?? songs.count,
             duration: album.duration,
             year: album.year,
             genre: album.genre,
@@ -84,130 +110,12 @@ public actor SwiftDataOfflineRepository: OfflineRepository {
         )
     }
 
-    public func savePlaylists(_ playlists: [PlaylistSummary]) async throws {
-        for playlist in playlists {
-            let playlistID = playlist.id
-            let desc = FetchDescriptor<OfflinePlaylist>(predicate: #Predicate { $0.id == playlistID })
-            let model = try modelContext.fetch(desc).first ?? OfflinePlaylist(
-                id: playlist.id,
-                name: playlist.name ?? "Untitled"
-            )
-            updatePlaylistMetadata(model, from: playlist)
-            modelContext.insert(model)
-        }
-        try modelContext.save()
-    }
-
-    public func savePlaylistDetail(_ detail: PlaylistDetail) async throws {
-        let playlistID = detail.id
-        let desc = FetchDescriptor<OfflinePlaylist>(predicate: #Predicate { $0.id == playlistID })
-        let playlist = try modelContext.fetch(desc).first ?? OfflinePlaylist(
-            id: detail.id,
-            name: detail.name ?? "Untitled"
-        )
-        updatePlaylistDetailMetadata(playlist, from: detail)
-
-        for entry in playlist.entries {
-            modelContext.delete(entry)
-        }
-        playlist.entries.removeAll()
-
-        if let songs = detail.entry {
-            for (index, song) in songs.enumerated() {
-                let entryID = "\(detail.id)_\(index)"
-                let entry = OfflinePlaylistEntry(id: entryID, index: index)
-                entry.playlist = playlist
-                entry.trackID = song.id
-                entry.fallbackTitle = song.title
-                entry.fallbackDuration = song.duration
-                entry.fallbackArtist = song.artist ?? song.albumArtist
-                entry.fallbackAlbum = song.album
-                entry.fallbackCoverArt = song.coverArt
-                entry.fallbackTrackNumber = song.track
-                entry.fallbackDiscNumber = song.discNumber
-                entry.fallbackYear = song.year
-                entry.fallbackGenre = song.genre
-
-                let track = try findOrCreateTrack(from: song, isExplicitDownload: false)
-                entry.track = track
-                modelContext.insert(entry)
-                playlist.entries.append(entry)
-            }
-        }
-
-        modelContext.insert(playlist)
-        try modelContext.save()
-    }
-
-    public func fetchPlaylistDetail(id: String) async throws -> PlaylistDetail? {
-        let desc = FetchDescriptor<OfflinePlaylist>(predicate: #Predicate { $0.id == id })
-        guard let playlist = try modelContext.fetch(desc).first else { return nil }
-
-        let sortedEntries = playlist.entries.sorted { $0.index < $1.index }
-        let songs: [SubsonicSong] = sortedEntries.map { entry in
-            if let track = entry.track {
-                return mapTrackToSong(track)
-            }
-            return SubsonicSong(
-                id: entry.trackID ?? entry.id,
-                title: entry.fallbackTitle ?? "Unknown Track",
-                album: entry.fallbackAlbum,
-                artist: entry.fallbackArtist,
-                track: entry.fallbackTrackNumber,
-                year: entry.fallbackYear,
-                genre: entry.fallbackGenre,
-                coverArt: entry.fallbackCoverArt,
-                duration: entry.fallbackDuration,
-                discNumber: entry.fallbackDiscNumber
-            )
-        }
-
-        return PlaylistDetail(
-            id: playlist.id,
-            name: playlist.name,
-            comment: playlist.comment,
-            owner: playlist.owner,
-            coverArt: playlist.coverArt,
-            songCount: playlist.songCount ?? songs.count,
-            duration: playlist.duration,
-            created: playlist.created,
-            changed: playlist.changed,
-            isPublic: playlist.isPublic,
-            entry: songs
-        )
-    }
-
     public func fetchAlbums() async throws -> [SubsonicAlbum] {
         let desc = FetchDescriptor<OfflineAlbum>(
             sortBy: [SortDescriptor(\.title, order: .forward)]
         )
         let albums = try modelContext.fetch(desc)
         return albums.map { mapAlbumToSubsonic($0) }
-    }
-
-    public func fetchPlaylists() async throws -> [PlaylistSummary] {
-        let desc = FetchDescriptor<OfflinePlaylist>(
-            sortBy: [SortDescriptor(\.name, order: .forward)]
-        )
-        let playlists = try modelContext.fetch(desc)
-        return playlists.map { mapPlaylistToSummary($0) }
-    }
-
-    public func fetchPlaylists(
-        matchingDownloadedTrackIDs downloadedIDs: Set<String>
-    ) async throws -> [PlaylistSummary] {
-        let desc = FetchDescriptor<OfflinePlaylist>(
-            sortBy: [SortDescriptor(\.name, order: .forward)]
-        )
-        let playlists = try modelContext.fetch(desc)
-        return playlists.compactMap { playlist in
-            let hasMatchingTrack = playlist.entries.contains { entry in
-                guard let id = entry.trackID ?? entry.track?.id else { return false }
-                return downloadedIDs.contains(id)
-            }
-            guard hasMatchingTrack else { return nil }
-            return mapPlaylistToSummary(playlist)
-        }
     }
 
     public func fetchArtists() async throws -> [Artist] {
@@ -342,35 +250,7 @@ extension SwiftDataOfflineRepository {
         album.updatedAt = Date()
     }
 
-    private func updatePlaylistMetadata(_ model: OfflinePlaylist, from summary: PlaylistSummary) {
-        model.name = summary.name ?? model.name
-        model.comment = summary.comment ?? model.comment
-        model.owner = summary.owner ?? model.owner
-        model.coverArt = summary.coverArt ?? model.coverArt
-        model.songCount = summary.songCount ?? model.songCount
-        model.duration = summary.duration ?? model.duration
-        model.created = summary.created ?? model.created
-        model.changed = summary.changed ?? model.changed
-        model.isPublic = summary.isPublic ?? model.isPublic
-        model.isReadonly = summary.isReadonly ?? model.isReadonly
-        model.validUntil = summary.validUntil ?? model.validUntil
-        model.updatedAt = Date()
-    }
-
-    private func updatePlaylistDetailMetadata(_ model: OfflinePlaylist, from detail: PlaylistDetail) {
-        model.name = detail.name ?? model.name
-        model.comment = detail.comment ?? model.comment
-        model.owner = detail.owner ?? model.owner
-        model.coverArt = detail.coverArt ?? model.coverArt
-        model.songCount = detail.songCount ?? model.songCount
-        model.duration = detail.duration ?? model.duration
-        model.created = detail.created ?? model.created
-        model.changed = detail.changed ?? model.changed
-        model.isPublic = detail.isPublic ?? model.isPublic
-        model.updatedAt = Date()
-    }
-
-    private func mapTrackToSong(_ track: OfflineTrack) -> SubsonicSong {
+    func mapTrackToSong(_ track: OfflineTrack) -> SubsonicSong {
         SubsonicSong(
             id: track.id,
             parent: track.albumID,
@@ -416,23 +296,6 @@ extension SwiftDataOfflineRepository {
             starred: album.starred,
             recordType: album.recordType,
             musicBrainzId: album.musicBrainzId
-        )
-    }
-
-    private func mapPlaylistToSummary(_ playlist: OfflinePlaylist) -> PlaylistSummary {
-        PlaylistSummary(
-            id: playlist.id,
-            name: playlist.name,
-            comment: playlist.comment,
-            owner: playlist.owner,
-            coverArt: playlist.coverArt,
-            songCount: playlist.songCount,
-            duration: playlist.duration,
-            created: playlist.created,
-            changed: playlist.changed,
-            isPublic: playlist.isPublic,
-            isReadonly: playlist.isReadonly,
-            validUntil: playlist.validUntil
         )
     }
 }

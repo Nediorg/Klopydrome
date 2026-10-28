@@ -1,5 +1,74 @@
 import Foundation
 import SwiftData
+import NavidromeClient
+
+public struct MinimalAlbumTrack: Codable, Sendable, Equatable {
+    public let id: String
+    public let title: String
+    public let artist: String?
+    public let track: Int?
+    public let discNumber: Int?
+    public let duration: Int?
+    public let suffix: String?
+    public let starred: String?
+    public let userRating: Int?
+
+    public init(
+        id: String,
+        title: String,
+        artist: String? = nil,
+        track: Int? = nil,
+        discNumber: Int? = nil,
+        duration: Int? = nil,
+        suffix: String? = nil,
+        starred: String? = nil,
+        userRating: Int? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.track = track
+        self.discNumber = discNumber
+        self.duration = duration
+        self.suffix = suffix
+        self.starred = starred
+        self.userRating = userRating
+    }
+
+    public init(from song: SubsonicSong) {
+        self.id = song.id
+        self.title = song.title ?? song.displayTitle
+        self.artist = song.artist
+        self.track = song.track
+        self.discNumber = song.discNumber
+        self.duration = song.duration
+        self.suffix = song.suffix
+        self.starred = song.starred
+        self.userRating = song.userRating
+    }
+
+    func toSubsonicSong(album: OfflineAlbum) -> SubsonicSong {
+        SubsonicSong(
+            id: id,
+            parent: album.id,
+            title: title,
+            album: album.title,
+            artist: artist ?? album.artistName,
+            track: track,
+            year: album.year,
+            genre: album.genre,
+            coverArt: album.coverArt,
+            suffix: suffix,
+            duration: duration,
+            discNumber: discNumber,
+            starred: starred,
+            userRating: userRating,
+            albumId: album.id,
+            artistId: album.artistID,
+            albumArtist: album.artistName
+        )
+    }
+}
 
 @Model
 final class OfflineArtist {
@@ -39,6 +108,7 @@ final class OfflineAlbum {
     var musicBrainzId: String?
     var created: String?
     var updatedAt: Date = Date()
+    var tracksSummaryData: Data?
 
     var artist: OfflineArtist?
 
@@ -83,7 +153,7 @@ final class OfflineTrack {
     var album: OfflineAlbum?
     var artist: OfflineArtist?
 
-    @Relationship(deleteRule: .cascade, inverse: \OfflinePlaylistEntry.track)
+    @Relationship(deleteRule: .nullify, inverse: \OfflinePlaylistEntry.track)
     var playlistEntries: [OfflinePlaylistEntry] = []
 
     init(id: String, title: String) {
@@ -107,6 +177,7 @@ final class OfflinePlaylist {
     var isReadonly: Bool?
     var validUntil: String?
     var updatedAt: Date = Date()
+    var tracksSummaryData: Data?
 
     @Relationship(deleteRule: .cascade, inverse: \OfflinePlaylistEntry.playlist)
     var entries: [OfflinePlaylistEntry] = []

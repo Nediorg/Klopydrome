@@ -1,9 +1,10 @@
 import XCTest
 @testable import Klopydrome
 import NavidromeClient
+import SwiftData
 
 final class SwiftDataOfflineRepositoryTests: XCTestCase {
-    private var repository: SwiftDataOfflineRepository!
+    var repository: SwiftDataOfflineRepository!
 
     override func setUp() async throws {
         repository = try SwiftDataOfflineRepository.makeInMemory()
