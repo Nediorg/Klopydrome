@@ -167,13 +167,32 @@ struct HeaderBarWindowDragRegion: NSViewRepresentable {
 }
 
 final class HeaderBarWindowDragView: NSView {
+    private static let resizeBorderMargin: CGFloat = 6.0
+
     override var mouseDownCanMoveWindow: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let window else { return super.hitTest(point) }
+        let windowPoint = superview?.convert(point, to: nil) ?? convert(point, to: nil)
+        if windowPoint.y >= window.frame.height - Self.resizeBorderMargin
+            || windowPoint.x >= window.frame.width - Self.resizeBorderMargin {
+            return nil
+        }
+        return super.hitTest(point)
+    }
 
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             window?.zoom(nil)
-        } else {
-            window?.performDrag(with: event)
+            return
         }
+        guard let window else { return }
+        let point = event.locationInWindow
+        if point.y >= window.frame.height - Self.resizeBorderMargin
+            || point.x >= window.frame.width - Self.resizeBorderMargin {
+            super.mouseDown(with: event)
+            return
+        }
+        window.performDrag(with: event)
     }
 }

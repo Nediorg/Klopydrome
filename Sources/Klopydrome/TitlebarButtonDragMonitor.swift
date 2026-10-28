@@ -18,6 +18,7 @@ final class TitlebarButtonDragMonitor {
 
     private let dragThreshold: CGFloat = 3.0
     private let titlebarHeight: CGFloat = 52.0
+    private let resizeBorderMargin: CGFloat = 6.0
 
     init(window: NSWindow) {
         self.window = window
@@ -99,8 +100,9 @@ final class TitlebarButtonDragMonitor {
 
     private func isInsideTitlebar(_ point: NSPoint, window: NSWindow) -> Bool {
         point.y >= window.frame.height - titlebarHeight
-            && point.y <= window.frame.height
+            && point.y <= window.frame.height - resizeBorderMargin
             && point.x >= 80
+            && point.x <= window.frame.width - resizeBorderMargin
     }
 
     private func isNonDraggableHit(at point: NSPoint, window: NSWindow) -> Bool {
