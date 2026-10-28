@@ -42,17 +42,7 @@ extension SwiftDataOfflineRepository {
 
         if let songs = detail.entry {
             playlist.tracksSummaryData = try? JSONEncoder().encode(songs)
-
-            let songIDs = Set(songs.map(\.id))
-            var downloadedByID: [String: OfflineTrack] = [:]
-            for songID in songIDs {
-                let downloadedDesc = FetchDescriptor<OfflineTrack>(
-                    predicate: #Predicate { $0.id == songID && $0.isDownloaded }
-                )
-                if let track = try modelContext.fetch(downloadedDesc).first {
-                    downloadedByID[songID] = track
-                }
-            }
+            let downloadedByID = try resolvePlaylistDownloadedTracks(for: Set(songs.map(\.id)))
 
             for (index, song) in songs.enumerated() {
                 guard let track = downloadedByID[song.id] else { continue }
@@ -110,17 +100,18 @@ extension SwiftDataOfflineRepository {
             }
         }
 
+        func populateMissing(from neededIDs: Set<String>) throws {
+            let missingIDs = neededIDs.subtracting(downloadedByID.keys)
+            guard !missingIDs.isEmpty else { return }
+            let resolved = try resolvePlaylistDownloadedTracks(for: missingIDs)
+            for (id, track) in resolved {
+                downloadedByID[id] = track
+            }
+        }
+
         if let data = playlist.tracksSummaryData,
            let summarySongs = try? JSONDecoder().decode([SubsonicSong].self, from: data) {
-            let missingIDs = Set(summarySongs.map(\.id)).subtracting(downloadedByID.keys)
-            for id in missingIDs {
-                let downloadedDesc = FetchDescriptor<OfflineTrack>(
-                    predicate: #Predicate { $0.id == id && $0.isDownloaded }
-                )
-                if let track = try modelContext.fetch(downloadedDesc).first {
-                    downloadedByID[id] = track
-                }
-            }
+            try populateMissing(from: Set(summarySongs.map(\.id)))
             return summarySongs.map { song in
                 if let downloaded = downloadedByID[song.id] {
                     return mapTrackToSong(downloaded)
@@ -132,18 +123,35 @@ extension SwiftDataOfflineRepository {
         let unlinkedIDs = playlist.entries
             .filter { $0.track == nil || !$0.track!.isDownloaded }
             .compactMap(\.trackID)
-        let missingIDs = Set(unlinkedIDs).subtracting(downloadedByID.keys)
-        for id in missingIDs {
-            let downloadedDesc = FetchDescriptor<OfflineTrack>(
-                predicate: #Predicate { $0.id == id && $0.isDownloaded }
-            )
-            if let track = try modelContext.fetch(downloadedDesc).first {
-                downloadedByID[id] = track
-            }
-        }
+        try populateMissing(from: Set(unlinkedIDs))
 
         let sortedEntries = playlist.entries.sorted { $0.index < $1.index }
         return sortedEntries.map { mapEntryToSong($0, downloadedByID: downloadedByID) }
+    }
+
+    private func resolvePlaylistDownloadedTracks(for songIDs: Set<String>) throws -> [String: OfflineTrack] {
+        guard !songIDs.isEmpty else { return [:] }
+        let totalDownloaded = (try? modelContext.fetchCount(
+            FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
+        )) ?? 0
+        guard totalDownloaded > 0 else { return [:] }
+
+        var downloadedByID: [String: OfflineTrack] = [:]
+        if totalDownloaded <= songIDs.count {
+            let desc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
+            let tracks = (try? modelContext.fetch(desc)) ?? []
+            for track in tracks where songIDs.contains(track.id) {
+                downloadedByID[track.id] = track
+            }
+        } else {
+            for songID in songIDs {
+                let desc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.id == songID && $0.isDownloaded })
+                if let track = try modelContext.fetch(desc).first {
+                    downloadedByID[songID] = track
+                }
+            }
+        }
+        return downloadedByID
     }
 
     private func mapEntryToSong(
