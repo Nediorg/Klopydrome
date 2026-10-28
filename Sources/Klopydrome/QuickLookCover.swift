@@ -2,10 +2,6 @@ import SwiftUI
 import AppKit
 import Quartz
 
-/// Wraps `CoverArtView` in an AppKit view that fires on both regular click
-/// (mouseDown) and Force Touch deep press (pressure stage 2 at the moment of
-/// pressing) and opens `QLPreviewPanel` with a zoom animation from the cover's
-/// on-screen frame — exactly like Finder.
 struct QuickLookCover: NSViewRepresentable {
     let coverArt: String?
     var size: CGFloat = 220
@@ -15,9 +11,10 @@ struct QuickLookCover: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSQuickLookView {
         let view = NSQuickLookView()
-        view.coverArt = coverArt
-        view.size = size
         view.title = title
+        view.size = size
+        view.coverArt = coverArt
+        view.preparePreviewItemIfNeeded()
         let hosting = NSHostingView(
             rootView: CoverArtView(coverArt: coverArt, size: size, cornerRadius: cornerRadius, shadow: shadow)
         )
@@ -34,17 +31,14 @@ struct QuickLookCover: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSQuickLookView, context: Context) {
-        // If Quick Look is open for the old cover and user navigated to a
-        // different album/playlist, dismiss without zooming back to the
-        // stale frame — return .zero in sourceFrame handles the unzoom,
-        // but we also close immediately to avoid showing wrong content.
         if nsView.coverArt != coverArt, let panel = QLPreviewPanel.shared(), panel.isVisible {
             panel.orderOut(nil)
             nsView.closePreview()
         }
-        nsView.coverArt = coverArt
-        nsView.size = size
         nsView.title = title
+        nsView.size = size
+        nsView.coverArt = coverArt
+        nsView.preparePreviewItemIfNeeded()
         if let hosting = nsView.hostingView {
             hosting.rootView = CoverArtView(
                 coverArt: coverArt,
@@ -63,26 +57,63 @@ struct QuickLookCover: NSViewRepresentable {
     }
 
     final class NSQuickLookView: NSView, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
-        var coverArt: String?
+        var title: String? {
+            didSet {
+                if title != oldValue {
+                    let itemTitle = title ?? "Cover".localized
+                    previewItem?.previewItemTitle = itemTitle
+                }
+            }
+        }
         var size: CGFloat = 220
-        var title: String?
+        var coverArt: String? {
+            didSet {
+                if coverArt != oldValue {
+                    preparePreviewItemIfNeeded()
+                }
+            }
+        }
         var hostingView: NSHostingView<CoverArtView>?
         private var previewItem: CoverPreviewItem?
-        /// CoverArt that the currently open panel is previewing — used to
-        /// suppress unzoom animation when user navigated away.
         private var previewCoverArt: String?
         private var forceFired = false
         private var openTask: Task<Void, Never>?
+        private var upgradeTask: Task<Void, Never>?
 
         func closePreview() {
             openTask?.cancel()
             openTask = nil
+            upgradeTask?.cancel()
+            upgradeTask = nil
             previewItem = nil
             previewCoverArt = nil
         }
 
+        func preparePreviewItemIfNeeded() {
+            guard let coverArt, !coverArt.isEmpty else {
+                previewItem = nil
+                previewCoverArt = nil
+                return
+            }
+            let itemTitle = title ?? "Cover".localized
+            if previewCoverArt == coverArt, let item = previewItem {
+                item.previewItemTitle = itemTitle
+                return
+            }
+            if let directURL = CoverArtStore.shared.cachedQuickLookFileURL(
+                coverArt: coverArt,
+                displayPixels: Int(size * 2)
+            ) {
+                previewItem = CoverPreviewItem(url: directURL, title: itemTitle)
+                previewCoverArt = coverArt
+            }
+        }
+
+        override var acceptsFirstResponder: Bool { true }
+
         override func mouseDown(with event: NSEvent) {
             forceFired = false
+            window?.makeFirstResponder(self)
             super.mouseDown(with: event)
         }
 
@@ -90,7 +121,7 @@ struct QuickLookCover: NSViewRepresentable {
             super.pressureChange(with: event)
             if event.stage == 2, !forceFired {
                 forceFired = true
-                Task { @MainActor in self.openPreview() }
+                openPreview()
             }
         }
 
@@ -99,11 +130,19 @@ struct QuickLookCover: NSViewRepresentable {
             guard !forceFired else { return }
             let loc = convert(event.locationInWindow, from: nil)
             guard bounds.contains(loc) else { return }
-            Task { @MainActor in self.openPreview() }
+            openPreview()
         }
 
         override func quickLook(with event: NSEvent) {
-            Task { @MainActor in self.openPreview() }
+            openPreview()
+        }
+
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 49 {
+                openPreview()
+                return
+            }
+            super.keyDown(with: event)
         }
 
         @MainActor
@@ -113,10 +152,24 @@ struct QuickLookCover: NSViewRepresentable {
 
             if let panel = QLPreviewPanel.shared(), panel.isVisible {
                 if previewCoverArt == coverArt {
-                    panel.orderOut(nil)
-                    closePreview()
+                    panel.close()
                     return
                 }
+            }
+
+            preparePreviewItemIfNeeded()
+
+            if previewItem != nil {
+                guard let panel = QLPreviewPanel.shared() else { return }
+                panel.dataSource = self
+                panel.delegate = self
+                configurePanelGeometry(panel, coverArt: coverArt)
+                panel.reloadData()
+                if !panel.isVisible {
+                    panel.makeKeyAndOrderFront(nil)
+                }
+                upgradeToFullCoverInBackground(coverArt: coverArt)
+                return
             }
 
             startOpenTask(coverArt: coverArt)
@@ -128,14 +181,13 @@ struct QuickLookCover: NSViewRepresentable {
             openTask = Task { @MainActor [weak self] in
                 guard let self else { return }
 
-                // 1. Resolve an immediate file URL for Quick Look from disk cache or memory cache (< 5ms).
                 guard let initialURL = await CoverArtStore.shared.quickLookFileURL(
                     coverArt: coverArt,
                     displayPixels: Int(self.size * 2)
                 ) else { return }
                 guard !Task.isCancelled, self.coverArt == coverArt else { return }
 
-                let itemTitle = self.title ?? String(localized: "Обложка")
+                let itemTitle = self.title ?? "Cover".localized
                 self.previewItem = CoverPreviewItem(url: initialURL, title: itemTitle)
 
                 guard let panel = QLPreviewPanel.shared() else { return }
@@ -146,13 +198,26 @@ struct QuickLookCover: NSViewRepresentable {
                 if !panel.isVisible {
                     panel.makeKeyAndOrderFront(nil)
                 }
+                self.upgradeToFullCoverInBackground(coverArt: coverArt)
+            }
+        }
 
-                // 2. If the initial URL is a thumbnail/preview, fetch the full-res original cover in background.
-                let isFull = await CoverArtStore.shared.isFullCoverCached(coverArt: coverArt)
-                if !isFull {
-                    guard let fullURL = await CoverArtStore.shared.fullCoverFileURL(coverArt: coverArt) else { return }
-                    guard !Task.isCancelled, self.coverArt == coverArt, self.previewCoverArt == coverArt else { return }
+        @MainActor
+        private func upgradeToFullCoverInBackground(coverArt: String) {
+            upgradeTask?.cancel()
+            upgradeTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                guard let fullURL = await CoverArtStore.shared.fullCoverFileURL(coverArt: coverArt) else { return }
+                guard !Task.isCancelled,
+                      self.coverArt == coverArt,
+                      self.previewCoverArt == coverArt else { return }
+                guard let panel = QLPreviewPanel.shared(), panel.isVisible else { return }
+
+                if self.previewItem?.previewItemURL != fullURL {
+                    let itemTitle = self.title ?? "Cover".localized
                     self.previewItem = CoverPreviewItem(url: fullURL, title: itemTitle)
+                    self.configurePanelGeometry(panel, coverArt: coverArt)
                     panel.reloadData()
                 }
             }
@@ -185,20 +250,12 @@ struct QuickLookCover: NSViewRepresentable {
             panel.setFrame(panel.frameRect(forContentRect: contentRect), display: false)
         }
 
-        // MARK: QLPreviewPanelDataSource
         func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { previewItem == nil ? 0 : 1 }
         func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
             previewItem
         }
 
-        // MARK: QLPreviewPanelDelegate — zoom from cover frame on open, clean fade on close
         func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
-            // Only provide a source frame when opening the panel.
-            // When closing (panel is already visible), returning .zero triggers a clean
-            // fade-out, avoiding stale zoom-back animations if the user navigated away
-            // (e.g. to Home/Playlists or different views) or scrolled the content.
-            guard !panel.isVisible else { return .zero }
-
             guard coverArt == previewCoverArt, let window = window else { return .zero }
             let frameInWindow = convert(bounds, to: nil)
             return window.convertToScreen(frameInWindow)
@@ -209,19 +266,29 @@ struct QuickLookCover: NSViewRepresentable {
             transitionImageFor item: QLPreviewItem!,
             contentRect: UnsafeMutablePointer<NSRect>!
         ) -> Any! {
-            guard let coverArt else { return nil }
-            return CoverArtStore.shared.anyCachedImage(
-                coverArt: coverArt,
-                preferredDisplayPixels: Int(size * 2)
-            )
+            nil
         }
 
-        override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+        override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+            guard let coverArt, !coverArt.isEmpty else { return false }
+            return true
+        }
+
         override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+            preparePreviewItemIfNeeded()
             panel.dataSource = self
             panel.delegate = self
+            if let coverArt {
+                configurePanelGeometry(panel, coverArt: coverArt)
+            }
         }
+
         override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+            if let current = panel.currentPreviewItem as? CoverPreviewItem,
+               current === previewItem,
+               panel.isVisible {
+                return
+            }
             panel.dataSource = nil
             panel.delegate = nil
             panel.contentAspectRatio = .zero
@@ -232,11 +299,9 @@ struct QuickLookCover: NSViewRepresentable {
     }
 }
 
-/// Simple `QLPreviewItem` wrapper that provides a clean user-facing title
-/// in the Quick Look title bar instead of temporary raw cache filenames.
 final class CoverPreviewItem: NSObject, QLPreviewItem {
     let previewItemURL: URL?
-    let previewItemTitle: String?
+    var previewItemTitle: String?
 
     init(url: URL, title: String?) {
         self.previewItemURL = url
