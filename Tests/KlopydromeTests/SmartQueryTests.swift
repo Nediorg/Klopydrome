@@ -48,20 +48,20 @@ final class SmartQueryTests: XCTestCase {
     }
 
     func testMissingFieldNeverMatches() {
-        let rule = QueryExpr(rule: .is_, field: "album", value: .string("Some Album"))
+        let rule = QueryExpr(rule: .is, field: "album", value: .string("Some Album"))
         XCTAssertFalse(rule.matches(song(album: nil)))
     }
 
     // MARK: Starred
 
     func testStarredRuleMatchesWhenFavorited() {
-        let rule = QueryExpr(rule: .is_, field: "starred", value: .number(1))
+        let rule = QueryExpr(rule: .is, field: "starred", value: .number(1))
         XCTAssertTrue(rule.matches(song(starred: "2024-01-01T00:00:00Z")))
         XCTAssertFalse(rule.matches(song(starred: nil)))
     }
 
     func testStarredRuleMatchesWhenNotFavorited() {
-        let rule = QueryExpr(rule: .is_, field: "starred", value: .number(0))
+        let rule = QueryExpr(rule: .is, field: "starred", value: .number(0))
         XCTAssertTrue(rule.matches(song(starred: nil)))
         XCTAssertFalse(rule.matches(song(starred: "2024-01-01T00:00:00Z")))
     }
@@ -288,7 +288,7 @@ final class SmartQueryTests: XCTestCase {
         let customRule = try XCTUnwrap(anyGroup.children[0].rule)
         XCTAssertEqual(customRule.field, .custom)
         XCTAssertEqual(customRule.customField, "vendorMood")
-        XCTAssertEqual(customRule.op, .is_)
+        XCTAssertEqual(customRule.op, .is)
         XCTAssertEqual(customRule.value.text, "immersive")
 
         XCTAssertEqual(reencoded, query)

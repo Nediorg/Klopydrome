@@ -177,4 +177,221 @@ extension AppState {
         }
         player.queue.append(contentsOf: songs)
     }
+
+    func play(_ songs: [SubsonicSong], at index: Int = 0) {
+        player.play(songs, startAt: index)
+    }
+
+    func play(_ song: SubsonicSong, in queue: [SubsonicSong]) {
+        if let index = queue.firstIndex(where: { $0.id == song.id }) {
+            player.play(queue, startAt: index)
+        } else {
+            player.play([song], startAt: 0)
+        }
+    }
+
+    func playShuffled(_ songs: [SubsonicSong]) {
+        guard !songs.isEmpty else { return }
+        player.play(songs.shuffled(), startAt: 0)
+    }
+
+    func play(_ album: SubsonicAlbum) {
+        let localTracks = downloadedSongs.filter { ($0.albumId ?? $0.parent) == album.id }
+        if !localTracks.isEmpty {
+            play(localTracks)
+            return
+        }
+        guard let client else { return }
+        Task {
+            let songs = (try? await client.getAlbum(id: album.id))?.song ?? []
+            guard !songs.isEmpty else { return }
+            await MainActor.run { play(songs) }
+        }
+    }
+
+    func playStation(from song: SubsonicSong) {
+        guard let client else {
+            play([song])
+            return
+        }
+        Task {
+            var similar = (try? await client.getSimilarSongs2(id: song.id, count: 50)) ?? []
+            if similar.isEmpty, let artistId = song.artistId, !artistId.isEmpty {
+                similar = (try? await client.getTopSongs(artistId: artistId, count: 50)) ?? []
+            }
+            if similar.isEmpty, let albumId = song.albumId {
+                similar = (try? await client.getAlbum(id: albumId))?.song ?? []
+            }
+            var stationQueue = [song]
+            stationQueue.append(contentsOf: similar.filter { $0.id != song.id })
+            await MainActor.run {
+                player.play(stationQueue, startAt: 0)
+            }
+        }
+    }
+
+    func playNext(_ album: SubsonicAlbum) {
+        guard let client else { return }
+        Task {
+            let songs = (try? await client.getAlbum(id: album.id))?.song ?? []
+            guard !songs.isEmpty else { return }
+            var queue = await MainActor.run { self.player.queue }
+            queue.append(contentsOf: songs)
+            await MainActor.run { self.player.queue = queue }
+        }
+    }
+
+    func playNext(_ song: SubsonicSong) {
+        guard !player.queue.isEmpty else {
+            player.play([song], startAt: 0)
+            return
+        }
+        var queue = player.queue
+        let insertAt = (player.currentIndex + 1) % queue.count
+        queue.insert(song, at: insertAt)
+        player.queue = queue
+    }
+
+    func playLater(_ song: SubsonicSong) {
+        guard !player.queue.isEmpty else {
+            player.play([song], startAt: 0)
+            return
+        }
+        player.queue.append(song)
+    }
+
+    func saveQueueToServer() {
+        guard queuePersistenceEnabled, let client,
+              !player.queue.isEmpty else { return }
+        Task {
+            let ids = player.queue.map(\.id)
+            try? await client.savePlayQueue(
+                songIds: ids,
+                currentId: player.currentSong?.id,
+                position: player.currentTime * 1000.0
+            )
+        }
+    }
+
+    func restoreQueueFromServer() async {
+        guard queuePersistenceEnabled, let client else { return }
+        guard let queue = try? await client.getPlayQueue(),
+              let entries = queue.entry, !entries.isEmpty else { return }
+        let restored = entries
+        let targetIndex: Int
+        if let current = queue.current, let index = restored.firstIndex(where: { $0.id == current }) {
+            targetIndex = index
+        } else {
+            targetIndex = 0
+        }
+        await MainActor.run {
+            let wasLoaded = player.hasLoadedItem
+            let previousID = player.currentSong?.id
+            player.queue = restored
+            player.currentIndex = targetIndex
+            if !wasLoaded || previousID != player.currentSong?.id {
+                player.startCurrent(autoPlay: false)
+                if let posMs = queue.position, posMs > 0 {
+                    player.seek(to: Double(posMs) / 1000.0)
+                }
+                player.pause()
+            }
+            saveQueueToServer()
+        }
+    }
+
+    func startCurrent(_ song: SubsonicSong) {
+        if discordSnoozeSongID != song.id {
+            discordSnoozeSongID = nil
+        }
+        currentCacheTask?.cancel()
+        lyricsTask?.cancel()
+        scrobbleTask?.cancel()
+
+        if let client {
+            saveQueueToServer()
+            lyricsTask = Task { await lyrics.load(song: song, client: client) }
+            if scrobblingEnabled {
+                scrobbleTask = Task { try? await client.scrobble(id: song.id, submission: false) }
+            }
+        }
+
+        if startLocalOrBuffered(song) { return }
+        guard let url = streamURL(for: song) else {
+            player.lastError = "Этот трек не загружен для оффлайн-прослушивания.".localized
+            player.isLoading = false
+            return
+        }
+        play(url: url)
+        if serverConfig.cacheEnabled {
+            activeCacheTasks.insert(song.id)
+            updateCachingFlag()
+            currentCacheTask = Task { await cacheCurrentInBackground(song) }
+        }
+    }
+
+    private func cacheCurrentInBackground(_ song: SubsonicSong) async {
+        defer {
+            activeCacheTasks.remove(song.id)
+            updateCachingFlag()
+        }
+        await downloadToCache(song)
+    }
+
+    private func updateCachingFlag() {
+        player.isCaching = activeCacheTasks.contains(player.currentSong?.id ?? "")
+    }
+
+    func candidateSuffixes(for song: SubsonicSong) -> [String] {
+        var suffixes: [String] = []
+        let download = downloadSuffix(for: song)
+        if !download.isEmpty { suffixes.append(download) }
+        let effective = effectiveSuffix(for: song)
+        if !effective.isEmpty && !suffixes.contains(effective) { suffixes.append(effective) }
+        if let raw = song.suffix?.lowercased(), !raw.isEmpty && !suffixes.contains(raw) {
+            suffixes.append(raw)
+        }
+        for fallback in ["mp3", "flac", "m4a", "opus", "ogg", "aac", "wav"] where !suffixes.contains(fallback) {
+            suffixes.append(fallback)
+        }
+        return suffixes
+    }
+
+    func cachedURL(for song: SubsonicSong) -> URL? {
+        guard let cache else { return nil }
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            let url = cache.fileURL(for: .streams, key: key)
+            if cachedStreamKeysSeeded {
+                if cachedStreamKeys.contains(url.lastPathComponent) {
+                    return url
+                }
+            } else if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    func isCached(_ song: SubsonicSong) -> Bool {
+        guard cache != nil else { return false }
+        if !cachedStreamKeysSeeded { Task { await seedCachedStreamKeys() } }
+        guard !cachedStreamKeys.isEmpty else { return false }
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            if let name = cacheFileName(for: key), cachedStreamKeys.contains(name) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func streamKey(for song: SubsonicSong) -> String {
+        CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
+    }
+
+    private func cacheFileName(for key: String) -> String? {
+        guard let cache else { return nil }
+        return cache.fileURL(for: .streams, key: key).lastPathComponent
+    }
 }

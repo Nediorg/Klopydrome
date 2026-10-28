@@ -1,8 +1,8 @@
 import Foundation
 import NavidromeClient
 
-/// Sort options for the artist page album shelf/grid.
-enum ArtistAlbumSort: String, CaseIterable, Identifiable {
+/// Sort criteria for album grids and artist discography shelves.
+enum AlbumSort: String, CaseIterable, Hashable, Identifiable {
     case release, name, popularity, recentlyAdded, artist, duration, playCount, genre, favorite, id
     var id: String { rawValue }
     var label: String {
@@ -19,11 +19,27 @@ enum ArtistAlbumSort: String, CaseIterable, Identifiable {
         case .id: return "По ID"
         }
     }
+
+    /// Server type for globally sorted pagination, or `nil` when the sort
+    /// must be applied locally (e.g. duration, genre, ID).
+    var asAlbumListType: AlbumListType? {
+        switch self {
+        case .name: return .alphabeticalByName
+        case .artist: return .alphabeticalByArtist
+        case .recentlyAdded: return .newest
+        case .popularity, .playCount: return .frequent
+        case .favorite: return .starred
+        case .release, .duration, .genre, .id: return nil
+        }
+    }
 }
+
+typealias LibrarySort = AlbumSort
+typealias ArtistAlbumSort = AlbumSort
 
 // Applies the chosen album sort and direction to a raw album list.
 // swiftlint:disable:next cyclomatic_complexity
-func sortedAlbums(_ source: [SubsonicAlbum], by sort: ArtistAlbumSort, descending: Bool) -> [SubsonicAlbum] {
+func sortedAlbums(_ source: [SubsonicAlbum], by sort: AlbumSort, descending: Bool) -> [SubsonicAlbum] {
     switch sort {
     case .release:
         // Unknown-year albums always sort last, in either direction.

@@ -46,6 +46,90 @@ extension AppState {
 
         Task { await TrackDownload.transfer(remoteURL, to: destinationURL) }
     }
+
+    // MARK: Cache management
+
+    func removeFromCache(_ song: SubsonicSong) async {
+        guard let cache else { return }
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            let fileName = cache.fileURL(for: .streams, key: key).lastPathComponent
+            if cachedStreamKeys.contains(fileName) || !cachedStreamKeysSeeded {
+                await cache.removeFile(for: .streams, key: key)
+                cachedStreamKeys.remove(fileName)
+            }
+        }
+        downloadedSongs.removeAll { $0.id == song.id }
+        await removeOfflineSong(song)
+    }
+
+    func cancelDownload(_ song: SubsonicSong) {
+        cancelledDownloads.insert(song.id)
+        downloadCancellationTokens[song.id]?.withLock { $0 = true }
+    }
+
+    func downloadToCache(_ song: SubsonicSong) async {
+        guard let cache, let url = downloadStreamURL(for: song) else {
+            downloadProgress.removeValue(forKey: song.id)
+            return
+        }
+        let token = OSAllocatedUnfairLock<Bool>(initialState: cancelledDownloads.contains(song.id))
+        downloadCancellationTokens[song.id] = token
+        defer {
+            downloadCancellationTokens.removeValue(forKey: song.id)
+        }
+        let key = CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        do {
+            downloadProgress[song.id] = 0.0
+            try await TrackDownload.streamToFile(
+                url: url,
+                destination: temp,
+                isCancelled: { @Sendable in token.withLock { $0 } },
+                onProgress: { @Sendable [weak self] progress in
+                    Task { @MainActor in self?.downloadProgress[song.id] = progress }
+                }
+            )
+            try await cache.moveFile(from: temp, to: .streams, key: key)
+            downloadProgress.removeValue(forKey: song.id)
+            cancelledDownloads.remove(song.id)
+            cachedStreamKeys.insert(cache.fileURL(for: .streams, key: key).lastPathComponent)
+            await persistOfflineSong(song)
+            prependDownloaded(song)
+        } catch {
+            downloadProgress.removeValue(forKey: song.id)
+            cancelledDownloads.remove(song.id)
+            try? FileManager.default.removeItem(at: temp)
+        }
+    }
+
+    func register(downloading song: SubsonicSong) {
+        downloadingSongIDs.insert(song.id)
+        if !downloadingSongs.contains(where: { $0.id == song.id }) {
+            downloadingSongs.append(song)
+        }
+        if downloadProgress[song.id] == nil {
+            downloadProgress[song.id] = 0.0
+        }
+    }
+
+    func unregisterDownload(from songs: [SubsonicSong]) {
+        let ids = Set(songs.map(\.id))
+        downloadingSongIDs.subtract(ids)
+        downloadingSongs.removeAll { ids.contains($0.id) }
+        for id in ids {
+            downloadProgress.removeValue(forKey: id)
+        }
+    }
+
+    func replaceDownloadedSongs(_ songs: [SubsonicSong]) {
+        downloadedSongs = songs
+    }
+
+    func prependDownloaded(_ song: SubsonicSong) {
+        if downloadedSongs.contains(where: { $0.id == song.id }) { return }
+        downloadedSongs.insert(song, at: 0)
+    }
 }
 
 enum TrackDownload {

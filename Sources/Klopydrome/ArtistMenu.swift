@@ -10,11 +10,11 @@ struct ArtistContextMenuItems: View {
     let artist: Artist
 
     var body: some View {
-        Button(app.isStarred(artist) ? "Убрать из избранного" : "В избранное") {
+        Button((app.isStarred(artist) ? "Убрать из избранного" : "В избранное").localized) {
             app.toggleStar(artist)
         }
         Divider()
-        Button("Поделиться…") {
+        Button("Поделиться…".localized) {
             app.presentShare(ShareTarget(entityID: artist.id, title: artist.name, kind: .artist))
         }
     }

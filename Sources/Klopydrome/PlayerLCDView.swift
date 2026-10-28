@@ -25,14 +25,6 @@ struct PlayerLCDView: View {
     @State private var hoverScrubber = false
     private var nowHovered: Bool { coverHovered || hoverText || hoverTrailing || hoverScrubber }
 
-    private var isTahoeOrLater: Bool {
-        if #available(macOS 26, *) {
-            true
-        } else {
-            false
-        }
-    }
-
     var body: some View {
         // body-hover breaks Tahoe principal (see bisect A/B). Keep only
         // contextMenu on the body; hover is tracked interiorly.
@@ -66,11 +58,8 @@ struct PlayerLCDView: View {
                             // tracking would shadow every zone beneath (seen as s1
                             // everywhere). Constrain to the real strip: heights must
                             // mirror MinimalScrubber.hitHeight (18 hovered / 12 idle).
-                            // onHover BEFORE padding: padding area must not track
-                            // (it leaked onto the cover zone 0–42).
                             .frame(maxWidth: .infinity, alignment: .bottom)
                             .frame(height: nowHovered ? 18 : 12)
-                            .onHover { hoverScrubber = $0 }
                             .padding(.leading, 42)
                             .padding(.trailing, 2)
                             .transition(.opacity)

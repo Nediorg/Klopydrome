@@ -75,8 +75,7 @@ extension AppState {
     func restoreCachedSongsIfNeeded() async {
         guard library.songs.isEmpty, let cache else { return }
         if let items: [SubsonicSong] = await readCachedArray(cache: cache, key: Self.songsMetadataKey) {
-            var seen = Set<String>()
-            library.songs = items.filter { seen.insert($0.id).inserted }
+            library.songs = items.uniqued()
             library.songsLoaded = true
         }
     }
@@ -140,8 +139,7 @@ extension AppState {
     /// Persists the cached songs list to disk for instant next-launch recovery.
     func persistSongsToDisk() async {
         guard let cache, !library.songs.isEmpty else { return }
-        var seen = Set<String>()
-        let unique = library.songs.filter { seen.insert($0.id).inserted }
+        let unique = library.songs.uniqued()
         await writeCached(cache: cache, key: Self.songsMetadataKey, value: unique)
     }
 

@@ -42,7 +42,7 @@ private struct MiniPlayerQueueView: View {
         Group {
             if app.player.queue.isEmpty {
                 ContentUnavailableView(
-                    "Очередь пуста.",
+                    "Очередь пуста.".localized,
                     systemImage: "text.line.first.and.arrowtriangle.forward"
                 )
             } else {

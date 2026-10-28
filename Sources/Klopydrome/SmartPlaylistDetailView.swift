@@ -31,19 +31,19 @@ struct SmartPlaylistDetailView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 ContentUnavailableView {
-                    Label("Не удалось загрузить", systemImage: "exclamationmark.triangle")
+                    Label("Не удалось загрузить".localized, systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Повторить") { Task { await load() } }
+                    Button("Повторить".localized) { Task { await load() } }
                 }
             case .loaded where songs.isEmpty:
                 ContentUnavailableView {
-                    Label("Нет совпадений", systemImage: "gearshape")
+                    Label("Нет совпадений".localized, systemImage: "gearshape")
                 } description: {
                     Text("Пока нет песен, подходящих под правила этого умного плейлиста.".localized)
                 } actions: {
-                    Button("Изменить правила") { app.openSmartPlaylistEditor(playlist: playlist) }
+                    Button("Изменить правила".localized) { app.openSmartPlaylistEditor(playlist: playlist) }
                 }
             case .loaded:
                 ScrollView {
@@ -63,6 +63,7 @@ struct SmartPlaylistDetailView: View {
                             )
                             .equatable()
                             .padding(.leading, -22)
+                            .padding(.trailing, 26)
                         }
                     }
                     .padding(.horizontal, 28)
@@ -72,9 +73,9 @@ struct SmartPlaylistDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await load() }
-        .confirmationDialog("Удалить умный плейлист?", isPresented: $confirmingDelete) {
-            Button("Удалить", role: .destructive) { delete() }
-            Button("Отмена", role: .cancel) {}
+        .confirmationDialog("Удалить умный плейлист?".localized, isPresented: $confirmingDelete) {
+            Button("Удалить".localized, role: .destructive) { delete() }
+            Button("Отмена".localized, role: .cancel) {}
         } message: {
             Text(L10n.format("format.smartPlaylist.delete.warning", playlist.name))
         }
@@ -160,7 +161,7 @@ struct SmartPlaylistDetailView: View {
             ActionPill(title: "Обновить", systemImage: "arrow.clockwise", filled: false) {
                 Task { await load() }
             }
-            .help("Пересчитать подходящие песни на сервере.")
+            .help("Пересчитать подходящие песни на сервере.".localized)
             Spacer()
             RoundEllipsisMenu {
                 SmartPlaylistContextMenuItems(playlist: playlist) {
@@ -171,7 +172,7 @@ struct SmartPlaylistDetailView: View {
                     confirmingDelete = true
                 }
             }
-            .help("Действия над плейлистом")
+            .help("Действия над плейлистом".localized)
         }
     }
 

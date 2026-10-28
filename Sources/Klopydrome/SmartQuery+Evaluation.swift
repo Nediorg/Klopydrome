@@ -70,7 +70,7 @@ extension QueryOperator {
         switch self {
         case .contains, .notContains: return containsText(actual, expected)
         case .startsWith, .endsWith: return affixText(actual, expected)
-        case .is_, .isNot: return equalValue(actual, expected)
+        case .is, .isNot: return equalValue(actual, expected)
         case .gt, .gte, .lt, .lte: return orderedNumeric(actual, expected)
         case .inTheRange: return inNumericRange(actual, expected)
         case .before, .after: return orderedDay(actual, expected)
@@ -97,7 +97,7 @@ extension QueryOperator {
 
     private func equalValue(_ actual: QueryValue, _ expected: QueryValue?) -> Bool {
         let hit = actual == expected
-        return self == .is_ ? hit : !hit
+        return self == .is ? hit : !hit
     }
 
     private func orderedNumeric(_ actual: QueryValue, _ expected: QueryValue?) -> Bool {

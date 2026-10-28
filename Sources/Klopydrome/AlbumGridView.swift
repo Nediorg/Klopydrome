@@ -97,7 +97,7 @@ struct AlbumGridView: View {
     var body: some View {
         VStack(spacing: 0) {
             LibraryHeader(title: config.title, searchText: $searchText) {
-                Picker("Показать", selection: $favoritesOnly) {
+                Picker("Показать".localized, selection: $favoritesOnly) {
                     Text("Все альбомы".localized).tag(false)
                     Text("Только избранное".localized).tag(true)
                 }
@@ -105,8 +105,8 @@ struct AlbumGridView: View {
 
                 Divider()
 
-                Picker("Сортировка", selection: $sort) {
-                    ForEach(LibrarySort.allCases) { option in
+                Picker("Сортировка".localized, selection: $sort) {
+                    ForEach(AlbumSort.allCases) { option in
                         Text(option.label.localized).tag(option)
                     }
                 }
@@ -119,7 +119,7 @@ struct AlbumGridView: View {
 
             Group {
                 if let loadError {
-                    LibraryUnavailableView(title: "Не удалось загрузить",
+                    LibraryUnavailableView(title: "Не удалось загрузить".localized,
                                            systemImage: "wifi.exclamationmark",
                                            message: loadError,
                                            retry: { Task { await refresh() } })
@@ -127,7 +127,7 @@ struct AlbumGridView: View {
                 } else if loading && albums.isEmpty {
                     initialLoadingGrid
                 } else if albums.isEmpty {
-                    LibraryUnavailableView(title: "Нет альбомов",
+                    LibraryUnavailableView(title: "Нет альбомов".localized,
                                            systemImage: config.emptySystemImage,
                                            message: config.emptyMessage)
                         .emptyStatePinnedToTop()
@@ -135,7 +135,7 @@ struct AlbumGridView: View {
                     if reprocessing || (!app.library[keyPath: config.loaded] && loading) {
                         initialLoadingGrid
                     } else {
-                        ContentUnavailableView("Ничего не найдено",
+                        ContentUnavailableView("Ничего не найдено".localized,
                                                systemImage: "magnifyingglass",
                                                // swiftlint:disable:next line_length
                                                 description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))
@@ -386,7 +386,7 @@ private extension AlbumGridView {
             }
             .scrollClipDisabled()
         }
-        .accessibilityLabel("Загрузка альбомов")
+        .accessibilityLabel("Загрузка альбомов".localized)
     }
 
     nonisolated static func compute(
@@ -414,7 +414,7 @@ private extension AlbumGridView {
                 default: return true
                 }
             }()
-            return sortedAlbums(list, by: sort.asArtistAlbumSort, descending: descending)
+            return sortedAlbums(list, by: sort, descending: descending)
         }
         return list
     }

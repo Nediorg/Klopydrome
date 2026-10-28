@@ -67,7 +67,7 @@ struct LyricsView: View {
     var body: some View {
         Group {
             if app.lyrics.isLoading && app.lyrics.syncedLines.isEmpty && app.lyrics.plainText == nil {
-                ProgressView("Загрузка текста…")
+                ProgressView("Загрузка текста…".localized)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !app.lyrics.syncedLines.isEmpty {
                 syncedLyrics

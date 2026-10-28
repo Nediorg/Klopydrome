@@ -87,15 +87,15 @@ extension SmartPlaylistEditorView {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 ContentUnavailableView {
-                    Label("Не удалось загрузить", systemImage: "exclamationmark.triangle")
+                    Label("Не удалось загрузить".localized, systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Повторить") { preview() }
+                    Button("Повторить".localized) { preview() }
                 }
             case .loaded(let songs) where songs.isEmpty:
                 ContentUnavailableView {
-                    Label("Нет совпадений", systemImage: "music.note.list")
+                    Label("Нет совпадений".localized, systemImage: "music.note.list")
                 } description: {
                     Text("Ни одна песня не подходит под текущие правила.".localized)
                 }

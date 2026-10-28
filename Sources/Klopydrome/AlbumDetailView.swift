@@ -33,6 +33,7 @@ struct AlbumDetailView: View {
                 if songs.isEmpty && loading {
                     skeletonRows
                         .padding(.leading, -22)
+                        .padding(.trailing, 26)
                 } else if songs.isEmpty, let loadError {
                     emptyErrorState(loadError)
                 } else {
@@ -287,6 +288,7 @@ private struct AlbumTrackListSection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, -22)
+            .padding(.trailing, 26)
 
             VStack(alignment: .leading, spacing: 2) {
                 let total = songs.reduce(0) { $0 + ($1.duration ?? 0) }

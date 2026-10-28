@@ -24,7 +24,7 @@ struct PlaylistsView: View {
                 initialLoadingGrid
             } else if playlists.isEmpty && app.smartPlaylists.isEmpty {
                 ContentUnavailableView {
-                    Label("Нет плейлистов", systemImage: "music.note.list")
+                    Label("Нет плейлистов".localized, systemImage: "music.note.list")
                 } description: {
                     Text("Создайте плейлист, чтобы увидеть его здесь.".localized)
                 } actions: {
@@ -87,41 +87,41 @@ struct PlaylistsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: app.isConnected) { await loadIfNeeded() }
         .confirmationDialog(
-            "Удалить плейлист?",
+            "Удалить плейлист?".localized,
             isPresented: Binding(
                 get: { confirmingDeleteID != nil },
                 set: { if !$0 { confirmingDeleteID = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) {
+            Button("Удалить".localized, role: .destructive) {
                 if let id = confirmingDeleteID, let playlist = playlists.first(where: { $0.id == id }) {
                     delete(playlist)
                 }
                 confirmingDeleteID = nil
             }
-            Button("Отмена", role: .cancel) { confirmingDeleteID = nil }
+            Button("Отмена".localized, role: .cancel) { confirmingDeleteID = nil }
         }
-        .alert("Переименовать умный плейлист", isPresented: $smartRenamePresented) {
-            TextField("Название плейлиста", text: $smartRenameName)
-            Button("Переименовать") { smartRename(smartRenameID, smartRenameName) }
-            Button("Отмена", role: .cancel) {}
+        .alert("Переименовать умный плейлист".localized, isPresented: $smartRenamePresented) {
+            TextField("Название плейлиста".localized, text: $smartRenameName)
+            Button("Переименовать".localized) { smartRename(smartRenameID, smartRenameName) }
+            Button("Отмена".localized, role: .cancel) {}
         }
         .confirmationDialog(
-            "Удалить умный плейлист?",
+            "Удалить умный плейлист?".localized,
             isPresented: Binding(
                 get: { confirmingDeleteSmart != nil },
                 set: { if !$0 { confirmingDeleteSmart = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) {
+            Button("Удалить".localized, role: .destructive) {
                 if let smart = confirmingDeleteSmart {
                     app.deleteSmartPlaylist(id: smart.id)
                 }
                 confirmingDeleteSmart = nil
             }
-            Button("Отмена", role: .cancel) { confirmingDeleteSmart = nil }
+            Button("Отмена".localized, role: .cancel) { confirmingDeleteSmart = nil }
         }
     }
 
@@ -143,7 +143,7 @@ struct PlaylistsView: View {
             .padding(.vertical, 24)
         }
         .scrollClipDisabled()
-        .accessibilityLabel("Загрузка плейлистов")
+        .accessibilityLabel("Загрузка плейлистов".localized)
     }
 
     private var smartSection: some View {

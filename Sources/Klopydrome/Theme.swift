@@ -15,26 +15,21 @@ enum AMColor {
     static let surfaceLight = adaptive(light: 0xEBEBEF, dark: 0x3A3A3C)
     /// Slider tracks
     static let trackFill = adaptive(light: 0xD1D1D6, dark: 0x4A4A4C)
-    /// Hairline dividers. Spec dark #38383A @ ~40% opacity (HIG_COMPLIANCE §1.1).
+    /// Hairline dividers.
     static let divider = adaptive(light: 0xE2E2E6, dark: 0x38383A, alpha: 0.4)
-    /// Primary accent — the system accent color (System Settings → Appearance →
-    /// Accent color / Highlight color, Multicolor on Tahoe). Previously a
-    /// custom Apple Music red wired via `AccentColor` in the asset catalog +
-    /// `NSAccentColorName` / `ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME`;
-    /// the custom asset has been removed so every tint, sidebar selection and
-    /// highlighted icon follows the OS choice automatically.
+    /// Primary accent — the system accent color.
     static let accent = Color.accentColor
-    /// Secondary text. Spec dark #98989D (HIG_COMPLIANCE §1.1).
+    /// Secondary text.
     static let secondaryText = adaptive(light: 0x6C6C70, dark: 0x98989D)
-    /// Tertiary text. Spec dark #6E6E73 — note: darker than secondary (HIG §1.1).
+    /// Tertiary text.
     static let tertiaryText = adaptive(light: 0x8E8E93, dark: 0x6E6E73)
-    /// Primary text (titles, names). Spec dark #F5F5F7 (HIG §1.1).
+    /// Primary text (titles, names).
     static let primaryText = adaptive(light: 0x1C1C1E, dark: 0xF5F5F7)
-    /// Tertiary hover surface for round icon buttons. Spec dark #48484A (HIG §1.3).
+    /// Tertiary hover surface for round icon buttons.
     static let surfaceTertiaryHover = adaptive(light: 0xD1D1D6, dark: 0x48484A)
-    /// iTunes Store accent (violet). Spec #AF52DE (HIG §1.1, §3.2).
+    /// iTunes Store accent (violet).
     static let storeAccent = Color(red: 175/255, green: 82/255, blue: 222/255)
-    /// Sidebar background base (under vibrancy). Spec dark #202022 (HIG §1.1, §3.4).
+    /// Sidebar background base (under vibrancy).
     static let sidebarBackground = adaptive(light: 0xF5F5F7, dark: 0x202022)
     /// Promo banner red
     static let promo = adaptive(light: 0xE0364E, dark: 0xE8364E)
@@ -61,9 +56,8 @@ enum AMColor {
     }
 }
 
-/// Semantic text styles mirroring the Apple Music type scale (§1.2 of
-/// HIG_COMPLIANCE.md). Prefer these over fixed `.system(size:)` literals so the
-/// UI honours Dynamic Type.
+/// Semantic text styles mirroring the Apple Music type scale. Prefer these
+/// over fixed `.system(size:)` literals so the UI honours Dynamic Type.
 enum AMFont {
     static let largeTitle = Font.largeTitle.weight(.bold)
     static let title2 = Font.title2.weight(.regular)
@@ -74,50 +68,23 @@ enum AMFont {
     static let footnote = Font.footnote
 }
 
-/// Fixed layout metrics shared across the window regions so the sidebar and
-/// inspector column stay consistent at any window size.
+/// Fixed layout metrics shared across the window regions.
 enum LayoutMetrics {
-    /// Minimum width of the now-playing block (downloads icon + LCD) in the
-    /// player bar. Guarantees that track title, artist, and trailing controls
-    /// have ample room without aggressive truncation.
     static let playerBarMinWidth: CGFloat = 320
-    /// Desired width for the LCD block as a fraction of the header width.
     static let playerBarMaxFraction: CGFloat = 0.32
-    /// Hard ceiling for the LCD block width so it never grows unbounded on very
-    /// wide windows even though the fraction would allow more.
     static let playerBarMaxWidth: CGFloat = 420
-    /// The toolbar's total minimum budget: leading (208) + LCD (320) +
-    /// trailing (199) + margins (24) ≈ 750.
     static let toolbarMinWidth: CGFloat = 750
-    /// Reserved width for the star + ellipsis trailing controls embedded in the
-    /// LCD, so song/album text truncates before them rather than being overlaid.
     static let topTrailingSlotWidth: CGFloat = 48
-    /// Minimum width of the leading toolbar group (back + transport row ≈ 208).
     static let toolbarLeadingMinWidth: CGFloat = 208
-    /// Minimum width of the trailing toolbar group (volume slider + lyrics/
-    /// queue buttons ≈ 199).
     static let toolbarTrailingMinWidth: CGFloat = 199
-    /// Vertical padding under the traffic lights that the sidebar needs to
-    /// keep the first row from sitting under them.
     static let trafficLightInset: CGFloat = 28
-    /// Minimum width of the sidebar column (see `SidebarView`).
     static let sidebarMinWidth: CGFloat = 200
-    /// Ideal resting width of the sidebar column.
     static let sidebarIdealWidth: CGFloat = 220
-    /// Maximum width of the sidebar column (see `SidebarView`).
     static let sidebarMaxWidth: CGFloat = 300
-    /// Minimum width of the DETAIL column. Accommodates leading controls (208)
-    /// + centered LCD (320) + trailing controls (199) + spacers (24) = 751.
     static let detailColumnMinWidth: CGFloat = 750
-    /// Inspector column sizing.
     static let inspectorMinWidth: CGFloat = 320
     static let inspectorIdealWidth: CGFloat = 360
-    /// Narrowest usable window width: guarantees detail column never shrinks
-    /// below 750 even with standard sidebar.
     static let windowMinWidth: CGFloat = 1000
-    /// The mini-player window has no window-toolbar items, so its minimum is
-    /// only the content (artwork + inspector column + padding), independent of
-    /// `windowMinWidth`'s toolbar math.
     static let miniPlayerMinWidth: CGFloat = 800
 }
 

@@ -53,7 +53,7 @@ struct AddToPlaylistMenu: View {
             Button {
                 Task { await newPlaylist() }
             } label: {
-                Label("Новый плейлист", systemImage: "plus.circle")
+                Label("Новый плейлист".localized, systemImage: "plus.circle")
             }
 
             if !recent.isEmpty {
@@ -78,7 +78,7 @@ struct AddToPlaylistMenu: View {
                 }
             }
         } label: {
-            Label("Добавить в плейлист", systemImage: "text.badge.plus")
+            Label("Добавить в плейлист".localized, systemImage: "text.badge.plus")
         }
     }
 

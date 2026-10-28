@@ -369,8 +369,8 @@
 "Недавние" = "Recent";
 "Недавно добавленные" = "Recently Added";
 "Неизвестный исполнитель" = "Unknown Artist";
-"Некорректный JSON — правила не изменены." = "Invalid JSON — rules were not changed.";
-"Некорректный JSON — сохранение отменено." = "Invalid JSON — save canceled.";
+"Некорректный JSON. Правила не изменены." = "Invalid JSON. Rules not changed.";
+"Некорректный JSON. Сохранение отменено." = "Invalid JSON. Save canceled.";
 "нет" = "no";
 "Нет альбомов" = "No Albums";
 "Нет артистов" = "No Artists";
@@ -486,7 +486,7 @@
 "По убыванию ID" = "By ID (descending)";
 "Поведение" = "Behavior";
 "Повтор" = "Repeat";
-"Повторить" = "Repeat";
+"Повторить" = "Retry";
 "Поделиться" = "Share";
 "Поделиться…" = "Share…";
 "Подзаголовок диска" = "Disc subtitle";
@@ -621,7 +621,7 @@
 "Срок действия" = "Validity period";
 "Ссылка" = "Link";
 "Статус" = "Status";
-"Текст" = "Text";
+"Текст" = "Lyrics";
 "Текст песни" = "Lyrics";
 "Текст песни не найден." = "Lyrics not found.";
 "Текущее состояние соединения с Discord. Если активности нет, " = "Current Discord connection status. If there is no activity, ";

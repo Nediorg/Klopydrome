@@ -32,26 +32,26 @@ struct AppCommandMenus: Commands {
     /// Every toolbar transport control must also exist as a menu command.
     @CommandsBuilder
     private var playbackMenu: some Commands {
-        CommandMenu("Воспроизведение") {
-            Button(app.player.isPlaying ? "Пауза" : "Слушать") {
+        CommandMenu("Воспроизведение".localized) {
+            Button((app.player.isPlaying ? "Пауза" : "Слушать").localized) {
                 app.player.togglePlayPause()
             }
             .disabled(!app.player.hasQueue)
 
-            Button("Остановить") {
+            Button("Остановить".localized) {
                 app.player.stop()
             }
             .disabled(!app.player.hasQueue)
 
             Divider()
 
-            Button("Следующий трек") {
+            Button("Следующий трек".localized) {
                 app.player.next()
             }
             .keyboardShortcut(.rightArrow, modifiers: .command)
             .disabled(!app.player.hasQueue)
 
-            Button("Предыдущий трек") {
+            Button("Предыдущий трек".localized) {
                 app.player.previous()
             }
             .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -59,12 +59,12 @@ struct AppCommandMenus: Commands {
 
             Divider()
 
-            Button("Увеличить громкость") {
+            Button("Увеличить громкость".localized) {
                 app.player.adjustVolume(by: 0.05)
             }
             .keyboardShortcut(.upArrow, modifiers: .command)
 
-            Button("Уменьшить громкость") {
+            Button("Уменьшить громкость".localized) {
                 app.player.adjustVolume(by: -0.05)
             }
             .keyboardShortcut(.downArrow, modifiers: .command)
@@ -73,8 +73,8 @@ struct AppCommandMenus: Commands {
 
     @CommandsBuilder
     private var controlsMenu: some Commands {
-        CommandMenu("Управление") {
-            Menu("Повтор") {
+        CommandMenu("Управление".localized) {
+            Menu("Повтор".localized) {
                 repeatMenuItem("Выключить", mode: .off)
                 repeatMenuItem("Все", mode: .all)
                 repeatMenuItem("Одну песню", mode: .one)
@@ -82,7 +82,7 @@ struct AppCommandMenus: Commands {
 
             Divider()
 
-            Menu("Перемешивание") {
+            Menu("Перемешивание".localized) {
                 Button {
                     app.player.setShuffleEnabled(true)
                 } label: {
@@ -169,9 +169,9 @@ struct AppCommandMenus: Commands {
             app.togglePlayerPanel(tab)
         } label: {
             if app.visiblePlayerPanel == tab {
-                Label(title, systemImage: "checkmark")
+                Label(title.localized, systemImage: "checkmark")
             } else {
-                Text(title)
+                Text(title.localized)
             }
         }
         .keyboardShortcut(shortcut, modifiers: [.command, .option])
@@ -193,9 +193,9 @@ struct AppCommandMenus: Commands {
     @ViewBuilder
     private func shuffleMenuLabel(_ title: String, selected: Bool) -> some View {
         if selected {
-            Label(title, systemImage: "checkmark")
+            Label(title.localized, systemImage: "checkmark")
         } else {
-            Text(title)
+            Text(title.localized)
         }
     }
 

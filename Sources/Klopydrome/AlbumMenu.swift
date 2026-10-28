@@ -2,20 +2,17 @@ import SwiftUI
 import NavidromeClient
 
 extension AppState {
-    /// Fetches an album's tracks.
     func albumsSongs(_ album: SubsonicAlbum) async -> [SubsonicSong] {
         guard let client else { return [] }
         return (try? await client.getAlbum(id: album.id))?.song ?? []
     }
 
-    /// Shuffles an album's tracks, loading them first.
     func playShuffled(_ album: SubsonicAlbum) async {
         let songs = await albumsSongs(album)
         guard !songs.isEmpty else { return }
         playShuffled(songs)
     }
 
-    /// Queues an album's tracks at the end of the queue ("В конец очереди").
     func playLater(_ album: SubsonicAlbum) async {
         let songs = await albumsSongs(album)
         guard !songs.isEmpty else { return }
@@ -26,7 +23,6 @@ extension AppState {
         player.queue.append(contentsOf: songs)
     }
 
-    /// Adds every track of an album to a playlist.
     func addAlbum(_ album: SubsonicAlbum, to playlistID: String) async {
         let songs = await albumsSongs(album)
         guard !songs.isEmpty else { return }
@@ -61,16 +57,16 @@ struct AlbumContextMenuItems: View {
         Button(L10n.format("format.album.shuffle", album.displayName)) {
             Task { await app.playShuffled(album) }
         }
-        Button("Слушать следующей") {
+        Button("Слушать следующей".localized) {
             app.playNext(album)
         }
-        Button("В конец очереди") {
+        Button("В конец очереди".localized) {
             Task { await app.playLater(album) }
         }
 
         Divider()
         AddToPlaylistMenu(songs: [], fetchSongs: albumSongs)
-        Button(isStarred ? "Убрать из избранного" : "В избранное") {
+        Button((isStarred ? "Убрать из избранного" : "В избранное").localized) {
             app.toggleStar(album)
         }
         if app.isAlbumDownloading(album.id) {
@@ -85,7 +81,7 @@ struct AlbumContextMenuItems: View {
         }
 
         Divider()
-        Button("Поделиться…") {
+        Button("Поделиться…".localized) {
             app.presentShare(ShareTarget(entityID: album.id, title: album.displayName, kind: .album))
         }
     }

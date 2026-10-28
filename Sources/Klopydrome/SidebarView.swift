@@ -142,21 +142,21 @@ struct SidebarView: View {
         .frame(minWidth: LayoutMetrics.sidebarMinWidth, alignment: .leading)
         .clipped()
         .confirmationDialog(
-            "Удалить плейлист?",
+            "Удалить плейлист?".localized,
             isPresented: Binding(
                 get: { confirmingDeleteID != nil },
                 set: { if !$0 { confirmingDeleteID = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) {
+            Button("Удалить".localized, role: .destructive) {
                 if let id = confirmingDeleteID,
                    let playlist = playlists.first(where: { $0.id == id }) {
                     Task { await app.deletePlaylist(playlist) }
                 }
                 confirmingDeleteID = nil
             }
-            Button("Отмена", role: .cancel) { confirmingDeleteID = nil }
+            Button("Отмена".localized, role: .cancel) { confirmingDeleteID = nil }
         }
         .searchable(text: Bindable(app).nav.searchQuery, placement: .sidebar, prompt: Text("Search".localized))
         .submitLabel(.search)
@@ -197,12 +197,12 @@ struct SidebarView: View {
             Button {
                 app.openCreatePlaylist()
             } label: {
-                Label("Новый плейлист", systemImage: "plus")
+                Label("Новый плейлист".localized, systemImage: "plus")
             }
             Button {
                 app.openSmartPlaylistEditor()
             } label: {
-                Label("Новый умный плейлист", systemImage: "gearshape")
+                Label("Новый умный плейлист".localized, systemImage: "gearshape")
             }
         }
     }
@@ -294,7 +294,7 @@ struct SidebarView: View {
             Image(systemName: icon)
                 .foregroundStyle(isSelected ? .white : Color(nsColor: .darkGray))
                 .frame(width: 16, height: 16)
-            Text(text)
+            Text(text.localized)
         }
     }
 

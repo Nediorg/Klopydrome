@@ -88,8 +88,7 @@ final class Player {
 
     /// The shared playback engine, lazily initialized on demand when
     /// the user chooses AVPlayer or MPV falls back to it.
-    @ObservationIgnored nonisolated(unsafe) var underlyingAVPlayer: AVPlayer?
-    var avPlayer: AVPlayer? { underlyingAVPlayer }
+    @ObservationIgnored nonisolated(unsafe) var avPlayer: AVPlayer?
     /// Active playback engine. MPV by default (every format, sample-accurate
     /// HTTP seeks — libmpv reads the seektable and range-requests the exact
     /// byte offset); AVPlayer when the user opts out in Settings.
@@ -192,7 +191,7 @@ final class Player {
     }
 
     deinit {
-        if let token = timeObserverToken, let avPlayer = underlyingAVPlayer {
+        if let token = timeObserverToken, let avPlayer = self.avPlayer {
             avPlayer.removeTimeObserver(token)
         }
         if let observer = endObserver {

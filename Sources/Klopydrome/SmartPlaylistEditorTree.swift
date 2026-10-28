@@ -137,8 +137,8 @@ struct GroupRecursiveView: View {
         .padding(.leading, depth > 0 ? 22 : 0)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Дублировать группу") { duplicateSelf() }
-            Button("Удалить группу", role: .destructive) {
+            Button("Дублировать группу".localized) { duplicateSelf() }
+            Button("Удалить группу".localized, role: .destructive) {
                 withAnimation(Motion.spring(Motion.expand)) { model.remove(group.id) }
             }
         }
@@ -167,15 +167,15 @@ struct GroupRecursiveView: View {
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
                 .draggable(QueryDrag(nodeID: group.id, isGroup: true))
-                .help("Переместить группу")
-                .accessibilityLabel("Переместить группу")
+                .help("Переместить группу".localized)
+                .accessibilityLabel("Переместить группу".localized)
 
             HStack(spacing: 6) {
                 Image(systemName: "square.3.layers.3d.down.right").foregroundStyle(.secondary)
                 Text("Группа".localized).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             .fixedSize()
-            Picker("Логика", selection: logicBinding) {
+            Picker("Логика".localized, selection: logicBinding) {
                 ForEach(QueryGroupLogic.allCases, id: \.self) { logic in
                     Text(logic.label.localized).tag(logic)
                 }
@@ -194,8 +194,8 @@ struct GroupRecursiveView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Удалить группу")
-                .accessibilityLabel("Удалить группу")
+                .help("Удалить группу".localized)
+                .accessibilityLabel("Удалить группу".localized)
             }
         }
     }
@@ -204,9 +204,9 @@ struct GroupRecursiveView: View {
     /// so the eye doesn't have to jump from the header to the append point.
     private var addRow: some View {
         HStack(spacing: 10) {
-            addAction(Label("Правило", systemImage: "plus"), help: "Добавить правило") { addRule() }
-            addAction(Label("Группа", systemImage: "plus.square.stack"),
-                      help: "Добавить вложенную группу") { addGroup() }
+            addAction(Label("Правило".localized, systemImage: "plus"), help: "Добавить правило".localized) { addRule() }
+            addAction(Label("Группа".localized, systemImage: "plus.square.stack"),
+                      help: "Добавить вложенную группу".localized) { addGroup() }
             Spacer()
         }
         .padding(.top, 2)

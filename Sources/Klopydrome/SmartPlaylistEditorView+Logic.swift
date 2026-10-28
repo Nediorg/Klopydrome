@@ -60,10 +60,10 @@ extension SmartPlaylistEditorView {
             // Legacy single-field playlist → synthesize an equivalent rule tree.
             var rules: [QueryNode] = []
             if let genre = playlist.trimmedGenre {
-                rules.append(QueryNode(.rule(QueryRule(field: .genre, op: .is_, value: .init(text: genre)))))
+                rules.append(QueryNode(.rule(QueryRule(field: .genre, op: .is, value: .init(text: genre)))))
             }
             if playlist.starredOnly {
-                rules.append(QueryNode(.rule(QueryRule(field: .loved, op: .is_, value: .init(number: 1)))))
+                rules.append(QueryNode(.rule(QueryRule(field: .loved, op: .is, value: .init(number: 1)))))
             }
             if let minPlayCount = playlist.minPlayCount {
                 let count = Double(minPlayCount)
@@ -171,7 +171,7 @@ extension SmartPlaylistEditorView {
         // document is equivalent, even if its text was reformatted manually.
         guard let data = jsonText.data(using: .utf8),
               let parser = try? JSONDecoder().decode(SmartQuery.self, from: data) else {
-            jsonError = "Некорректный JSON — правила не изменены."
+            jsonError = "Некорректный JSON. Правила не изменены.".localized
             return
         }
         guard parser != visualQuery() else {
@@ -213,7 +213,7 @@ extension SmartPlaylistEditorView {
         if mode == .json {
             guard let data = jsonText.data(using: .utf8),
                   let parser = try? JSONDecoder().decode(SmartQuery.self, from: data) else {
-                jsonError = "Некорректный JSON — сохранение отменено."
+                jsonError = "Некорректный JSON. Сохранение отменено.".localized
                 return
             }
             query = parser
@@ -239,7 +239,7 @@ extension SmartPlaylistEditorView {
     /// Save and replace: PUT the edited rules back to the server playlist.
     func saveServer(_ target: ServerSmartPlaylist) {
         guard let query = buildQueryOrReturnToJSON() else {
-            jsonError = "Некорректный JSON — сохранение отменено."
+            jsonError = "Некорректный JSON. Сохранение отменено.".localized
             return
         }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -265,7 +265,7 @@ extension SmartPlaylistEditorView {
         saveAsPresented = false
         let query = buildQueryOrReturnToJSON()
         guard let query else {
-            jsonError = "Некорректный JSON — сохранение отменено."
+            jsonError = "Некорректный JSON. Сохранение отменено.".localized
             return
         }
         name = trimmed

@@ -24,12 +24,12 @@ struct PlaylistContextMenuItems: View {
     private var followed: Bool { app.isFollowed(playlist) }
 
     var body: some View {
-        Button("Изменить…") {
+        Button("Изменить…".localized) {
             guard app.confirmOfflineAction() else { return }
             onRename()
         }
         if playlist.isSmart {
-            Button("Редактировать правила…") {
+            Button("Редактировать правила…".localized) {
                 guard app.confirmOfflineAction() else { return }
                 onEditRules()
             }
@@ -43,19 +43,19 @@ struct PlaylistContextMenuItems: View {
             Button(L10n.format("format.playlist.shuffle", playlist.displayName)) {
                 Task { await app.playShuffled(playlist) }
             }
-            Button("Слушать следующей") {
+            Button("Слушать следующей".localized) {
                 Task { await app.playNext(playlist) }
             }
-            Button("В конец очереди") {
+            Button("В конец очереди".localized) {
                 Task { await app.playLater(playlist) }
             }
         }
 
         Divider()
-        Button(followed ? "Убрать из избранного" : "Добавить в избранное") {
+        Button((followed ? "Убрать из избранного" : "Добавить в избранное").localized) {
             app.toggleFollow(playlist)
         }
-        Button(playlist.isPublic == true ? "Сделать закрытым" : "Сделать открытым") {
+        Button((playlist.isPublic == true ? "Сделать закрытым" : "Сделать открытым").localized) {
             guard app.confirmOfflineAction() else { return }
             Task { await app.togglePlaylistVisibility(playlist) }
         }
@@ -72,15 +72,15 @@ struct PlaylistContextMenuItems: View {
             .disabled(app.isOfflineSession)
         }
         Divider()
-        Button("Дублировать") {
+        Button("Дублировать".localized) {
             guard app.confirmOfflineAction() else { return }
             Task { await app.duplicatePlaylist(playlist) }
         }
-        Button("Поделиться…") {
+        Button("Поделиться…".localized) {
             app.presentShare(ShareTarget(entityID: playlist.id, title: playlist.displayName, kind: .playlist))
         }
         Divider()
-        Button("Удалить из медиатеки", role: .destructive) {
+        Button("Удалить из медиатеки".localized, role: .destructive) {
             guard app.confirmOfflineAction() else { return }
             onDelete()
         }

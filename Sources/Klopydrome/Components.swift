@@ -172,7 +172,7 @@ struct PlaybackSlider: View {
             .contentShape(Rectangle())
             .gesture(drag(width: width))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Позиция воспроизведения")
+            .accessibilityLabel("Позиция воспроизведения".localized)
             .accessibilityValue(app.player.formattedCurrentTime())
             .accessibilityAdjustableAction { direction in
                 let step = direction == .increment ? 10.0 : -10.0
@@ -260,7 +260,7 @@ struct RatingStars: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Рейтинг")
+        .accessibilityLabel("Рейтинг".localized)
         .accessibilityValue(L10n.format("format.rating.outOfFive", rating))
         .contentShape(Rectangle())
 
@@ -274,69 +274,11 @@ struct RatingStars: View {
     }
 }
 
-/// A song row styled like the Music app's track list. The currently playing row
-/// gets a solid red background with white text (Apple Music behaviour).
-
-/// Sort criteria for album grids — unified with the artist page (10 topics).
-/// Server-driven cases keep pagination globally sorted; local cases sort the
-/// already-fetched pages client-side (used for Songs and for album sorts
-/// without a server `AlbumListType`).
-enum LibrarySort: String, CaseIterable, Hashable, Identifiable {
-    case release, name, popularity, recentlyAdded, artist, duration, playCount, genre, favorite, id
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .release: return "По дате релиза"
-        case .name: return "По названию"
-        case .popularity: return "По популярности"
-        case .recentlyAdded: return "По дате добавления"
-        case .artist: return "По исполнителю"
-        case .duration: return "По длительности"
-        case .playCount: return "По прослушиваниям"
-        case .genre: return "По жанру"
-        case .favorite: return "По избранным"
-        case .id: return "По ID"
-        }
-    }
-
-    /// Server type for globally sorted pagination, or `nil` when the sort
-    /// must be applied locally (e.g. duration, genre, ID).
-    var asAlbumListType: AlbumListType? {
-        switch self {
-        case .name: return .alphabeticalByName
-        case .artist: return .alphabeticalByArtist
-        case .recentlyAdded: return .newest
-        case .popularity, .playCount: return .frequent
-        case .favorite: return .starred
-        case .release, .duration, .genre, .id: return nil
-        }
-    }
-
-    /// Maps to the artist-page `ArtistAlbumSort` for the shared local sorter.
-    var asArtistAlbumSort: ArtistAlbumSort {
-        switch self {
-        case .release: return .release
-        case .name: return .name
-        case .popularity: return .popularity
-        case .recentlyAdded: return .recentlyAdded
-        case .artist: return .artist
-        case .duration: return .duration
-        case .playCount: return .playCount
-        case .genre: return .genre
-        case .favorite: return .favorite
-        case .id: return .id
-        }
-    }
-}
-
-/// Library section header: centered title, a donut menu (caller-provided
-/// filter options) and a filter button that expands into an inline search
-/// field on the same row. Shared by the album grids and the Songs table.
+/// Ellipsis action button triggering the song context menu.
 struct SongEllipsisMenu: View {
     let song: SubsonicSong
     var foregroundStyle: Color = .secondary
     var app: AppState?
-    var extraMenuItems: (() -> AnyView)?
     var extraActions: [SongMenuExtraAction] = []
     var compact: Bool = false
     var side: CGFloat?
@@ -366,8 +308,6 @@ struct SongEllipsisMenu: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: (resolvedSide <= 16) ? 10 : (compact ? 12 : 14), weight: .semibold))
                 .foregroundStyle(foregroundStyle)
-                .frame(width: resolvedSide, height: resolvedSide)
-                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .frame(width: resolvedSide, height: resolvedSide)
@@ -445,14 +385,11 @@ struct RoundFavoriteButton: View {
             ZStack {
                 Circle()
                     .fill(hovering ? AMColor.surfaceTertiaryHover : AMColor.surfaceLight)
-                    .frame(width: size, height: size)
 
                 Image(systemName: isStarred ? "star.fill" : "star")
                     .font(.system(size: 14))
                     .foregroundStyle(isStarred ? AMColor.accent : Color.secondary)
             }
-            .frame(width: size, height: size)
-            .contentShape(Circle())
             .onHover { hovering = $0 }
         }
         .buttonStyle(.plain)

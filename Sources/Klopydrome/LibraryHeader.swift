@@ -38,7 +38,7 @@ struct LibraryHeader<MenuContent: View>: View {
     var body: some View {
         ZStack {
             if !title.isEmpty {
-                Text(title)
+                Text(title.localized)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     // Keep clear of the inline search field / menu cluster at the edges.

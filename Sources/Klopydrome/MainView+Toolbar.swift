@@ -142,8 +142,8 @@ struct PlayerHeaderBar: View {
                         .hoverFill()
                 }
                 .buttonStyle(.plain)
-                .help("Текст")
-                .accessibilityLabel("Текст")
+                .help("Текст".localized)
+                .accessibilityLabel("Текст".localized)
 
                 Button {
                     app.togglePlayerPanel(.queue)
@@ -155,8 +155,8 @@ struct PlayerHeaderBar: View {
                         .hoverFill()
                 }
                 .buttonStyle(.plain)
-                .help("Дальше")
-                .accessibilityLabel("Дальше")
+                .help("Дальше".localized)
+                .accessibilityLabel("Дальше".localized)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
@@ -178,8 +178,8 @@ struct PlayerHeaderBar: View {
         }
         .buttonStyle(.plain)
         .padding(.trailing, 2)
-        .help("Назад")
-        .accessibilityLabel("Назад")
+        .help("Назад".localized)
+        .accessibilityLabel("Назад".localized)
     }
 }
 
@@ -197,7 +197,7 @@ private struct ToolbarVolumeControl: View {
             }
             ToolbarVolumeSlider(value: $player.volume)
                 .frame(width: 75, height: 52)
-                .help("Громкость")
+                .help("Громкость".localized)
             VolumeEdgeButton(
                 systemImage: "speaker.wave.3.fill",
                 label: L10n.text("action.volume.maximum")

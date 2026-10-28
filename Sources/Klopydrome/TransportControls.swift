@@ -54,8 +54,8 @@ struct TransportControls: View {
             .buttonStyle(.plain)
             .disabled(!app.player.hasQueue)
             .onHover { shuffleHover = $0 }
-            .accessibilityLabel("Перемешать")
-            .help("Перемешать")
+            .accessibilityLabel("Перемешать".localized)
+            .help("Перемешать".localized)
 
             sideButton("backward.fill",
                         fontSize: 16,
@@ -80,8 +80,8 @@ struct TransportControls: View {
             .hoverFill(fill: Color.primary.opacity(0.12))
             .foregroundStyle(Color.primary)
             .animation(.snappy(duration: 0.14, extraBounce: 0), value: app.player.isPlaying)
-            .help("Играть/Пауза")
-            .accessibilityLabel(app.player.isPlaying ? "Pause" : "Play")
+            .help("Играть/Пауза".localized)
+            .accessibilityLabel((app.player.isPlaying ? "Пауза" : "Играть").localized)
 
             sideButton("forward.fill",
                         fontSize: 16,
@@ -109,8 +109,8 @@ struct TransportControls: View {
             .buttonStyle(.plain)
             .disabled(!app.player.hasQueue)
             .onHover { repeatHover = $0 }
-            .accessibilityLabel("Повтор")
-            .help("Повтор")
+            .accessibilityLabel("Повтор".localized)
+            .help("Повтор".localized)
         }
     }
 
@@ -153,8 +153,8 @@ struct TransportControls: View {
             .buttonStyle(.plain)
             .disabled(!app.player.hasQueue)
             .animation(.snappy(duration: 0.14, extraBounce: 0), value: app.player.isPlaying)
-            .help("Играть/Пауза")
-            .accessibilityLabel(app.player.isPlaying ? "Pause" : "Play")
+            .help("Играть/Пауза".localized)
+            .accessibilityLabel((app.player.isPlaying ? "Пауза" : "Играть").localized)
 
             sideButton("forward.fill",
                        fontSize: 18,
@@ -200,7 +200,7 @@ struct TransportControls: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled ?? !app.player.hasQueue)
-        .accessibilityLabel(help)
-        .help(help)
+        .accessibilityLabel(help.localized)
+        .help(help.localized)
     }
 }

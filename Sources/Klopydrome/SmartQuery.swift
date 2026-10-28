@@ -7,7 +7,8 @@ import NavidromeClient
 /// rule DSL used across the Subsonic ecosystem. `dsl` is the server
 /// operator name.
 enum QueryOperator: String, CaseIterable, Hashable {
-    case is_
+    // swiftlint:disable:next identifier_name
+    case `is` = "is"
     case isNot
     case contains
     case notContains
@@ -27,23 +28,11 @@ enum QueryOperator: String, CaseIterable, Hashable {
     case isMissing
     case isPresent
 
-    var dsl: String {
-        switch self {
-        case .is_: return "is"
-        case .isNot: return "isNot"
-        case .inTheRange: return "inTheRange"
-        case .inTheLast: return "inTheLast"
-        case .notInTheLast: return "notInTheLast"
-        case .notInPlaylist: return "notInPlaylist"
-        case .isMissing: return "isMissing"
-        case .isPresent: return "isPresent"
-        default: return rawValue
-        }
-    }
+    var dsl: String { rawValue }
 
     var label: String {
         switch self {
-        case .is_: return "равно"
+        case .is: return "равно"
         case .isNot: return "не равно"
         case .contains: return "содержит"
         case .notContains: return "не содержит"
@@ -84,11 +73,6 @@ enum QueryOperator: String, CaseIterable, Hashable {
     /// Whether the rule's expected value is a boolean flag (true/false).
     var expectsBoolean: Bool {
         self == .isMissing || self == .isPresent
-    }
-
-    fileprivate static func fromDSL(_ string: String) -> QueryOperator? {
-        if string == "is" { return .is_ }
-        return QueryOperator(rawValue: string)
     }
 }
 
@@ -312,13 +296,13 @@ struct QueryExpr: Codable, Equatable, Hashable {
         if let logic = QueryGroupLogic(rawValue: key.stringValue) {
             let arr = try c.decode([QueryExpr].self, forKey: key)
             self.init(group: logic, children: arr)
-        } else if let op = QueryOperator.fromDSL(key.stringValue) {
+        } else if let queryOperator = QueryOperator(rawValue: key.stringValue) {
             let sub = try c.nestedContainer(keyedBy: DynKey.self, forKey: key)
             guard let fieldKey = sub.allKeys.first else {
                 throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Empty rule"))
             }
             let val = try sub.decode(JSONValue.self, forKey: fieldKey)
-            self.init(rule: op, field: fieldKey.stringValue, value: val)
+            self.init(rule: queryOperator, field: fieldKey.stringValue, value: val)
         } else {
             throw DecodingError.dataCorrupted(
                 .init(codingPath: decoder.codingPath,

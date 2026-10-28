@@ -13,6 +13,7 @@ struct MainView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
+        @Bindable var app = app
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
         } detail: {
@@ -46,10 +47,7 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miniPlayerDidClose)) { _ in
             isMiniPlayerVisible = false
         }
-        .inWindowModal(isPresented: Binding(
-            get: { app.isCreatingPlaylist },
-            set: { app.isCreatingPlaylist = $0 }
-        )) {
+        .inWindowModal(isPresented: $app.isCreatingPlaylist) {
             CreatePlaylistModal(
                 songs: app.creatingPlaylistSongs,
                 existing: app.editingPlaylistTarget,
@@ -61,10 +59,7 @@ struct MainView: View {
                 }
             )
         }
-        .inWindowModal(item: Binding(
-            get: { app.editingSmartPlaylist },
-            set: { app.editingSmartPlaylist = $0 }
-        )) { target in
+        .inWindowModal(item: $app.editingSmartPlaylist) { target in
             SmartPlaylistEditorView(
                 playlist: target.playlist,
                 server: target.server,
@@ -73,16 +68,10 @@ struct MainView: View {
                 }
             )
         }
-        .sheet(item: Binding(
-            get: { app.shareTarget },
-            set: { app.shareTarget = $0 }
-        )) { target in
+        .sheet(item: $app.shareTarget) { target in
             ShareSheet(target: target)
         }
-        .inWindowModal(item: Binding(
-            get: { app.inspectingSong },
-            set: { app.inspectingSong = $0 }
-        )) { song in
+        .inWindowModal(item: $app.inspectingSong) { song in
             SongInfoSheet(
                 song: song,
                 onDismiss: {
@@ -273,7 +262,7 @@ struct MinimalScrubber: View {
                         )
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Позиция воспроизведения")
+                    .accessibilityLabel("Позиция воспроизведения".localized)
                     .accessibilityValue(app.player.formattedCurrentTime())
                     .accessibilityAdjustableAction { direction in
                         let step = direction == .increment ? 10.0 : -10.0

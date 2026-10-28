@@ -5,19 +5,16 @@ import NavidromeClient
 struct SongRow: View {
     let song: SubsonicSong
     var index: Int?
-    var showAlbum: Bool = true
-    var showsArtist: Bool = false
+    var showAlbum = true
+    var showsArtist = false
     /// When non-nil, overrides the environment-derived current-track check.
     /// Lets parents pass a snapshot and enables `Equatable` skipping when
     /// `AppState` ticks for unrelated reasons (progress, downloads).
     var isCurrentOverride: Bool?
-    /// Surface-specific prefix items for the row's context menu (e.g. «Убрать
-    /// из плейлиста»); the canonical `SongActionItems` always follow.
-    var extraMenuItems: (() -> AnyView)?
     var extraActions: [SongMenuExtraAction] = []
     var onPlay: ((Int) -> Void)?
     /// Whether this row is part of the current selection.
-    var isSelected: Bool = false
+    var isSelected = false
     /// Lazily resolves the full selection when the context menu opens.
     /// Avoids O(N×M) per render by deferring the work until actually needed.
     var resolveSelection: (() -> [SubsonicSong])?
@@ -79,7 +76,6 @@ struct SongRow: View {
                 ForEach(extraActions, id: \.title) { extra in
                     Button(extra.title) { extra.action() }
                 }
-                if let extraMenuItems { extraMenuItems() }
                 SongActionItems(
                     app: app,
                     song: song,

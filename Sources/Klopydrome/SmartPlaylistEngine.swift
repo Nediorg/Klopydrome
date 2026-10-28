@@ -114,8 +114,7 @@ final class CachedLibraryRepo: SongRepo {
             try Task.checkCancellation()
             let page = try await client.getSongsByGenre(genre: genre, count: genrePageSize, offset: offset)
             if page.isEmpty { break }
-            for song in page where !seen.contains(song.id) {
-                seen.insert(song.id)
+            for song in page where seen.insert(song.id).inserted {
                 songs.append(song)
             }
             if page.count < genrePageSize { break }
@@ -163,8 +162,7 @@ final class CachedLibraryRepo: SongRepo {
                 return collected
             }
 
-            for song in batchSongs where !seen.contains(song.id) {
-                seen.insert(song.id)
+            for song in batchSongs where seen.insert(song.id).inserted {
                 songs.append(song)
                 if songs.count >= maxSongs { break }
             }

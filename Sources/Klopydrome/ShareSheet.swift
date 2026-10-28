@@ -153,18 +153,18 @@ struct ShareSheet: View {
     private var formBody: some View {
         VStack(spacing: 12) {
             Form {
-                Picker("Срок действия", selection: $expiry) {
+                Picker("Срок действия".localized, selection: $expiry) {
                     ForEach(ExpiryChoice.allCases) { choice in
                         Text(choice.label.localized).tag(choice)
                     }
                 }
-                Toggle("Разрешить загрузку", isOn: $allowDownload)
+                Toggle("Разрешить загрузку".localized, isOn: $allowDownload)
                 descriptionField
             }
             .formStyle(.grouped)
 
             if expiry == .custom {
-                DatePicker("Истекает", selection: $customDate,
+                DatePicker("Истекает".localized, selection: $customDate,
                            displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.graphical)
                     .padding(8)
@@ -179,7 +179,7 @@ struct ShareSheet: View {
             }
 
             HStack {
-                Button("Отмена") { dismiss() }
+                Button("Отмена".localized) { dismiss() }
                 Button("Все ссылки…".localized) {
                     showingSharesManager = true
                 }
@@ -218,21 +218,21 @@ struct ShareSheet: View {
     private var resultBody: some View {
         VStack(spacing: 14) {
             if let url = generatedURL {
-                TextField("Ссылка", text: .constant(url))
+                TextField("Ссылка".localized, text: .constant(url))
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
                 HStack(spacing: 12) {
                     Button(action: { copy(url) },
                            label: {
-                        Label(copied ? "Скопировано" : "Копировать",
+                        Label((copied ? "Скопировано" : "Копировать").localized,
                               systemImage: copied ? "checkmark" : "doc.on.doc")
                     })
                     if let destination = URL(string: url) {
-                        Link("Открыть", destination: destination)
+                        Link("Открыть".localized, destination: destination)
                     }
                     Spacer()
-                    Button("Готово") { dismiss() }
+                    Button("Готово".localized) { dismiss() }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 }
@@ -240,7 +240,7 @@ struct ShareSheet: View {
                 Text("Не удалось получить ссылку.".localized).foregroundStyle(.secondary)
                 HStack {
                     Spacer()
-                    Button("Готово") { dismiss() }
+                    Button("Готово".localized) { dismiss() }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 }

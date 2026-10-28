@@ -18,7 +18,7 @@ struct RuleRow: View {
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
                 .draggable(QueryDrag(nodeID: node.id, isGroup: false))
-                .accessibilityLabel("Переместить правило")
+                .accessibilityLabel("Переместить правило".localized)
                 .accessibilityAddTraits(.isButton)
 
             fieldPicker
@@ -38,15 +38,15 @@ struct RuleRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Удалить правило")
-            .accessibilityLabel("Удалить правило")
+            .help("Удалить правило".localized)
+            .accessibilityLabel("Удалить правило".localized)
         }
         .padding(.vertical, 2)
         .hoverFill(fill: Color.primary.opacity(0.05), cornerRadius: 6)
         .onHover { hovering = $0 }
         .contextMenu {
-            Button("Дублировать") { duplicate() }
-            Button("Удалить", role: .destructive) {
+            Button("Дублировать".localized) { duplicate() }
+            Button("Удалить".localized, role: .destructive) {
                 withAnimation(Motion.spring(Motion.expand)) { model.remove(node.id) }
             }
         }
@@ -61,7 +61,7 @@ struct RuleRow: View {
     }
 
     private var fieldPicker: some View {
-        Picker("Поле", selection: fieldBinding) {
+        Picker("Поле".localized, selection: fieldBinding) {
             ForEach(QueryField.allCases) { field in Text(field.label.localized).tag(field) }
         }
         .pickerStyle(.menu)
@@ -83,7 +83,7 @@ struct RuleRow: View {
     }
 
     private var opPicker: some View {
-        Picker("Оператор", selection: opBinding) {
+        Picker("Оператор".localized, selection: opBinding) {
             ForEach(current.field.allowedOperators, id: \.self) { option in Text(option.label.localized).tag(option) }
         }
         .pickerStyle(.menu)
@@ -103,7 +103,7 @@ struct RuleRow: View {
             if current.field == .playlistID {
                 playlistMenu
             } else if current.op.expectsBoolean || current.field.isBoolean {
-                Toggle(current.op.expectsBoolean ? "Отметить" : "Избранные", isOn: booleanBinding)
+                Toggle((current.op.expectsBoolean ? "Отметить" : "Избранные").localized, isOn: booleanBinding)
                     .toggleStyle(.checkbox)
                     .labelsHidden()
                     .frame(width: 170, alignment: .leading)
@@ -112,12 +112,12 @@ struct RuleRow: View {
             } else if current.field == .genre {
                 genrePicker
             } else if current.field.isNumeric {
-                TextField("Значение", text: numericTextBinding)
+                TextField("Значение".localized, text: numericTextBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 120)
                     .monospacedDigit()
             } else {
-                TextField("Значение", text: textBinding)
+                TextField("Значение".localized, text: textBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 170)
             }
@@ -128,9 +128,9 @@ struct RuleRow: View {
     /// dates for date fields).
     private var rangeEditor: some View {
         HStack(spacing: 4) {
-            rangeField(0, placeholder: "от")
+            rangeField(0, placeholder: "от".localized)
             Text("—").foregroundStyle(.secondary)
-            rangeField(1, placeholder: "до")
+            rangeField(1, placeholder: "до".localized)
         }
     }
 
@@ -202,7 +202,7 @@ struct RuleRow: View {
     private var selectedPlaylistName: String {
         guard let id = current.value.text, !id.isEmpty,
               let playlist = app.library.playlists.first(where: { $0.id == id }) else {
-            return "Выберите плейлист…"
+            return "Выберите плейлист…".localized
         }
         return playlist.displayName
     }
@@ -218,7 +218,7 @@ struct RuleRow: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Text(current.value.text?.isEmpty == false ? current.value.text! : "Выберите жанр…")
+                Text(current.value.text?.isEmpty == false ? current.value.text! : "Выберите жанр…".localized)
                     .foregroundStyle(current.value.text?.isEmpty == false ? .primary : .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)

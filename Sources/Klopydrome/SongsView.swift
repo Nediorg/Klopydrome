@@ -23,8 +23,7 @@ struct SongsView: View {
             return processedSongs
         }
         if searchText.isEmpty && !favoritesOnly {
-            var seen = Set<String>()
-            return songs.filter { seen.insert($0.id).inserted }
+            return songs.uniqued()
         }
         return []
     }
@@ -79,7 +78,7 @@ struct SongsView: View {
                 filteredCount: searchText.isEmpty ? nil : displaySongs.count,
                 totalCount: searchText.isEmpty ? nil : songs.count
             ) {
-                Picker("Показать", selection: $favoritesOnly) {
+                Picker("Показать".localized, selection: $favoritesOnly) {
                     Text("Все песни".localized).tag(false)
                     Text("Только избранное".localized).tag(true)
                 }
@@ -106,7 +105,7 @@ struct SongsView: View {
                     if reprocessing || (!app.library.songsLoaded && loading) {
                         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        ContentUnavailableView("Ничего не найдено",
+                        ContentUnavailableView("Ничего не найдено".localized,
                                                systemImage: "magnifyingglass",
                                                // swiftlint:disable:next line_length
                                                 description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))

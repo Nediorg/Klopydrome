@@ -8,7 +8,7 @@ import NavidromeClient
 extension Player {
     @discardableResult
     func ensureAVPlayer() -> AVPlayer {
-        if let existing = underlyingAVPlayer { return existing }
+        if let existing = avPlayer { return existing }
         let player = AVPlayer()
         player.automaticallyWaitsToMinimizeStalling = false
         player.volume = outputGain
@@ -52,11 +52,10 @@ extension Player {
             }
         }
 
-        underlyingAVPlayer = player
+        avPlayer = player
         return player
     }
 
-    /// Loads `url` into AVPlayer and starts playback.
     func playURL(_ url: URL) {
         mpvFailureFallback.clear()
         automix.currentSourceURL = url

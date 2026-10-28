@@ -95,6 +95,7 @@ struct PlaylistDetailView: View {
                     if displayedSongs.isEmpty && loading {
                         SkeletonSongList(count: 10, showAlbum: true)
                             .padding(.leading, -22)
+                            .padding(.trailing, 26)
                     } else if displayedSongs.isEmpty, let loadError {
                         DetailUnavailableView(message: loadError) {
                             app.loadPlaylistIfNeeded(currentDetail.summary, forceReload: true)
@@ -133,6 +134,7 @@ struct PlaylistDetailView: View {
                             )
                             .equatable()
                             .padding(.leading, -22)
+                            .padding(.trailing, 26)
                         }
                         if displayedCount < filteredRows.count {
                             Color.clear.frame(height: 80)
@@ -187,10 +189,10 @@ struct PlaylistDetailView: View {
             isPresented: $confirmingDelete,
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) {
+            Button("Удалить".localized, role: .destructive) {
                 delete(currentDetail)
             }
-            Button("Отмена", role: .cancel) {}
+            Button("Отмена".localized, role: .cancel) {}
         }
         .inWindowModal(isPresented: $showingCommentModal) {
             PlaylistCommentModal(

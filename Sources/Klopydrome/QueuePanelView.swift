@@ -51,7 +51,7 @@ struct QueuePanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Вкладка очереди", selection: $selectedTab) {
+            Picker("Вкладка очереди".localized, selection: $selectedTab) {
                 Text("Далее".localized).tag(Tab.upNext)
                 Text("История".localized).tag(Tab.history)
             }
@@ -60,7 +60,7 @@ struct QueuePanelView: View {
             .padding()
 
             HStack {
-                Text(selectedTab == .upNext ? "Далее" : "История")
+                Text((selectedTab == .upNext ? "Далее" : "История").localized)
                     .font(.headline)
                 Spacer()
                 Button {
@@ -83,7 +83,7 @@ struct QueuePanelView: View {
                 .disabled(list.isEmpty)
                 .onHover { clearHovered = $0 }
                 .animation(.snappy(duration: 0.15), value: clearHovered)
-                .help("Очистить список")
+                .help("Очистить список".localized)
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
@@ -131,8 +131,7 @@ struct QueuePanelView: View {
         switch selectedTab {
         case .upNext: return app.player.queue
         case .history:
-            var seen = Set<String>()
-            return app.player.history.reversed().filter { seen.insert($0.id).inserted }
+            return app.player.history.reversed().uniqued()
         }
     }
 

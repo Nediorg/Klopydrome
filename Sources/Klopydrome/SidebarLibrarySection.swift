@@ -85,7 +85,7 @@ struct SidebarLibrarySection: View {
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 16, height: 16)
 
-                Text(section.title)
+                Text(section.title.localized)
                     .foregroundStyle(Color.primary)
                     .lineLimit(1)
             }

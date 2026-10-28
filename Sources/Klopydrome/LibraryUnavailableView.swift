@@ -17,7 +17,7 @@ struct LibraryUnavailableView: View {
             Text(message.localized)
         } actions: {
             if let retry {
-                Button("Повторить", action: retry)
+                Button("Повторить".localized, action: retry)
                     .buttonStyle(.bordered)
             }
         }

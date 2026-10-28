@@ -320,10 +320,10 @@ extension QueryField {
     var allowedOperators: [QueryOperator] {
         switch style {
         case .playlist: return [.inPlaylist, .notInPlaylist]
-        case .boolean: return [.is_, .isNot, .isMissing, .isPresent]
-        case .number: return [.is_, .isNot, .gt, .lt, .inTheRange, .isMissing, .isPresent]
-        case .date: return [.is_, .isNot, .before, .after, .inTheLast, .notInTheLast, .isMissing, .isPresent]
-        case .string: return [.is_, .isNot, .contains, .notContains, .startsWith, .endsWith, .isMissing, .isPresent]
+        case .boolean: return [.is, .isNot, .isMissing, .isPresent]
+        case .number: return [.is, .isNot, .gt, .lt, .inTheRange, .isMissing, .isPresent]
+        case .date: return [.is, .isNot, .before, .after, .inTheLast, .notInTheLast, .isMissing, .isPresent]
+        case .string: return [.is, .isNot, .contains, .notContains, .startsWith, .endsWith, .isMissing, .isPresent]
         case .sort: return []
         }
     }
