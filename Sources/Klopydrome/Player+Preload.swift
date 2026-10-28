@@ -99,8 +99,8 @@ extension Player {
         automix.transitionAnalysisTask?.cancel()
         automix.transitionAnalysisTask = nil
         automix.transitionPlan = nil
-        avPlayer.pause()
-        avPlayer.replaceCurrentItem(with: nil)
+        avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
         mpvEngine.stop()
         mpvEngine = preloaded
         mpvEngine.volume = outputGain
@@ -154,7 +154,6 @@ extension Player {
         if let coverArt = song.coverArt, !coverArt.isEmpty {
             Task {
                 _ = await CoverArtStore.shared.image(coverArt: coverArt, size: 240)
-                _ = await CoverArtStore.shared.image(coverArt: coverArt, size: 720)
             }
         }
         automix.preloadTask = Task { [weak self] in

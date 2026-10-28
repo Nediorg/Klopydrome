@@ -39,13 +39,14 @@ extension Player {
     }
 
     var avRealPosition: Double {
+        guard let avPlayer else { return mpvStreamOffset }
         let base = avPlayer.currentTime().seconds
         let pipePos = base.isFinite ? base : 0
         return pipePos + mpvStreamOffset
     }
 
     var avSeekableTimeRangesEmpty: Bool {
-        avPlayer.currentItem?.seekableTimeRanges.isEmpty ?? true
+        avPlayer?.currentItem?.seekableTimeRanges.isEmpty ?? true
     }
 
     /// A seek on a live remote transcode always requires a server restart when
@@ -62,7 +63,7 @@ extension Player {
     }
 
     func setAVPTranscodeSeek(to target: Double) {
-        guard avPlayer.currentItem != nil else {
+        guard let avPlayer, avPlayer.currentItem != nil else {
             pendingSeekTime = target
             currentTime = target
             return
@@ -81,6 +82,7 @@ extension Player {
     private func performAVPTranscodeRestart(at target: Double) {
         guard let url = automix.currentSourceURL,
               let offsetURL = Self.transcodedSeekURL(from: url, at: target) else { return }
+        let player = ensureAVPlayer()
         let offset = Double(max(0, Int(target)))
         mpvStreamOffset = offset
         mpvSeekRestartActive = true
@@ -90,18 +92,18 @@ extension Player {
         currentTime = target
         heldSeekTarget = target
         isBuffering = true
-        avPlayer.pause()
-        avPlayer.replaceCurrentItem(with: nil)
+        player.pause()
+        player.replaceCurrentItem(with: nil)
         // Give the engine a moment to settle before loading the new pipe.
         let item = AVPlayerItem(url: offsetURL)
         observeItemStatus(item)
-        avPlayer.replaceCurrentItem(with: item)
+        player.replaceCurrentItem(with: item)
         // AVPlayer's new pipe starts at 0; display offset keeps the scrubber
         // at the absolute position. Mark stepped immediately — the hold logic
         // will keep the target until the new pipe's time catches up.
         mpvRestartStepped = true
         if isPlaying {
-            avPlayer.play()
+            player.play()
         }
     }
 

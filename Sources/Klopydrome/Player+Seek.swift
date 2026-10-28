@@ -43,7 +43,7 @@ extension Player {
             return
         }
 
-        guard avPlayer.currentItem != nil else {
+        guard let avPlayer, avPlayer.currentItem != nil else {
             pendingSeekTime = clamped
             currentTime = clamped
             return
@@ -106,10 +106,10 @@ extension Player {
             if engineKind == .mpv, !mpvEngine.isLoaded || mpvEngine.isBuffering || !mpvEngine.isSeekable {
                 pendingSeekTime = clamped
             }
-            if engineKind != .mpv, avPlayer.currentItem == nil { pendingSeekTime = clamped }
+            if engineKind != .mpv, avPlayer?.currentItem == nil { pendingSeekTime = clamped }
             return
         }
-        guard avPlayer.currentItem != nil else {
+        guard let avPlayer, avPlayer.currentItem != nil else {
             pendingSeekTime = clamped
             return
         }
@@ -141,7 +141,7 @@ extension Player {
             mpvEngine.pause()
             if automix.activeCrossfade != nil { automix.preloadedMPVEngine?.pause() }
         } else {
-            avPlayer.pause()
+            avPlayer?.pause()
         }
         isBuffering = false
         isPlaying = false
@@ -166,6 +166,10 @@ extension Player {
             updateNowPlayingInfo()
             return
         }
+        guard let avPlayer else {
+            onTrackRequest?(song)
+            return
+        }
         if avPlayer.currentItem == nil {
             onTrackRequest?(song)
             return
@@ -179,8 +183,8 @@ extension Player {
         guard hasQueue else { return }
 
         resetPreloadedNext()
-        avPlayer.pause()
-        avPlayer.replaceCurrentItem(with: nil)
+        avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
         mpvEngine.stop()
 
         isPlaying = false

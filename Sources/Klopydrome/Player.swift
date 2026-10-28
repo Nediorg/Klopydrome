@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 import Foundation
 import AppKit
 import NavidromeClient
@@ -62,7 +61,7 @@ final class Player {
     var duration: Double = 0
     var volume: Float = 1.0 {
         didSet {
-            avPlayer.volume = outputGain
+            avPlayer?.volume = outputGain
             mpvEngine.volume = outputGain
         }
     }
@@ -87,14 +86,15 @@ final class Player {
     var onTrackCrossfaded: ((SubsonicSong) -> Void)?
     var onStreamRecordFinished: ((URL) -> Void)?
 
-    /// The shared playback engine. Internal so the seek/formatting
-    /// extensions (in separate files) can drive it.
-    let avPlayer = AVPlayer()
+    /// The shared playback engine, lazily initialized on demand when
+    /// the user chooses AVPlayer or MPV falls back to it.
+    @ObservationIgnored nonisolated(unsafe) var underlyingAVPlayer: AVPlayer?
+    var avPlayer: AVPlayer? { underlyingAVPlayer }
     /// Active playback engine. MPV by default (every format, sample-accurate
     /// HTTP seeks — libmpv reads the seektable and range-requests the exact
     /// byte offset); AVPlayer when the user opts out in Settings.
     enum EngineKind { case avPlayer, mpv }
-    var engineKind: EngineKind = .avPlayer
+    var engineKind: EngineKind = .mpv
     var mpvEngine = MPVPlaybackEngine()
     @ObservationIgnored var mpvFailureFallback = MPVFailureFallback()
     let automix = AutomixPreparation()
@@ -113,7 +113,7 @@ final class Player {
     /// True once the current track has been loaded into the active engine, so
     /// Play can resume it directly instead of re-resolving the source.
     var hasLoadedItem: Bool {
-        engineKind == .mpv ? mpvEngine.isLoaded : avPlayer.currentItem != nil
+        engineKind == .mpv ? mpvEngine.isLoaded : avPlayer?.currentItem != nil
     }
 
     /// True while the user is actively scrubbing. The periodic time observer
@@ -183,45 +183,6 @@ final class Player {
     }
 
     init() {
-        avPlayer.automaticallyWaitsToMinimizeStalling = false
-        avPlayer.volume = outputGain
-
-        timeObserverToken = avPlayer.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] time in
-            Task { @MainActor [weak self] in
-                self?.handleAVPPeriodicUpdate(time)
-            }
-        }
-
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.onTrackEnded?()
-            }
-        }
-
-        statusObserver = avPlayer.observe(\.status, options: [.new]) { [weak self] player, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if player.status == .failed {
-                    self.handleFailure(player.error ?? player.currentItem?.error)
-                }
-            }
-        }
-
-        timeControlStatusObserver = avPlayer.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.engineKind == .avPlayer else { return }
-                self.isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
-                if player.timeControlStatus == .playing { self.isLoading = false }
-            }
-        }
-
         // The MPV engine drives its own clock; the AVPlayer time observer
         // must not overwrite `currentTime`/`duration` while it's running.
         setUpMPVEngine()
@@ -231,7 +192,7 @@ final class Player {
     }
 
     deinit {
-        if let token = timeObserverToken {
+        if let token = timeObserverToken, let avPlayer = underlyingAVPlayer {
             avPlayer.removeTimeObserver(token)
         }
         if let observer = endObserver {
@@ -310,8 +271,8 @@ final class Player {
         resetPreloadedNext()
         // Stop the current item immediately. If the next track isn't ready yet
         // (stream resolve / transcode), the previous one must not keep playing.
-        avPlayer.pause()
-        avPlayer.replaceCurrentItem(with: nil)
+        avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
         mpvEngine.stop()
         isPlaying = autoPlay
         lastError = nil
@@ -326,7 +287,6 @@ final class Player {
         mpvStreamOffset = 0
         mpvSeekRestartActive = false
         mpvRestartStepped = false
-        engineKind = .avPlayer
         // A seek requested for the PREVIOUS track must not land on this one.
         pendingSeekTime = nil
         if recordHistory {
@@ -341,28 +301,6 @@ final class Player {
 
     func clearHistory() {
         history = []
-    }
-
-    /// Loads `url` into AVPlayer and starts playback.
-    func playURL(_ url: URL) {
-        mpvFailureFallback.clear()
-        automix.currentSourceURL = url
-        engineKind = .avPlayer
-        mpvStreamOffset = 0
-        mpvSeekRestartActive = false
-        mpvRestartStepped = false
-        heldSeekTarget = nil
-        transcodeRestartResidual = nil
-        isLoading = false
-        isCaching = false
-        lastError = nil
-        hasReportedFailure = false
-        let item = AVPlayerItem(url: url)
-        observeItemStatus(item)
-        avPlayer.replaceCurrentItem(with: item)
-        // Don't start playing until the item is ready — observeItemStatus fires
-        // applyPendingSeekIfNeeded(), which can begin playback if needed.
-        updateNowPlayingInfo()
     }
 
     /// Plays `url` through libmpv (via MPVKit). The default engine: mpv owns
@@ -381,8 +319,8 @@ final class Player {
         mpvFailureFallback.arm(for: url)
         automix.currentSourceURL = url
         engineKind = .mpv
-        avPlayer.pause()
-        avPlayer.replaceCurrentItem(with: nil)
+        avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
         lastError = nil
         hasReportedFailure = false
         isBuffering = true
@@ -400,68 +338,6 @@ final class Player {
         // during a paused queue restore, true when the user hits play. The async
         // task below only calls mpvEngine.play() when isPlaying is still true.
         loadMPVStream(url: url, streamRecordURL: streamRecordURL)
-    }
-
-    func observeItemStatus(_ item: AVPlayerItem) {
-        itemStatusObserver?.invalidate()
-        itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if item.status == .readyToPlay {
-                    self.applyPendingSeekIfNeeded()
-                    // Start playback only when ready — avoids audio bursts
-                    // during queue restoration (playURL → pause → no audio).
-                    if self.isPlaying {
-                        self.avPlayer.play()
-                    }
-                }
-                if item.status == .failed {
-                    self.handleFailure(item.error)
-                }
-            }
-        }
-    }
-
-    private func handleFailure(_ error: Error?) {
-        guard !hasReportedFailure else { return }
-        hasReportedFailure = true
-        lastError = L10n.text("format.player.unavailable")
-        isPlaying = false
-        isLoading = false
-        updateNowPlayingInfo()
-    }
-
-    private func handleAVPPeriodicUpdate(_ time: CMTime) {
-        // The MPV engine ticks its own clock via onTimeUpdate.
-        if engineKind == .mpv { return }
-        let pipeSeconds = time.seconds.isFinite ? time.seconds : 0
-        let display = pipeSeconds + mpvStreamOffset
-        if !isScrubbing && !isSeekInFlight {
-            if mpvSeekRestartActive && !mpvRestartStepped {
-                // New pipe not yet stepped — keep held target.
-            } else if let held = heldSeekTarget {
-                if display >= held - 0.25 {
-                    heldSeekTarget = nil
-                    currentTime = display
-                } else if currentTime < held {
-                    currentTime = held
-                }
-            } else {
-                currentTime = display
-            }
-        }
-        if let item = avPlayer.currentItem, item.duration.isNumeric {
-            let rawDuration = item.duration.seconds
-            duration = rawDuration.isFinite && rawDuration > 0
-                ? rawDuration + mpvStreamOffset
-                : 0
-        }
-        isBuffering = avPlayer.timeControlStatus == .waitingToPlayAtSpecifiedRate
-        if avPlayer.timeControlStatus == .playing { isLoading = false }
-        if avPlayer.status == .failed || avPlayer.currentItem?.status == .failed {
-            handleFailure(avPlayer.error ?? avPlayer.currentItem?.error)
-        }
-        reportNowPlayingSecond(display)
     }
 }
 
