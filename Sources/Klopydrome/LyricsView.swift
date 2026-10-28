@@ -93,8 +93,8 @@ struct LyricsView: View {
         // until something re-requests it. Re-run on appear and on every song
         // change while visible; the store deduplicates by song id.
         .task(id: app.player.displaySong?.id) {
-            guard let client = app.client, let song = app.player.displaySong else { return }
-            await app.lyrics.load(song: song, client: client)
+            guard let song = app.player.displaySong else { return }
+            await app.lyrics.load(song: song, client: app.client, cache: app.cache)
         }
         .background {
             LyricsClockSynchronizer(onSync: refreshClockAndIndex)

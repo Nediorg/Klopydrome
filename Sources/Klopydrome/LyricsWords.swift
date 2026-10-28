@@ -3,7 +3,7 @@ import Foundation
 /// A single word (or spacing chunk) of a word-synced lyric line, plus the
 /// second at which it starts being sung. Chunks without their own marker
 /// inherit the line start time.
-struct SyncedWord: Equatable {
+struct SyncedWord: Equatable, Codable {
     let text: String
     let start: Double
     /// End of the word's sung window in seconds, from the server's `cue.end`

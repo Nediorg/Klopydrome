@@ -75,70 +75,125 @@ final class LyricsStore {
         !taskCancelled && loadedForSongID == requestedSongID
     }
 
-    func load(song: SubsonicSong, client: SubsonicClient) async {
+    struct CachedLyrics: Codable, Equatable {
+        let syncedLines: [SyncedLine]
+        let wordsByLine: [Int: [SyncedWord]]
+        let plainText: String?
+    }
+
+    static func cacheKey(for songID: String) -> String {
+        "lyrics_\(songID)"
+    }
+
+    func load(song: SubsonicSong, client: SubsonicClient?, cache: CacheManager? = nil) async {
         guard loadedForSongID != song.id else { return }
         loadedForSongID = song.id
-        isLoading = true
         syncedLines = []
         wordsByLine = [:]
         plainText = nil
+
+        let hasCachedData = await hydrateFromDiskCache(songID: song.id, cache: cache)
+
+        guard let client else {
+            isLoading = false
+            return
+        }
+
+        if !hasCachedData {
+            isLoading = true
+        }
+
         defer {
             if loadedForSongID == song.id { isLoading = false }
         }
 
-        let entries = try? await client.getLyricsBySongId(id: song.id)
+        guard let result = await Self.fetchLyricsFromServer(song: song, client: client) else { return }
+        await applyServerLyrics(result, songID: song.id, hasCachedData: hasCachedData, cache: cache)
+    }
+
+    private func hydrateFromDiskCache(songID: String, cache: CacheManager?) async -> Bool {
+        guard let cache else { return false }
+        let key = Self.cacheKey(for: songID)
+        guard let data = await cache.readData(for: .metadata, key: key),
+              let cached = try? JSONDecoder().decode(CachedLyrics.self, from: data) else {
+            return false
+        }
         guard Self.shouldApplyLoadResult(
-            requestedSongID: song.id,
+            requestedSongID: songID,
             loadedForSongID: loadedForSongID,
             taskCancelled: Task.isCancelled
-        ) else {
-            return
+        ) else { return false }
+        self.syncedLines = cached.syncedLines
+        self.wordsByLine = cached.wordsByLine
+        self.plainText = cached.plainText
+        return true
+    }
+
+    private func applyServerLyrics(
+        _ result: CachedLyrics,
+        songID: String,
+        hasCachedData: Bool,
+        cache: CacheManager?
+    ) async {
+        guard Self.shouldApplyLoadResult(
+            requestedSongID: songID,
+            loadedForSongID: loadedForSongID,
+            taskCancelled: Task.isCancelled
+        ) else { return }
+
+        let differs = (syncedLines != result.syncedLines ||
+                       wordsByLine != result.wordsByLine ||
+                       plainText != result.plainText)
+        if differs || !hasCachedData {
+            self.syncedLines = result.syncedLines
+            self.wordsByLine = result.wordsByLine
+            self.plainText = result.plainText
         }
 
-        // Prefer a synced entry whose lines actually carry timestamps. Lines
-        // without a start are NOT synced (unsynced structured lyrics) — taking
-        // them would freeze the highlight on line 0.
+        if let cache, differs || !hasCachedData {
+            if let encoded = try? JSONEncoder().encode(result) {
+                _ = try? await cache.write(data: encoded, to: .metadata, key: Self.cacheKey(for: songID))
+            }
+        }
+    }
+
+    static func fetchLyricsFromServer(
+        song: SubsonicSong,
+        client: SubsonicClient
+    ) async -> CachedLyrics? {
+        let entries = try? await client.getLyricsBySongId(id: song.id)
+
+        // Prefer a synced entry whose lines actually carry timestamps.
         if let entry = entries?.first(where: { isTimed(entry: $0) }),
            let lines = entry.line, !lines.isEmpty {
-            syncedLines = apply(offset: entry.offset, to: lines)
-            wordsByLine = Self.wordsByLine(from: entry, offset: entry.offset, lineCount: lines.count)
-            return
+            let synced = apply(offset: entry.offset, to: lines)
+            let words = wordsByLine(from: entry, offset: entry.offset, lineCount: lines.count)
+            return CachedLyrics(syncedLines: synced, wordsByLine: words, plainText: nil)
         }
 
-        // A structured entry may still hold text when nothing is timed (some
-        // servers ship unsynced lyrics as `line` values). Keep it as plain text
-        // instead of dropping the lyrics entirely.
-        if let text = Self.plainText(from: entries), !text.isEmpty {
-            plainText = text
-            return
+        if let text = plainText(from: entries), !text.isEmpty {
+            return CachedLyrics(syncedLines: [], wordsByLine: [:], plainText: text)
         }
 
         let fallback = try? await client.getLyrics(
             artist: song.artist ?? "",
             title: song.title ?? ""
         )
-        guard Self.shouldApplyLoadResult(
-            requestedSongID: song.id,
-            loadedForSongID: loadedForSongID,
-            taskCancelled: Task.isCancelled
-        ), let text = fallback?.value, !text.isEmpty else {
-            return
+        if let text = fallback?.value, !text.isEmpty {
+            let timed = LrcTextParser.parse(text)
+            if !timed.isEmpty {
+                return CachedLyrics(syncedLines: timed, wordsByLine: [:], plainText: nil)
+            } else {
+                return CachedLyrics(syncedLines: [], wordsByLine: [:], plainText: text)
+            }
         }
-
-        // Some servers return raw LRC text (with [mm:ss] markers) here.
-        // Parse it into synced lines when present; otherwise show as text.
-        let timed = LrcTextParser.parse(text)
-        if !timed.isEmpty {
-            syncedLines = timed
-        } else {
-            plainText = text
-        }
+        return nil
     }
 
     /// A structured entry is usable as synced lyrics only when at least one
     /// line carries a start timestamp; synced=false or lines with nil starts
     /// would make `activeLineIndex` stick on the first line forever.
-    private func isTimed(entry: LyricsEntry) -> Bool {
+    static func isTimed(entry: LyricsEntry) -> Bool {
         guard entry.synced ?? false else { return false }
         return entry.line?.contains(where: { $0.start != nil }) ?? false
     }
@@ -160,7 +215,7 @@ final class LyricsStore {
     /// convention probes `audio + offset`; baking it into the starts
     /// as `start - offset` is equivalent and keeps `activeLineIndex` unchanged.
     /// Positive offset → smaller starts → lines activate earlier.
-    private func apply(offset: Double?, to lines: [SyncedLine]) -> [SyncedLine] {
+    static func apply(offset: Double?, to lines: [SyncedLine]) -> [SyncedLine] {
         guard let offset, offset != 0 else { return lines }
         return lines.map { line in
             guard let start = line.start else { return line }
