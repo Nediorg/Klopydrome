@@ -216,6 +216,8 @@ struct SongRow: View {
             }
             SongEllipsisMenu(
                 song: song,
+                selection: actionTargets,
+                resolveSelection: isSelected ? resolveSelection : nil,
                 foregroundStyle: isCurrent ? .white : .secondary,
                 app: app,
                 extraActions: extraActions,

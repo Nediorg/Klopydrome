@@ -8,6 +8,9 @@ import Foundation
 /// streamer yields the raw network chunks (typically 16–64 KB) instead —
 /// the same bytes in ~1/1000 of the iterations, with `Content-Length`
 /// delivered up front for progress reporting.
+///
+/// Reuses a single shared `URLSession` to preserve TCP/TLS and HTTP/2
+/// connections across sequential track requests.
 enum HTTPChunkStreamer {
 
     enum Chunk {
@@ -17,38 +20,67 @@ enum HTTPChunkStreamer {
         case body(Data)
     }
 
+    private static let coordinator = Coordinator()
+
     static func chunks(from url: URL) -> AsyncThrowingStream<Chunk, Error> {
-        AsyncThrowingStream { continuation in
-            let config = URLSessionConfiguration.ephemeral
-            config.urlCache = nil
-            config.requestCachePolicy = .reloadIgnoringLocalCacheData
-            let delegate = Delegate(continuation: continuation)
-            let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
-            let task = session.dataTask(with: url)
-            delegate.task = task
-            task.resume()
-            // Breaking the session↔delegate retain cycle and stopping the
-            // transfer when the consumer goes away (task cancellation, early
-            // return on a stale download).
-            continuation.onTermination = { _ in
-                task.cancel()
-                session.invalidateAndCancel()
-            }
-        }
+        coordinator.stream(for: url)
     }
 
-    private final class Delegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-        let continuation: AsyncThrowingStream<Chunk, Error>.Continuation
-        weak var task: URLSessionDataTask?
+    private final class Coordinator: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+        private var session: URLSession!
+        private let lock = NSLock()
+        private var streams: [Int: AsyncThrowingStream<Chunk, Error>.Continuation] = [:]
 
-        init(continuation: AsyncThrowingStream<Chunk, Error>.Continuation) {
-            self.continuation = continuation
+        override init() {
+            super.init()
+            let config = URLSessionConfiguration.default
+            config.urlCache = nil
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+            config.timeoutIntervalForRequest = 60
+            config.timeoutIntervalForResource = 3600
+            config.httpMaximumConnectionsPerHost = 6
+            self.session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        }
+
+        func stream(for url: URL) -> AsyncThrowingStream<Chunk, Error> {
+            AsyncThrowingStream { continuation in
+                let task = self.session.dataTask(with: url)
+                let taskID = task.taskIdentifier
+
+                self.lock.lock()
+                self.streams[taskID] = continuation
+                self.lock.unlock()
+
+                continuation.onTermination = { [weak self] _ in
+                    task.cancel()
+                    _ = self?.removeStream(for: taskID)
+                }
+
+                task.resume()
+            }
+        }
+
+        private func removeStream(for taskID: Int) -> AsyncThrowingStream<Chunk, Error>.Continuation? {
+            lock.lock()
+            defer { lock.unlock() }
+            return streams.removeValue(forKey: taskID)
+        }
+
+        private func streamContinuation(for taskID: Int) -> AsyncThrowingStream<Chunk, Error>.Continuation? {
+            lock.lock()
+            defer { lock.unlock() }
+            return streams[taskID]
         }
 
         func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
                         didReceive response: URLResponse,
                         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+            guard let continuation = streamContinuation(for: dataTask.taskIdentifier) else {
+                completionHandler(.cancel)
+                return
+            }
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                _ = removeStream(for: dataTask.taskIdentifier)
                 continuation.finish(throwing: URLError(.badServerResponse))
                 completionHandler(.cancel)
                 return
@@ -58,10 +90,12 @@ enum HTTPChunkStreamer {
         }
 
         func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            guard let continuation = streamContinuation(for: dataTask.taskIdentifier) else { return }
             continuation.yield(.body(data))
         }
 
         func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            guard let continuation = removeStream(for: task.taskIdentifier) else { return }
             if let error {
                 continuation.finish(throwing: error)
             } else {

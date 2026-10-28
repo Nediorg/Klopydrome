@@ -21,8 +21,18 @@ struct SongActionItems: View {
     var onPlay: (() -> Void)?
 
     private var targets: [SubsonicSong] { selection.isEmpty ? [song] : selection }
-    private var primaryCached: Bool { app.isCached(song) }
-    private var primaryDownloading: Bool { app.downloadingSongIDs.contains(song.id) }
+    private var primaryCached: Bool {
+        if targets.count > 1 {
+            return targets.allSatisfy { app.isCached($0) }
+        }
+        return app.isCached(song)
+    }
+    private var primaryDownloading: Bool {
+        if targets.count > 1 {
+            return targets.allSatisfy { app.downloadingSongIDs.contains($0.id) }
+        }
+        return app.downloadingSongIDs.contains(song.id)
+    }
     private var isPlayableOffline: Bool { !app.isOfflineSession || primaryCached }
 
     var body: some View {
@@ -49,7 +59,7 @@ struct SongActionItems: View {
                 if primaryCached {
                     targets.forEach { song in Task { await app.removeFromCache(song) } }
                 } else {
-                    targets.forEach { app.cacheSong($0) }
+                    app.cacheSongs(targets)
                 }
             }
             .disabled(app.isOfflineSession && !primaryCached)

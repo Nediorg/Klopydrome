@@ -317,11 +317,12 @@ struct DownloadsToolbarButton: View {
                                 Capsule()
                                     .fill(Color.secondary.opacity(0.25))
                                 if let progress = app.overallDownloadProgress {
-                                    Capsule()
+                                    Rectangle()
                                         .fill(AMColor.accent)
                                         .frame(width: geo.size.width * progress)
                                 }
                             }
+                            .clipShape(Capsule())
                         }
                         .frame(height: 2)
                         .opacity(app.overallDownloadProgress != nil ? 1 : 0)

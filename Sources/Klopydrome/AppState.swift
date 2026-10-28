@@ -158,19 +158,36 @@ final class AppState {
     /// newest-first so the Downloads popover reads naturally.
     var downloadedSongs: [SubsonicSong] = []
 
-    /// Aggregate download progress (0...1) across active transfers, or nil when
-    /// nothing is downloading. Drives the status bar under the toolbar icon.
+    /// Aggregate download progress (0...1) across top-level active transfers (tasks
+    /// and standalone songs), or nil when nothing is downloading. Drives the progress
+    /// bar under the toolbar icon.
     var overallDownloadProgress: Double? {
-        guard !downloadingSongIDs.isEmpty else { return nil }
-        let values = downloadingSongIDs.map { downloadProgress[$0] ?? 0.0 }
-        guard !values.isEmpty else { return nil }
-        return values.reduce(0, +) / Double(values.count)
+        var progresses: [Double] = []
+
+        for task in activeDownloadTasks {
+            progresses.append(task.progress(downloadProgress: downloadProgress))
+        }
+
+        let taskSongIDs = Set(activeDownloadTasks.flatMap { $0.songs.map(\.id) })
+        let standaloneSongs = downloadingSongs.filter { !taskSongIDs.contains($0.id) }
+        for song in standaloneSongs {
+            progresses.append(downloadProgress[song.id] ?? 0.0)
+        }
+
+        if progresses.isEmpty {
+            guard !downloadingSongIDs.isEmpty else { return nil }
+            progresses = downloadingSongIDs.map { downloadProgress[$0] ?? 0.0 }
+        }
+
+        guard !progresses.isEmpty else { return nil }
+        let average = progresses.reduce(0.0, +) / Double(progresses.count)
+        return min(max(average, 0.0), 1.0)
     }
 
     /// Whether the Downloads affordance should be visible at all: any active
     /// transfer or any completed offline songs.
     var hasDownloadContent: Bool {
-        !downloadingSongIDs.isEmpty || !downloadedSongs.isEmpty
+        !activeDownloadTasks.isEmpty || !downloadingSongIDs.isEmpty || !downloadedSongs.isEmpty
     }
 
     /// Rule-based playlists stored locally (Subsonic can't persist these).

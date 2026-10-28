@@ -277,6 +277,8 @@ struct RatingStars: View {
 /// Ellipsis action button triggering the song context menu.
 struct SongEllipsisMenu: View {
     let song: SubsonicSong
+    var selection: [SubsonicSong] = []
+    var resolveSelection: (() -> [SubsonicSong])?
     var foregroundStyle: Color = .secondary
     var app: AppState?
     var extraActions: [SongMenuExtraAction] = []
@@ -297,10 +299,17 @@ struct SongEllipsisMenu: View {
     var body: some View {
         let button = Button {
             if let resolvedApp {
+                let targets: [SubsonicSong] = {
+                    if let resolveSelection {
+                        let resolved = resolveSelection()
+                        return resolved.count > 1 ? resolved : [song]
+                    }
+                    return selection.isEmpty ? [song] : selection
+                }()
                 showSongActionMenu(
                     for: song,
                     app: resolvedApp,
-                    selection: [song],
+                    selection: targets,
                     extraActions: extraActions
                 )
             }

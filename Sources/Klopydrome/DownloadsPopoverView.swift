@@ -348,6 +348,23 @@ private struct TaskTrackRow: View {
             }
         }
         .onHover { isHovered = $0 }
+        .onTapGesture(count: 2) {
+            handlePlay()
+        }
+        .contextMenu {
+            SongActionItems(
+                app: app,
+                song: song,
+                selection: [song],
+                onPlay: { handlePlay() }
+            )
+        }
+    }
+
+    private func handlePlay() {
+        if !app.isOfflineSession || isCompleted {
+            app.play([song], at: 0)
+        }
     }
 
     @ViewBuilder
@@ -439,5 +456,23 @@ private struct DownloadRow: View {
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            handlePlay()
+        }
+        .contextMenu {
+            SongActionItems(
+                app: app,
+                song: song,
+                selection: [song],
+                onPlay: { handlePlay() }
+            )
+        }
+    }
+
+    private func handlePlay() {
+        if !app.isOfflineSession || app.isCached(song) {
+            app.play([song], at: 0)
+        }
     }
 }

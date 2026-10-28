@@ -68,10 +68,10 @@ extension AppState {
         downloadCancellationTokens[song.id]?.withLock { $0 = true }
     }
 
-    func downloadToCache(_ song: SubsonicSong) async {
+    func downloadToCache(_ song: SubsonicSong) async throws {
         guard let cache, let url = downloadStreamURL(for: song) else {
             downloadProgress.removeValue(forKey: song.id)
-            return
+            throw SubsonicError.invalidURL
         }
         let token = OSAllocatedUnfairLock<Bool>(initialState: cancelledDownloads.contains(song.id))
         downloadCancellationTokens[song.id] = token
@@ -96,10 +96,30 @@ extension AppState {
             cachedStreamKeys.insert(cache.fileURL(for: .streams, key: key).lastPathComponent)
             await persistOfflineSong(song)
             prependDownloaded(song)
+
+            // Concurrently prefetch and cache lyrics for offline use
+            if let client {
+                Task { [weak self] in
+                    guard let cache = self?.cache else { return }
+                    let lyricsKey = LyricsStore.cacheKey(for: song.id)
+                    if await !cache.hasFile(for: .metadata, key: lyricsKey),
+                       let lyricsResult = await LyricsStore.fetchLyricsFromServer(song: song, client: client) {
+                        let payload = LyricsStore.CachedLyrics(
+                            syncedLines: lyricsResult.syncedLines,
+                            wordsByLine: lyricsResult.wordsByLine,
+                            plainText: lyricsResult.plainText
+                        )
+                        if let data = try? JSONEncoder().encode(payload) {
+                            _ = try? await cache.write(data: data, to: .metadata, key: lyricsKey)
+                        }
+                    }
+                }
+            }
         } catch {
             downloadProgress.removeValue(forKey: song.id)
             cancelledDownloads.remove(song.id)
             try? FileManager.default.removeItem(at: temp)
+            throw error
         }
     }
 
@@ -114,11 +134,15 @@ extension AppState {
     }
 
     func unregisterDownload(from songs: [SubsonicSong]) {
-        let ids = Set(songs.map(\.id))
-        downloadingSongIDs.subtract(ids)
-        downloadingSongs.removeAll { ids.contains($0.id) }
-        for id in ids {
-            downloadProgress.removeValue(forKey: id)
+        for song in songs {
+            let stillInOtherTask = activeDownloadTasks.contains { task in
+                task.songs.contains(where: { $0.id == song.id })
+            }
+            if !stillInOtherTask {
+                downloadingSongIDs.remove(song.id)
+                downloadingSongs.removeAll { $0.id == song.id }
+                downloadProgress.removeValue(forKey: song.id)
+            }
         }
     }
 

@@ -308,9 +308,10 @@ extension AppState {
         lyricsTask?.cancel()
         scrobbleTask?.cancel()
 
+        lyricsTask = Task { await lyrics.load(song: song, client: client, cache: cache) }
+
         if let client {
             saveQueueToServer()
-            lyricsTask = Task { await lyrics.load(song: song, client: client) }
             if scrobblingEnabled {
                 scrobbleTask = Task { try? await client.scrobble(id: song.id, submission: false) }
             }
@@ -335,7 +336,7 @@ extension AppState {
             activeCacheTasks.remove(song.id)
             updateCachingFlag()
         }
-        await downloadToCache(song)
+        try? await downloadToCache(song)
     }
 
     private func updateCachingFlag() {

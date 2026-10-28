@@ -151,8 +151,12 @@ enum SongActionMenuBuilder {
         app: AppState
     ) {
         let isStarred = app.isStarred(song)
-        let primaryCached = app.isCached(song)
-        let primaryDownloading = app.downloadingSongIDs.contains(song.id)
+        let primaryCached = targets.count > 1
+            ? targets.allSatisfy { app.isCached($0) }
+            : app.isCached(song)
+        let primaryDownloading = targets.count > 1
+            ? targets.allSatisfy { app.downloadingSongIDs.contains($0.id) }
+            : app.downloadingSongIDs.contains(song.id)
 
         menu.addItem(SongMenuActionItem(
             title: (isStarred ? "Убрать из избранного" : "В избранное").localized,
@@ -180,7 +184,7 @@ enum SongActionMenuBuilder {
                 if primaryCached {
                     targets.forEach { targetSong in Task { await app.removeFromCache(targetSong) } }
                 } else {
-                    targets.forEach { app.cacheSong($0) }
+                    app.cacheSongs(targets)
                 }
             })
         }
@@ -325,7 +329,7 @@ func buildSongActionMenu(
     menu.autoenablesItems = false
 
     let targets = selection.isEmpty ? [song] : selection
-    let primaryCached = app.isCached(song)
+    let primaryCached = targets.count > 1 ? targets.allSatisfy { app.isCached($0) } : app.isCached(song)
     let isPlayableOffline = !app.isOfflineSession || primaryCached
 
     SongActionMenuBuilder.addExtraActions(to: menu, extraActions: extraActions)

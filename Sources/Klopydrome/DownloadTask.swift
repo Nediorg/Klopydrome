@@ -17,6 +17,7 @@ struct DownloadTask: Identifiable, Equatable {
     var coverArt: String?
     var songs: [SubsonicSong]
     var completedSongIDs: Set<String> = []
+    var failedSongIDs: Set<String> = []
     var currentSongID: String?
 
     var totalCount: Int { songs.count }
@@ -100,6 +101,7 @@ extension AppState {
         )
         activeDownloadTasks.append(task)
         for song in targets {
+            cancelledDownloads.remove(song.id)
             register(downloading: song)
         }
         if let firstID = targets.first?.id {
@@ -121,12 +123,18 @@ extension AppState {
                         downloadProgress[song.id] = 0.0
                     }
                 }
-                await downloadToCache(song)
-                await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
+                do {
+                    try await downloadToCache(song)
+                    await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
+                } catch is CancellationError {
+                    // Cancelled download is not marked as failed or completed
+                } catch {
+                    await MainActor.run { markSongFailed(in: taskID, songID: song.id) }
+                }
             }
             await MainActor.run {
-                unregisterDownload(from: targets)
                 activeDownloadTasks.removeAll { $0.id == taskID }
+                unregisterDownload(from: targets)
             }
         }
     }
@@ -143,10 +151,42 @@ extension AppState {
     func markSongCompleted(in taskID: UUID, songID: String) {
         guard let index = activeDownloadTasks.firstIndex(where: { $0.id == taskID }) else { return }
         activeDownloadTasks[index].completedSongIDs.insert(songID)
+        activeDownloadTasks[index].failedSongIDs.remove(songID)
+        let stillInOtherTask = activeDownloadTasks.contains {
+            $0.id != taskID && $0.songs.contains(where: { $0.id == songID })
+        }
+        if !stillInOtherTask {
+            downloadingSongIDs.remove(songID)
+            downloadingSongs.removeAll { $0.id == songID }
+        }
         downloadProgress.removeValue(forKey: songID)
         if activeDownloadTasks[index].currentSongID == songID {
             let nextSong = activeDownloadTasks[index].songs.first { song in
-                !activeDownloadTasks[index].completedSongIDs.contains(song.id)
+                !activeDownloadTasks[index].completedSongIDs.contains(song.id) &&
+                !activeDownloadTasks[index].failedSongIDs.contains(song.id)
+            }
+            activeDownloadTasks[index].currentSongID = nextSong?.id
+            if let nextID = nextSong?.id {
+                downloadProgress[nextID] = 0.0
+            }
+        }
+    }
+
+    func markSongFailed(in taskID: UUID, songID: String) {
+        guard let index = activeDownloadTasks.firstIndex(where: { $0.id == taskID }) else { return }
+        activeDownloadTasks[index].failedSongIDs.insert(songID)
+        let stillInOtherTask = activeDownloadTasks.contains {
+            $0.id != taskID && $0.songs.contains(where: { $0.id == songID })
+        }
+        if !stillInOtherTask {
+            downloadingSongIDs.remove(songID)
+            downloadingSongs.removeAll { $0.id == songID }
+        }
+        downloadProgress.removeValue(forKey: songID)
+        if activeDownloadTasks[index].currentSongID == songID {
+            let nextSong = activeDownloadTasks[index].songs.first { song in
+                !activeDownloadTasks[index].completedSongIDs.contains(song.id) &&
+                !activeDownloadTasks[index].failedSongIDs.contains(song.id)
             }
             activeDownloadTasks[index].currentSongID = nextSong?.id
             if let nextID = nextSong?.id {
@@ -181,6 +221,11 @@ extension AppState {
             if activeDownloadTasks[index].songs.isEmpty {
                 activeDownloadTasks.remove(at: index)
             }
+        }
+        let stillInOtherTask = activeDownloadTasks.contains { $0.songs.contains(where: { $0.id == song.id }) }
+        if !stillInOtherTask {
+            downloadingSongIDs.remove(song.id)
+            downloadingSongs.removeAll { $0.id == song.id }
         }
     }
 
