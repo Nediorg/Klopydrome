@@ -76,13 +76,40 @@
 - **Detail views must fill all space**: Every detail view inside `DetailColumn` must specify `.frame(maxWidth: .infinity, maxHeight: .infinity)` before `.safeAreaInset` is applied.
 - Automix transitions are analysis-only (`Player+TransitionAnalysis.swift`); rendering stays on the established MPV crossfade.
 
+## Code comments & readability (Zero comment bloat)
+- **Code must be self-documenting**: Express intent through clear, concise naming of types, variables, and functions. Do NOT add docstrings (`///`) or inline comments (`//`) that simply restate what the code already says.
+- **Forbidden**:
+  - Tautological comments on properties (e.g. `/// Track duration`, `/// User preference for shuffle`).
+  - Obvious step comments (e.g. `// Set up player`, `// Remove track`).
+  - Gratuitous `// MARK: - ...` separators for 2–3 line sections or self-evident properties.
+- **Allowed only by exception**:
+  - Non-obvious C-interop caveats or unsafe pointer lifecycles (e.g. Libmpv C API specifics).
+  - Mathematical and audio formulas (e.g. ReplayGain / Automix equal-power crossfade math).
+  - Low-level system workarounds (e.g. AppKit event tap quirks, pipe-offset audio seek limitations).
+
+## Architectural discipline (KISS & DRY)
+- **Single source of truth for core flows**:
+  - All playback initiation must route through a single authoritative entry point in `AppState` (`app.play(...)`), which handles offline filtering, starting index resolution, and player state dispatch. Individual views and menus MUST NOT duplicate offline filtering or index recalculation.
+  - Queue operations (`playNext`, `playLater`, `remove`, `clear`) must have unified implementations without diverging overloads for single vs. collection items.
+  - Playback source context is restricted strictly to `.album`, `.playlist`, and `.smartPlaylist`. Do not re-introduce synthetic or ad-hoc source types.
+- **No overengineered crutches**: Avoid multi-timer cascades, synthetic data reconstruction, or speculative fallback logic. Keep the control flow direct, linear, and predictable.
+- **Auto Layout & NSHostingView Container Geometry**:
+  - When hosting scrollable SwiftUI views (`ScrollView`, `List`, `LazyVStack`) in an `NSHostingView` inside an AppKit clipping container or drawer:
+    1. **Never leave `NSHostingView` unconstrained in the scroll axis**: An unconstrained height (`bottomAnchor >= clipHost.bottomAnchor` without an explicit upper bound) causes SwiftUI to report its entire content height (e.g. 20,000+ pt for 400+ rows) as fitting size. This causes `ScrollView.bounds.height == content.height`, completely breaking `LazyVStack` virtualization (eagerly realizing all rows) and destroying scrollability (rubber-banding at 0 without scrolling).
+    2. **Never tie `NSHostingView.bottomAnchor` to `clipHost.bottomAnchor` with `.required` equality during resize animations**: An equality constraint steals space from sibling views. If siblings have 1:1 aspect ratio constraints (such as square artwork), Auto Layout shrinks their width, collapsing the window into an un-resizable miniature pill.
+    3. **The established drawer pattern**: Bound the hosted view's height to the intended target height (`heightAnchor.constraint(equalToConstant: targetHeight)` at priority 999) with `bottomAnchor.constraint(greaterThanOrEqualTo: clipHost.bottomAnchor)`. The clipping host masks content during transitions without squeezing adjacent views or allowing unbounded height growth.
+- **Scroll Virtualization & Large Collection Performance**:
+  - In `ScrollView` + `LazyVStack`, avoid allocating temporary enumerated arrays (`ForEach(Array(list.enumerated()), id: \.offset)`). Use index ranges (`ForEach(0..<list.count, id: \.self)`) or stable identifiers (`id: \.id`).
+  - Never attach `NotificationCenter` listeners (e.g. `ScrollGate` observers) or allocate class-based hover trackers inside individual row views (`QueueTrackRow`, `SongRow`). Hover state must remain strictly view-local (`.onHover { hovering = $0 }`).
+  - **Streaming API Ingestion & Table Virtualization**: During background streaming or incremental search ingestion (`search3`, library sync), throttle UI table view updates to at most once per second (1 Hz) to prevent layout thrashing and continuous cell mounting during user scrolling. Fast-path cache/download checks with O(1) lookups before touching disk.
+
 ## UI conventions & Design System
 - **Mandatory reuse of core UI assets — never invent custom duplicates:**
   - `SongTable`: full tabular song list with sorting and columns (used in Songs browser).
   - `SongRow`: standard track row for detail lists (Album, Playlist, Artist, Favorites, Downloads).
   - `CompactSongsSection` / `CompactSongsGrid`: 3-row Apple Music-style compact song blocks/shelves.
   - `AlbumGridView` / `AlbumCard`: standard square album artwork tiles with hover play/actions.
-  - Content pills (`TopResultSongCard`, `TopResultArtistCard`, `ContentPillCard`): 8pt continuous radius, 40pt artwork thumbnail.
+  - `ContentPillCard`: 8pt continuous radius, 40pt artwork thumbnail. Search "Top Results" MUST reuse this canonical pill component from Home Quick Access rather than inventing divergent search cards.
   - `SkeletonKit`: unified shimmer loading skeletons (`SkeletonSongRow`, `SkeletonSongList`, `SkeletonCardGrid`).
 - **Context actions have ONE source of truth:**
   - Playlist actions: `PlaylistContextMenuItems` in `PlaylistMenu.swift`.
@@ -92,8 +119,33 @@
 - **Hit targets are larger than visual glyphs:** Keep padding inside the label and add `.contentShape(Rectangle())`. Action buttons and ellipsis menus must have square, generous hit targets (24–28pt), never restricted to the tiny glyph bounds.
 - **No verbose text clutter (self-sufficient, concise UI copy):** Feature names, buttons, menu items, and toggles must be strictly concise and explain their intent on their own. Longer wording is only acceptable when it directly removes ambiguity. Avoid explanatory subtitles under checkboxes/toggles, prose descriptions, and gratuitous hover text (`.help(...)`) on labeled controls — they create visual noise that degrades interface readability. Use standard macOS nouns over verbs ("Offline Mode", "Network"). Standard, concise tooltips remain appropriate only for icon-only controls where meaning is not self-evident.
 - **Deep system unification (component coherence):** Ensure components operate collectively through shared sources of truth. Architectural and visual improvements must apply across all related screens at the shared-entity level, rather than being patched ad-hoc in isolated views. Fragmented logic, duplicate components, and divergent user flows are unacceptable.
-- `Build`/`lint` gate: `./scripts/lint.sh` uses a baseline. If an edit nears a size limit, extract new code into an extension file rather than raising thresholds.
+- **Typography & Font Hierarchy in Track Rows & Applets:**
+  - In track rows (`QueueTrackRow`, `CompactSongRow`, `SongRow`, popover lists), Title and Subtitle share equal base font size (`.callout` or 12pt). Visual hierarchy MUST be expressed through font weight (Title: `.medium` or `.semibold` vs Subtitle: `.regular`) and color contrast (`.primary` vs `AMColor.secondaryText`), NEVER by shrinking the subtitle to miniature `.caption` or `.caption2`.
+  - **Header Action Buttons (Play / Shuffle pills)**: Action buttons in Album/Playlist detail headers must strictly use `AMFont.actionPill` (14pt, `.semibold`) and icon `AMFont.actionPillIcon` (13pt). Never shrink action button labels to miniature body or caption sizes.
+  - **Tile & Count Metadata**: Subtitles displaying item counts (e.g. "%d albums", "%d songs") in Artists and Genres tiles must strictly use `AMFont.rowSubtitle` with `AMColor.secondaryText`. Arbitrary hardcoded point sizes (`9pt`, `10.5pt`) are forbidden.
+  - All typography styles must reference semantic styles (`AMFont`) or standard dynamic type scales rather than arbitrary hardcoded point sizes.
+- **Consistent Active Track & Hover Presentation:**
+  - Active playing track state must be uniform across all row components:
+    1. Title text tinted with `AMColor.accent`.
+    2. Artwork shows speaker/playing badge overlay.
+    3. Row selection / hover uses neutral translucent highlight (`Color.primary.opacity(0.08)` or `AMColor.sidebarSelection`), NEVER a solid full-row colored accent fill that clashes with surrounding rows.
+    4. Subtitle remains neutral secondary text (`AMColor.secondaryText`).
+- **Card Container & Skeleton Unification:**
+  - Standard media cards (Album, Playlist, Smart Playlist) must use the shared card container: 6pt continuous corner radius, 1:1 aspect ratio artwork, 2-line title limit with line reservation, and secondary owner/artist line.
+  - Skeletons and loading states must exclusively use `SkeletonKit` (`SkeletonCard`, `SkeletonSongRow`). Private placeholder structs with static non-shimmer rectangles are forbidden.
+- **Low Power Mode & Energy Conservation**:
+  - Disable infinite decorative animations (such as continuous shimmer sweeps in `Shimmer.swift` and `Components.swift`) when `ProcessInfo.processInfo.isLowPowerModeEnabled`.
+  - In Low Power Mode, cap cover art loading resolution to `.low` (240px) to prevent memory and GPU spikes during rapid scrolling.
+- `Build`/`lint` gate: `./scripts/lint.sh` enforces code-size thresholds and quality rules. If an edit nears a size limit, extract new code into an extension file rather than raising thresholds.
 
 ## Localization & Branding
 - Every user-visible string MUST be localized (`Localizable.strings` in `en.lproj` and `ru.lproj`). Flag hard-coded strings.
+- **English canonical keys only**: All localization keys in Swift code MUST be in English (e.g. `"Show".localized`, `"Quick Access".localized`). Never write Russian string literals as localization keys in Swift source files (e.g. forbidden: `"Показать".localized`).
+- **1:1 key parity**: `en.lproj/Localizable.strings` and `ru.lproj/Localizable.strings` must maintain exact 1:1 key parity. `en.lproj` must never contain Cyrillic keys.
 - Do not use the app brand name in locale strings. Use generic wording ("Кэш приложения" / "Application cache", not "Кэш Klopydrome").
+
+## Deterministic & locale-agnostic testing
+- Tests must be deterministic regardless of system language or region settings.
+- **Never assert on localized UI string literals**:
+  - Assert underlying domain state, enums, or numeric values instead of formatted strings (e.g. assert `player.isCrossfading == true` and `player.crossfadeRemainingTime == 3.0` rather than checking formatted `"Crossfade · 3 s"`).
+  - When testing error dispatch, assert that the error exists or match against the localized format function (`L10n.format(...)`).

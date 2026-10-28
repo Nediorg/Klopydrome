@@ -53,11 +53,10 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# Lint gate (new SwiftLint violations only, frozen in the baseline).
+# Lint gate.
 if [[ "${RUN_LINT}" == "1" ]]; then
     if command -v swiftlint >/dev/null 2>&1; then
-        [[ -f .swiftlint-baseline.json ]] || swiftlint lint --write-baseline .swiftlint-baseline.json >/dev/null
-        swiftlint lint --strict --baseline .swiftlint-baseline.json
+        swiftlint lint --strict
     else
         echo "warning: swiftlint not found; skipping lint gate (brew install swiftlint)" >&2
     fi
