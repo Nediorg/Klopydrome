@@ -12,151 +12,199 @@ struct PlaylistsView: View {
     @State private var confirmingDeleteID: String?
     @State private var confirmingDeleteSmart: SmartPlaylist?
 
+    @State private var searchText = ""
+    @State private var favoritesOnly = false
+
+    private let gap: CGFloat = 16
+    private let minCard: CGFloat = 165
+
     private let playlistPageSize = 100
     @State private var displayedPlaylistCount = 100
+
+    private var filteredPlaylists: [PlaylistSummary] {
+        var list = playlists
+        if favoritesOnly {
+            list = list.filter { app.isFollowed($0) }
+        }
+        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if !query.isEmpty {
+            list = list.filter {
+                ($0.displayName + " " + ($0.owner ?? "")).lowercased().contains(query)
+            }
+        }
+        return list
+    }
+
+    private var filteredSmartPlaylists: [SmartPlaylist] {
+        if favoritesOnly { return [] }
+        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return app.smartPlaylists }
+        return app.smartPlaylists.filter {
+            $0.name.lowercased().contains(query)
+        }
+    }
+
     private var displayedPlaylists: [PlaylistSummary] {
-        Array(playlists.prefix(displayedPlaylistCount))
+        Array(filteredPlaylists.prefix(displayedPlaylistCount))
     }
 
     var body: some View {
-        Group {
-            if loading && playlists.isEmpty && app.smartPlaylists.isEmpty {
-                initialLoadingGrid
-            } else if playlists.isEmpty && app.smartPlaylists.isEmpty {
-                ContentUnavailableView {
-                    Label("Нет плейлистов".localized, systemImage: "music.note.list")
-                } description: {
-                    Text("Создайте плейлист, чтобы увидеть его здесь.".localized)
-                } actions: {
-                    Button("Создать плейлист".localized) {
-                        guard app.confirmOfflineAction() else { return }
-                        app.creatingPlaylistSongs = []
-                        app.isCreatingPlaylist = true
-                    }
+        VStack(spacing: 0) {
+            LibraryHeader(title: "All Playlists", searchText: $searchText) {
+                Picker("Show".localized, selection: $favoritesOnly) {
+                    Text("All Playlists".localized).tag(false)
+                    Text("Favorites only".localized).tag(true)
                 }
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if !app.smartPlaylists.isEmpty {
-                            smartSection
-                        }
+                .pickerStyle(.inline)
+            }
+            .background(.ultraThinMaterial)
+            .overlay(alignment: .bottom) { Divider().opacity(0.35) }
+            .zIndex(1)
 
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
-                            ForEach(displayedPlaylists) { playlist in
-                                Button {
-                                    app.openPlaylist(playlist)
-                                } label: {
-                                    PlaylistTile(playlist: playlist)
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    PlaylistContextMenuItems(playlist: playlist) {
-                                        rename(playlist)
-                                    } onEditRules: {
-                                        app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: playlist))
-                                    } onDelete: {
-                                        confirmingDeleteID = playlist.id
-                                    }
-                                }
-                            }
-                            if displayedPlaylistCount < playlists.count {
-                                Color.clear.frame(height: 1)
-                                    .gridCellColumns(1)
-                                    .onAppear {
-                                        displayedPlaylistCount = min(
-                                            displayedPlaylistCount + playlistPageSize,
-                                            playlists.count
-                                        )
-                                    }
-                            }
+            Group {
+                if loading && playlists.isEmpty && app.smartPlaylists.isEmpty {
+                    initialLoadingGrid
+                } else if playlists.isEmpty && app.smartPlaylists.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Playlists".localized, systemImage: "music.note.list")
+                    } description: {
+                        Text("Create a playlist to see it here.".localized)
+                    } actions: {
+                        Button("Create Playlist".localized) {
+                            guard app.confirmOfflineAction() else { return }
+                            app.creatingPlaylistSongs = []
+                            app.isCreatingPlaylist = true
                         }
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
-                }
-                .scrollClipDisabled()
-                .refreshable {
-                    if app.isOfflineSession {
-                        _ = await app.reconnect()
-                    } else {
-                        await load()
+                    .emptyStatePinnedToTop()
+                } else if filteredPlaylists.isEmpty && filteredSmartPlaylists.isEmpty {
+                    ContentUnavailableView(
+                        "Nothing Found".localized,
+                        systemImage: "magnifyingglass",
+                        description: Text("Try changing the query or filter settings.".localized)
+                    )
+                    .emptyStatePinnedToTop()
+                } else {
+                    GeometryReader { geo in
+                        let available = geo.size.width - 48
+                        let count = max(1, Int((available + gap) / (minCard + gap)))
+                        let rawWidth = (available - CGFloat(count - 1) * gap) / CGFloat(count)
+                        let cardWidth = floor(rawWidth)
+                        let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 24) {
+                                if !filteredSmartPlaylists.isEmpty {
+                                    smartSection(cols: cols, cardWidth: cardWidth)
+                                }
+
+                                LazyVGrid(columns: cols, spacing: gap) {
+                                    ForEach(displayedPlaylists) { playlist in
+                                        Button {
+                                            app.openPlaylist(playlist)
+                                        } label: {
+                                            PlaylistTile(
+                                                playlist: playlist,
+                                                width: cardWidth,
+                                                onRename: { rename(playlist) },
+                                                onEditRules: {
+                                                    let server = ServerSmartPlaylist(summary: playlist)
+                                                    app.openSmartPlaylistEditor(server: server)
+                                                },
+                                                onDelete: { confirmingDeleteID = playlist.id }
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    if displayedPlaylistCount < filteredPlaylists.count {
+                                        Color.clear.frame(height: 1)
+                                            .gridCellColumns(count)
+                                            .onAppear {
+                                                displayedPlaylistCount = min(
+                                                    displayedPlaylistCount + playlistPageSize,
+                                                    filteredPlaylists.count
+                                                )
+                                            }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 20)
+                        }
+                        .scrollClipDisabled()
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .refreshable {
+            if app.isOfflineSession {
+                _ = await app.reconnect()
+            } else {
+                await load()
+            }
+        }
         .task(id: app.isConnected) { await loadIfNeeded() }
+        .onChange(of: searchText) { displayedPlaylistCount = playlistPageSize }
+        .onChange(of: favoritesOnly) { displayedPlaylistCount = playlistPageSize }
         .confirmationDialog(
-            "Удалить плейлист?".localized,
+            "Delete Playlist?".localized,
             isPresented: Binding(
                 get: { confirmingDeleteID != nil },
                 set: { if !$0 { confirmingDeleteID = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Удалить".localized, role: .destructive) {
+            Button("Delete".localized, role: .destructive) {
                 if let id = confirmingDeleteID, let playlist = playlists.first(where: { $0.id == id }) {
                     delete(playlist)
                 }
                 confirmingDeleteID = nil
             }
-            Button("Отмена".localized, role: .cancel) { confirmingDeleteID = nil }
+            Button("Cancel".localized, role: .cancel) { confirmingDeleteID = nil }
         }
-        .alert("Переименовать умный плейлист".localized, isPresented: $smartRenamePresented) {
-            TextField("Название плейлиста".localized, text: $smartRenameName)
-            Button("Переименовать".localized) { smartRename(smartRenameID, smartRenameName) }
-            Button("Отмена".localized, role: .cancel) {}
+        .alert("Rename Smart Playlist".localized, isPresented: $smartRenamePresented) {
+            TextField("Playlist Name".localized, text: $smartRenameName)
+            Button("Rename".localized) { smartRename(smartRenameID, smartRenameName) }
+            Button("Cancel".localized, role: .cancel) {}
         }
         .confirmationDialog(
-            "Удалить умный плейлист?".localized,
+            "Delete Smart Playlist?".localized,
             isPresented: Binding(
                 get: { confirmingDeleteSmart != nil },
                 set: { if !$0 { confirmingDeleteSmart = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Удалить".localized, role: .destructive) {
+            Button("Delete".localized, role: .destructive) {
                 if let smart = confirmingDeleteSmart {
                     app.deleteSmartPlaylist(id: smart.id)
                 }
                 confirmingDeleteSmart = nil
             }
-            Button("Отмена".localized, role: .cancel) { confirmingDeleteSmart = nil }
+            Button("Cancel".localized, role: .cancel) { confirmingDeleteSmart = nil }
         }
     }
 
-    /// Responsive grid of large, square playlist tiles.
-    private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 24)]
-    }
-
-    /// Keeps the first tab visit spatially stable while the playlist manifest is
-    /// in flight, replacing the former page-wide spinner with useful structure.
     private var initialLoadingGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
-                ForEach(0..<8, id: \.self) { _ in
-                    PlaylistTilePlaceholder()
-                }
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
-        }
-        .scrollClipDisabled()
-        .accessibilityLabel("Загрузка плейлистов".localized)
+        SkeletonCardGrid(
+            count: 12,
+            minCard: minCard,
+            gap: gap,
+            accessibilityLabel: "Loading playlists".localized
+        )
     }
 
-    private var smartSection: some View {
+    private func smartSection(cols: [GridItem], cardWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Умные плейлисты".localized)
+            Text("Smart Playlists".localized)
                 .font(.title3.bold())
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
-                ForEach(app.smartPlaylists) { smart in
+            LazyVGrid(columns: cols, spacing: gap) {
+                ForEach(filteredSmartPlaylists) { smart in
                     Button {
                         app.openSmartPlaylist(smart)
                     } label: {
-                        SmartPlaylistTile(playlist: smart)
+                        SmartPlaylistTile(playlist: smart, width: cardWidth)
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -175,8 +223,6 @@ struct PlaylistsView: View {
         }
     }
 
-    /// Fetches the playlist list only when it has never been loaded, so revisits
-    /// are instant. Pull-to-refresh still forces a full reload.
     private func loadIfNeeded() async {
         guard !app.library.playlistsLoaded else {
             loading = false
@@ -212,113 +258,106 @@ struct PlaylistsView: View {
     }
 }
 
-/// Large, square playlist tile: artwork with the title and creator underneath.
-struct PlaylistTilePlaceholder: View {
-    var width: CGFloat?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-                .aspectRatio(1, contentMode: .fit)
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color.primary.opacity(0.07))
-                .frame(width: 132, height: 13)
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-                .frame(width: 88, height: 10)
-        }
-        .frame(width: width, alignment: .leading)
-        .accessibilityHidden(true)
-    }
-}
-
 struct PlaylistTile: View {
     let playlist: PlaylistSummary
     var width: CGFloat?
+    var onRename: (() -> Void)?
+    var onEditRules: (() -> Void)?
+    var onDelete: (() -> Void)?
+
+    @Environment(AppState.self) private var app
+    @State private var hovering = false
+    @State private var hoverTracker = HoverTracker()
+
+    private var isFollowed: Bool { app.isFollowed(playlist) }
 
     private var fallbackPreset: PlaylistCoverPreset {
-        let presets = PlaylistCoverPreset.all
-        let index = abs(playlist.id.hashValue) % presets.count
-        return presets[index]
+        PlaylistCoverPreset.preset(for: playlist.id)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            artwork
-            textBlock
-        }
-        .frame(width: width, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if let width {
-            coverView(size: width)
-                .frame(width: width, height: width)
-        } else {
-            GeometryReader { geo in
-                coverView(size: geo.size.width)
+        let cardWidth = width ?? 165
+        MediaCard(
+            width: cardWidth,
+            title: playlist.displayName,
+            subtitle: playlist.owner ?? "Playlist".localized,
+            reservesTitleLines: true
+        ) {
+            if let coverArt = playlist.coverArt, !coverArt.isEmpty {
+                CoverArtView(coverArt: coverArt, size: cardWidth, cornerRadius: 6, shadow: true)
+            } else {
+                CoverPresetView(preset: fallbackPreset, size: cardWidth, title: playlist.displayName)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
             }
-            .aspectRatio(1, contentMode: .fit)
+        } trailingBadge: {
+            if hovering || isFollowed {
+                Button {
+                    app.toggleFollow(playlist)
+                } label: {
+                    Image(systemName: isFollowed ? "star.fill" : "star")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isFollowed ? AMColor.accent : .white)
+                        .padding(5)
+                        .background(Circle().fill(.black.opacity(0.35)))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .help(isFollowed ? "Remove from Favorites".localized : "Add to Favorites".localized)
+                .accessibilityLabel(
+                    isFollowed ? "Remove from Favorites".localized : "Add to Favorites".localized
+                )
+                .transition(.opacity)
+            }
         }
-    }
-
-    @ViewBuilder
-    private func coverView(size: CGFloat) -> some View {
-        if let coverArt = playlist.coverArt, !coverArt.isEmpty {
-            CoverArtView(coverArt: coverArt, size: size, cornerRadius: 6, shadow: true)
-        } else {
-            CoverPresetView(preset: fallbackPreset, size: size, title: playlist.displayName)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+        .onHover { isInside in
+            hoverTracker.isInside = isInside
+            if isInside {
+                if !ScrollGate.shared.isScrolling {
+                    hovering = true
+                }
+            } else {
+                if hovering {
+                    hovering = false
+                }
+            }
         }
-    }
-
-    private var textBlock: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(playlist.displayName)
-                .font(.callout)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            Text(playlist.owner ?? "Плейлист".localized)
-                .font(.callout)
-                .foregroundStyle(AMColor.secondaryText)
-                .lineLimit(1)
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
+            if hoverTracker.isInside && !hovering {
+                hovering = true
+            }
         }
-        .padding(.horizontal, 2)
+        .contextMenu {
+            PlaylistContextMenuItems(
+                playlist: playlist,
+                onRename: onRename ?? {},
+                onEditRules: onEditRules ?? {},
+                onDelete: onDelete ?? {}
+            )
+        }
     }
 }
 
-/// Square tile for a smart playlist: outline gear artwork with rules beneath.
 struct SmartPlaylistTile: View {
     let playlist: SmartPlaylist
+    var width: CGFloat?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let cardWidth = width ?? 165
+        MediaCard(
+            width: cardWidth,
+            title: playlist.name,
+            subtitle: playlist.ruleSummary,
+            reservesTitleLines: true
+        ) {
             Image(systemName: "gearshape")
-                .font(.system(size: 72, weight: .light))
+                .font(.system(size: cardWidth * 0.44, weight: .light))
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: cardWidth, height: cardWidth)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.gray.opacity(0.12))
                 )
-                .aspectRatio(1, contentMode: .fit)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(playlist.name)
-                    .font(.callout)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(playlist.ruleSummary)
-                    .font(.callout)
-                    .foregroundStyle(AMColor.secondaryText)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 2)
         }
-        .contentShape(Rectangle())
     }
 }

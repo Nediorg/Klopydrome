@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// Alphabetical artist index, Apple Music style.
 struct ArtistsView: View {
     @Environment(AppState.self) private var app
 
@@ -13,23 +12,21 @@ struct ArtistsView: View {
     }
 
     @State private var loading = true
-    /// Set when the index fetch fails, so an error renders with retry instead
-    /// of a misleading "Нет артистов".
     @State private var loadError: String?
 
     var body: some View {
         Group {
             if let loadError {
-                LibraryUnavailableView(title: "Не удалось загрузить",
+                LibraryUnavailableView(title: "Failed to load".localized,
                                        systemImage: "wifi.exclamationmark",
                                        message: loadError,
                                        retry: { Task { await load() } })
             } else if loading && indexes.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if indexes.isEmpty {
-                LibraryUnavailableView(title: "Нет артистов",
+                LibraryUnavailableView(title: "No Artists".localized,
                                        systemImage: "music.mic",
-                                       message: "В вашей библиотеке пока нет артистов.")
+                                       message: "There are no artists in your library yet.".localized)
             } else {
                 List {
                     ForEach(indexes, id: \.name) { index in
@@ -45,11 +42,13 @@ struct ArtistsView: View {
                                             coverArt: artist.coverArt ?? app.coverArtForArtist(artist)
                                         )
                                         Text(artist.name)
+                                            .font(AMFont.rowTitle)
+                                            .foregroundStyle(AMColor.primaryText)
                                         Spacer()
                                         if let count = artist.albumCount {
                                             Text("\(count) \(Pluralized.album(count))")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .font(AMFont.rowSubtitle)
+                                                .foregroundStyle(AMColor.secondaryText)
                                         }
                                     }
                                     .contentShape(Rectangle())
@@ -83,8 +82,6 @@ struct ArtistsView: View {
         }
     }
 
-    /// Fetches the artist index only when it has never been loaded, so a revisit
-    /// to the tab is instant. Pull-to-refresh still forces a full reload.
     private func loadIfNeeded() async {
         if app.isOfflineSession {
             loading = false
@@ -136,8 +133,6 @@ struct CircularArtistArt: View {
     }
 
     @State private var image: NSImage?
-    /// Same foreground-retry nonce as cover tiles: re-fires the task below
-    /// when failed artist images are invalidated store-wide.
     @State private var retryNonce = 0
 
     private var displayImage: NSImage? {
@@ -178,6 +173,38 @@ struct CircularArtistArt: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct ArtistTile: View {
+    @Environment(AppState.self) private var app
+    let artist: Artist
+    var size: CGFloat = 80
+    var coverArt: String?
+
+    var body: some View {
+        Button {
+            app.openArtistInLibrary(artist)
+        } label: {
+            VStack(spacing: 6) {
+                CircularArtistArt(
+                    name: artist.name,
+                    imageURL: artist.artistImageUrl,
+                    coverArt: coverArt ?? artist.coverArt ?? app.coverArtForArtist(artist),
+                    size: size
+                )
+                Text(artist.name)
+                    .font(.caption)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(width: size, alignment: .top)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            ArtistContextMenuItems(artist: artist)
         }
     }
 }

@@ -1,8 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// A compact Apple Music-style pill card container used across Home and Search.
-/// Features an 8pt continuous corner radius, subtle hover feedback, and full hit-target coverage.
 struct ContentPillContainer<Content: View>: View {
     let action: () -> Void
     @ViewBuilder let content: () -> Content
@@ -26,15 +24,12 @@ struct ContentPillContainer<Content: View>: View {
     }
 }
 
-/// Compact pill card representing a playlist.
 struct PlaylistPillCard: View {
     let playlist: PlaylistSummary
     let onTap: () -> Void
 
     private var fallbackPreset: PlaylistCoverPreset {
-        let presets = PlaylistCoverPreset.all
-        let index = abs(playlist.id.hashValue) % presets.count
-        return presets[index]
+        PlaylistCoverPreset.preset(for: playlist.id)
     }
 
     var body: some View {
@@ -49,11 +44,11 @@ struct PlaylistPillCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(playlist.displayName)
-                        .font(.callout.weight(.medium))
+                        .font(AMFont.rowTitle)
                         .lineLimit(1)
-                    Text("Плейлист".localized)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Text("Playlist".localized)
+                        .font(AMFont.rowSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -70,7 +65,6 @@ struct PlaylistPillCard: View {
     }
 }
 
-/// Compact pill card representing an artist.
 struct ArtistPillCard: View {
     let artist: Artist
     let onTap: () -> Void
@@ -82,11 +76,11 @@ struct ArtistPillCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(artist.name)
-                        .font(.callout.weight(.medium))
+                        .font(AMFont.rowTitle)
                         .lineLimit(1)
-                    Text("Исполнитель".localized)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Text("Artist".localized)
+                        .font(AMFont.rowSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -103,7 +97,6 @@ struct ArtistPillCard: View {
     }
 }
 
-/// Compact pill card representing an album.
 struct AlbumPillCard: View {
     let album: SubsonicAlbum
     let onTap: () -> Void
@@ -115,11 +108,11 @@ struct AlbumPillCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(album.displayName)
-                        .font(.callout.weight(.medium))
+                        .font(AMFont.rowTitle)
                         .lineLimit(1)
-                    Text(album.artist ?? "Альбом".localized)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Text(album.artist ?? "Album".localized)
+                        .font(AMFont.rowSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -133,5 +126,60 @@ struct AlbumPillCard: View {
         .contextMenu {
             AlbumContextMenuItems(album: album)
         }
+    }
+}
+
+struct SongPillCard: View {
+    let song: SubsonicSong
+    let isCurrent: Bool
+    let onPlay: () -> Void
+
+    @Environment(AppState.self) private var app
+
+    var body: some View {
+        ContentPillContainer(action: onPlay) {
+            HStack(spacing: 10) {
+                ZStack {
+                    CoverArtView(coverArt: song.coverArt, size: 40, cornerRadius: 4)
+                    if isCurrent {
+                        Color.black.opacity(0.35)
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.displayTitle)
+                        .font(AMFont.rowTitle)
+                        .lineLimit(1)
+                        .foregroundStyle(isCurrent ? AMColor.accent : .primary)
+                    Text(subtitleText)
+                        .font(AMFont.rowSubtitle)
+                        .foregroundStyle(AMColor.secondaryText)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isCurrent ? "speaker.wave.2.fill" : "play.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(isCurrent ? AMColor.accent : Color.secondary)
+            }
+        }
+        .contextMenu {
+            SongActionItems(app: app, song: song, onPlay: onPlay)
+        }
+    }
+
+    private var subtitleText: String {
+        let type = "Song".localized
+        if let artist = song.artist, !artist.isEmpty {
+            return "\(type) · \(artist)"
+        }
+        return type
     }
 }

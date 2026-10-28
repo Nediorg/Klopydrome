@@ -1,9 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// The per-tab settings that make the two album grids differ. Everything else —
-/// pagination, search/debounce, filter+sort, empty states — is shared.
-/// MainActor-isolated because the backing `LibraryCache` store is `@MainActor`.
 @MainActor
 struct AlbumGridConfig {
     let title: String
@@ -16,45 +13,37 @@ struct AlbumGridConfig {
     let allLoaded: WritableKeyPath<LibraryCache, Bool>
 
     static let albums = AlbumGridConfig(
-        title: "Альбомы",
+        title: "Albums",
         listType: .alphabeticalByName,
         defaultSort: .name,
         emptySystemImage: "square.stack",
-        emptyMessage: "Альбомы появятся здесь, когда будут в вашей библиотеке.",
+        emptyMessage: "Albums will appear here when they're in your library.",
         albums: \LibraryCache.albums,
         loaded: \LibraryCache.albumsLoaded,
         allLoaded: \LibraryCache.albumsAllLoaded
     )
 
     static let recentlyAdded = AlbumGridConfig(
-        title: "Недавно добавленные",
+        title: "Recently Added",
         listType: .newest,
         defaultSort: .recentlyAdded,
         emptySystemImage: "clock",
-        emptyMessage: "Альбомы, добавленные в библиотеку, появятся здесь.",
+        emptyMessage: "Albums added to your library will appear here.",
         albums: \LibraryCache.recentAlbums,
         loaded: \LibraryCache.recentAlbumsLoaded,
         allLoaded: \LibraryCache.recentAllLoaded
     )
 }
 
-/// Paged album grid with search, favorites filter and sorting. Powers both the
-/// "Альбомы" and "Недавно добавленные" tabs; the two differ only in
-/// `AlbumGridConfig`.
 struct AlbumGridView: View {
     @Environment(AppState.self) private var app
     private let config: AlbumGridConfig
 
-    /// A compact initial response reaches the first useful grid sooner. Further
-    /// pages retain the larger batch size once the user has content to browse.
     private let initialPageSize = 48
     private let pageSize = 100
     @State private var loading = true
     @State private var isLoadingMore = false
-    /// Set when the initial fetch fails, so an error renders with retry
-    /// instead of a misleading "Нет альбомов".
     @State private var loadError: String?
-    /// A later pagination failure must not be treated as the end of the list.
     @State private var pageLoadError: String?
 
     @State private var sort: LibrarySort
@@ -63,9 +52,6 @@ struct AlbumGridView: View {
     @State private var processedAlbums: [SubsonicAlbum] = []
     @State private var reprocessing = false
 
-    /// Filtered + sorted result to display. Falls back to raw `albums` on first
-    /// appearance while background sort/filter computation is running, avoiding
-    /// a flash of empty state or "Ничего не найдено".
     private var displayAlbums: [SubsonicAlbum] {
         if !processedAlbums.isEmpty {
             return processedAlbums
@@ -78,12 +64,8 @@ struct AlbumGridView: View {
 
     private var currentType: AlbumListType? { sort.asAlbumListType }
     private var isLocalSort: Bool { currentType == nil }
-    /// Debounced reprocess task for the search field.
     @State private var searchTask: Task<Void, Never>?
-    /// Off-main reprocess task (filter + sort of the whole album list).
     @State private var reprocessTask: Task<Void, Never>?
-    /// Increments each reprocess; results apply only when their token still
-    /// matches, so a slow background sort can't overwrite a newer one.
     @State private var reprocessGeneration = 0
 
     private let gap: CGFloat = 16
@@ -97,15 +79,15 @@ struct AlbumGridView: View {
     var body: some View {
         VStack(spacing: 0) {
             LibraryHeader(title: config.title, searchText: $searchText) {
-                Picker("Показать".localized, selection: $favoritesOnly) {
-                    Text("Все альбомы".localized).tag(false)
-                    Text("Только избранное".localized).tag(true)
+                Picker("Show".localized, selection: $favoritesOnly) {
+                    Text("All Albums".localized).tag(false)
+                    Text("Favorites only".localized).tag(true)
                 }
                 .pickerStyle(.inline)
 
                 Divider()
 
-                Picker("Сортировка".localized, selection: $sort) {
+                Picker("Sort".localized, selection: $sort) {
                     ForEach(AlbumSort.allCases) { option in
                         Text(option.label.localized).tag(option)
                     }
@@ -119,7 +101,7 @@ struct AlbumGridView: View {
 
             Group {
                 if let loadError {
-                    LibraryUnavailableView(title: "Не удалось загрузить".localized,
+                    LibraryUnavailableView(title: "Failed to load".localized,
                                            systemImage: "wifi.exclamationmark",
                                            message: loadError,
                                            retry: { Task { await refresh() } })
@@ -127,18 +109,19 @@ struct AlbumGridView: View {
                 } else if loading && albums.isEmpty {
                     initialLoadingGrid
                 } else if albums.isEmpty {
-                    LibraryUnavailableView(title: "Нет альбомов".localized,
+                    LibraryUnavailableView(title: "No Albums".localized,
                                            systemImage: config.emptySystemImage,
-                                           message: config.emptyMessage)
+                                           message: config.emptyMessage.localized)
                         .emptyStatePinnedToTop()
                 } else if displayAlbums.isEmpty {
                     if reprocessing || (!app.library[keyPath: config.loaded] && loading) {
                         initialLoadingGrid
                     } else {
-                        ContentUnavailableView("Ничего не найдено".localized,
-                                               systemImage: "magnifyingglass",
-                                               // swiftlint:disable:next line_length
-                                                description: Text("Попробуйте изменить запрос или параметры фильтра.".localized))
+                        ContentUnavailableView(
+                            "Nothing Found".localized,
+                            systemImage: "magnifyingglass",
+                            description: Text("Try changing the query or filter settings.".localized)
+                        )
                             .emptyStatePinnedToTop()
                     }
                 } else {
@@ -178,8 +161,6 @@ struct AlbumGridView: View {
         .refreshable { await refresh() }
         .task { await loadIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
-            // A background failure leaves `loadError`/*page* error latched with
-            // only manual retry; one automatic retry per activation resumes it.
             if loadError != nil {
                 Task { await refresh() }
             } else if pageLoadError != nil {
@@ -194,16 +175,8 @@ struct AlbumGridView: View {
     private var albums: [SubsonicAlbum] { app.library[keyPath: config.albums] }
     private var allLoaded: Bool { app.library[keyPath: config.allLoaded] }
 
-    /// Fetches the first page only when the store has never been loaded, so a
-    /// revisit to the tab is instant and keeps scroll position. Pull-to-refresh
-    /// still forces a full reload via `refresh()`.
     private func loadIfNeeded() async {
         guard !app.library[keyPath: config.loaded] else {
-            // Already-loaded store: the tab re-appears with fresh `@State`, so
-            // `processedAlbums` is empty and the spinner is running. Recompute
-            // the grid from the cache and stop the spinner — otherwise every
-            // revisit shows "Ничего не найдено" (or a stuck spinner when the
-            // library is genuinely empty) even though albums exist.
             loading = false
             reprocess()
             return
@@ -211,8 +184,6 @@ struct AlbumGridView: View {
         await refresh()
     }
 
-    /// Debounces search-field reprocessing so fast typing doesn't filter + sort
-    /// the whole album list on every character.
     private func scheduleReprocess() {
         searchTask?.cancel()
         searchTask = Task {
@@ -222,14 +193,10 @@ struct AlbumGridView: View {
         }
     }
 
-    /// Filters (and locally sorts when needed) into `processedAlbums`.
-    /// Server sorts are already ordered via `currentType`; local sorts
-    /// (duration/genre/id/release) are applied here.
     private func reprocess() {
         let generation = reprocessGeneration + 1
         reprocessGeneration = generation
 
-        // Snapshot all inputs synchronously on the main actor.
         let base = albums
         if base.isEmpty {
             processedAlbums = []
@@ -334,8 +301,6 @@ struct AlbumGridView: View {
     }
 }
 
-// MARK: - Subviews & Computations
-
 private extension AlbumGridView {
     @ViewBuilder
     var paginationFooter: some View {
@@ -343,7 +308,7 @@ private extension AlbumGridView {
             VStack(spacing: 8) {
                 Divider().opacity(0.4)
                 Button { Task { await loadMore() } } label: {
-                    Label("Повторить загрузку".localized, systemImage: "arrow.clockwise")
+                    Label("Retry".localized, systemImage: "arrow.clockwise")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.secondary)
                         .opacity(0.5)
@@ -354,7 +319,7 @@ private extension AlbumGridView {
                 }
                 .buttonStyle(.plain)
                 .help(pageLoadError)
-                .accessibilityLabel("Повторить загрузку".localized)
+                .accessibilityLabel("Retry".localized)
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.horizontal, 24)
@@ -366,27 +331,13 @@ private extension AlbumGridView {
         }
     }
 
-    /// The first network response has not arrived yet, but the grid dimensions
-    /// are already useful feedback and avoid a visually empty tab.
     var initialLoadingGrid: some View {
-        GeometryReader { geo in
-            let available = geo.size.width - 48
-            let count = max(1, Int((available + gap) / (minCard + gap)))
-            let rawWidth = (available - CGFloat(count - 1) * gap) / CGFloat(count)
-            let cardWidth = floor(rawWidth)
-            let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
-            ScrollView {
-                LazyVGrid(columns: cols, spacing: gap) {
-                    ForEach(0..<12, id: \.self) { _ in
-                        AlbumCardPlaceholder(width: cardWidth)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 20)
-            }
-            .scrollClipDisabled()
-        }
-        .accessibilityLabel("Загрузка альбомов".localized)
+        SkeletonCardGrid(
+            count: 12,
+            minCard: minCard,
+            gap: gap,
+            accessibilityLabel: "Loading albums".localized
+        )
     }
 
     nonisolated static func compute(

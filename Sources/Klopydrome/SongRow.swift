@@ -7,20 +7,13 @@ struct SongRow: View {
     var index: Int?
     var showAlbum = true
     var showsArtist = false
-    /// When non-nil, overrides the environment-derived current-track check.
-    /// Lets parents pass a snapshot and enables `Equatable` skipping when
-    /// `AppState` ticks for unrelated reasons (progress, downloads).
     var isCurrentOverride: Bool?
     var playlist: PlaylistSummary?
     var playlistIndex: Int?
     var extraActions: [SongMenuExtraAction] = []
     var onPlay: ((Int) -> Void)?
-    /// Whether this row is part of the current selection.
     var isSelected = false
-    /// Lazily resolves the full selection when the context menu opens.
-    /// Avoids O(N×M) per render by deferring the work until actually needed.
     var resolveSelection: (() -> [SubsonicSong])?
-    /// Called when the user clicks the row (without double-click intent).
     var onSelect: (() -> Void)?
 
     @Environment(AppState.self) private var app
@@ -28,15 +21,14 @@ struct SongRow: View {
     @State private var hoverTracker = HoverTracker()
 
     private var isCurrent: Bool { isCurrentOverride ?? (app.player.currentSong?.id == song.id) }
-    private var fgPrimary: Color { isCurrent ? .white : .primary }
-    private var fgSecondary: Color { isCurrent ? .white.opacity(0.8) : .secondary }
+    private var fgPrimary: Color { isCurrent ? AMColor.accent : .primary }
+    private var fgSecondary: Color { AMColor.secondaryText }
     private var isCachedLocally: Bool { app.isCached(song) }
     private var isCurrentPlaying: Bool { isCurrent && app.player.isPlaying }
     private var isPlayableLocally: Bool { !app.isOfflineSession || isCachedLocally }
     private var isNarrow: Bool { !showAlbum && !showsArtist }
     private var rowCornerRadius: CGFloat { isNarrow ? 4 : 6 }
 
-    /// Songs that context-menu bulk actions apply to.
     private var actionTargets: [SubsonicSong] {
         guard isSelected, let resolve = resolveSelection else { return [song] }
         let resolved = resolve()
@@ -56,10 +48,7 @@ struct SongRow: View {
             .padding(.vertical, isNarrow ? 2 : 5)
             .frame(height: isNarrow ? 26 : nil)
             .background {
-                if isCurrent {
-                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
-                        .fill(AMColor.accent)
-                } else if isSelected {
+                if isSelected {
                     RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
                         .fill(AMColor.sidebarSelection.opacity(0.55))
                 } else if hovering {
@@ -88,8 +77,6 @@ struct SongRow: View {
                 )
             }
         }
-        // Fixed height (not minHeight) so LazyVStack can estimate row sizes
-        // without materializing them — prevents gaps in long lists.
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
         .opacity(isPlayableLocally ? 1.0 : 0.45)
         .onHover { isInside in
@@ -102,6 +89,11 @@ struct SongRow: View {
                 if hovering {
                     hovering = false
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidStart)) { _ in
+            if hovering {
+                hovering = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
@@ -180,18 +172,17 @@ struct SongRow: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(song.displayTitle)
-                    .font(.callout)
-                    .fontWeight(isCurrent ? .semibold : .regular)
+                    .font(AMFont.rowTitle)
                     .foregroundStyle(fgPrimary)
                     .lineLimit(1)
                 if showAlbum {
                     Text(song.displaySubtitle)
-                        .font(.caption)
+                        .font(AMFont.rowSubtitle)
                         .foregroundStyle(fgSecondary)
                         .lineLimit(1)
                 } else if showsArtist, let artist = song.artist {
                     Text(artist)
-                        .font(.caption)
+                        .font(AMFont.rowSubtitle)
                         .foregroundStyle(fgSecondary)
                         .lineLimit(1)
                 }
@@ -222,7 +213,7 @@ struct SongRow: View {
                 song: song,
                 selection: actionTargets,
                 resolveSelection: isSelected ? resolveSelection : nil,
-                foregroundStyle: isCurrent ? .white : .secondary,
+                foregroundStyle: .secondary,
                 app: app,
                 playlist: playlist,
                 playlistIndex: playlistIndex,
@@ -252,28 +243,21 @@ extension SongRow: Equatable {
     }
 }
 
-/// Selection state manager for `SongRow`-based lists (album, playlist, smart playlist).
-/// Handles Cmd+click (additive toggle) and plain click (replace with single item).
-/// Pass `songs` for the full ordered list to support Shift+click range selection.
 struct SongRowSelection {
     var ids: Set<SubsonicSong.ID> = []
     var anchor: SubsonicSong.ID?
 
-    /// Toggle or replace selection based on current NSEvent modifier flags.
     mutating func toggle(_ id: SubsonicSong.ID, allSongs: [SubsonicSong]) {
         let flags = NSApp.currentEvent?.modifierFlags ?? []
         if flags.contains(.command) {
-            // Cmd+click: additive toggle
             if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
             anchor = id
         } else if flags.contains(.shift), let anchorId = anchor ?? ids.first,
                   let anchorIdx = allSongs.firstIndex(where: { $0.id == anchorId }),
                   let targetIdx = allSongs.firstIndex(where: { $0.id == id }) {
-            // Shift+click: range from anchor to target
             let range = min(anchorIdx, targetIdx)...max(anchorIdx, targetIdx)
             ids = Set(allSongs[range].map(\.id))
         } else {
-            // Plain click: if already the only selection, deselect; else select only this
             ids = ids == [id] ? [] : [id]
             anchor = ids.isEmpty ? nil : id
         }

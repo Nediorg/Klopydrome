@@ -1,7 +1,6 @@
 import SwiftUI
 import NavidromeClient
 
-/// An item pairing a track with its global index in the source songs array.
 struct CompactSongItem {
     let song: SubsonicSong
     let globalIndex: Int
@@ -17,13 +16,6 @@ struct CompactSongItem {
     }
 }
 
-/// A 3-column tabular song section matching Apple Music Sequoia.
-///
-/// In collapsed mode, it renders as a horizontal carousel (`ScrollView(.horizontal)`),
-/// scrolling columns of strictly 3 songs side-by-side.
-///
-/// In expanded mode, it stacks 3x3 blocks downward in the page without reordering.
-/// Any remainder songs are balanced evenly across the 3 columns into available slots.
 struct CompactSongsSection: View {
     let title: String
     var titleFont: Font = .title3.bold()
@@ -37,12 +29,10 @@ struct CompactSongsSection: View {
 
     private let maxCarouselColumns = 10
 
-    /// In collapsed mode (carousel), columns are strictly chunked into 3 songs each.
     private var carouselColumns: [[CompactSongItem]] {
         Array(CompactSongItem.columns(from: songs).prefix(maxCarouselColumns))
     }
 
-    /// Can expand if there is more than 1 full 3x3 block (more than 9 songs).
     private var canExpand: Bool {
         songs.count > 9
     }
@@ -61,6 +51,8 @@ struct CompactSongsSection: View {
                 collapsedCarousel
             }
         }
+        .frame(minWidth: 0, idealWidth: LayoutMetrics.detailColumnMinWidth, maxWidth: .infinity)
+        .animation(Motion.spring(Motion.expand), value: expanded)
         .onChange(of: songsIdentity) {
             expanded = false
             expandedLimit = 45
@@ -71,9 +63,7 @@ struct CompactSongsSection: View {
         HStack(spacing: 6) {
             Button {
                 if canExpand {
-                    withAnimation(Motion.spring(Motion.expand)) {
-                        expanded.toggle()
-                    }
+                    expanded.toggle()
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -90,12 +80,11 @@ struct CompactSongsSection: View {
             }
             .buttonStyle(.plain)
             .disabled(!canExpand)
-            .help(expanded ? "Свернуть".localized : "Раскрыть".localized)
-            .accessibilityLabel(expanded ? "Свернуть".localized : "Раскрыть".localized)
+            .help(expanded ? "Collapse".localized : "Expand".localized)
+            .accessibilityLabel(expanded ? "Collapse".localized : "Expand".localized)
         }
     }
 
-    /// Horizontal carousel of strictly 3-song columns.
     private var collapsedCarousel: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 16) {
@@ -111,9 +100,10 @@ struct CompactSongsSection: View {
             .padding(.vertical, 4)
         }
         .scrollClipDisabled()
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minWidth: 0, idealWidth: LayoutMetrics.detailColumnMinWidth, maxWidth: .infinity)
     }
 
-    /// Continuous 3-column layout without vertical block gaps and with dividers between all songs.
     private var expandedGrid: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
@@ -125,19 +115,20 @@ struct CompactSongsSection: View {
                             allSongs: songs,
                             subtitle: subtitle
                         )
-                        .frame(maxWidth: .infinity)
+                        .frame(minWidth: 0, maxWidth: .infinity)
                     } else {
-                        Spacer().frame(maxWidth: .infinity)
+                        Spacer().frame(minWidth: 0, maxWidth: .infinity)
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
 
             if songs.count > expandedLimit {
                 Button {
                     expandedLimit = min(expandedLimit + 45, songs.count)
                 } label: {
                     HStack(spacing: 6) {
-                        Text("Показать ещё".localized)
+                        Text("Show More".localized)
                             .font(.callout.weight(.medium))
                         Image(systemName: "chevron.down")
                             .font(.caption)
@@ -153,11 +144,9 @@ struct CompactSongsSection: View {
                 .padding(.top, 4)
             }
         }
+        .frame(minWidth: 0, idealWidth: LayoutMetrics.detailColumnMinWidth, maxWidth: .infinity)
     }
 
-    /// Flattens songs for a screen column (0, 1, or 2) in expanded mode:
-    /// Full 3x3 blocks (9 songs) place 3 songs into each column.
-    /// The remainder (< 9 songs) is balanced evenly across columns into available slots.
     private func expandedSongsForColumn(_ columnIndex: Int) -> [CompactSongItem] {
         guard !songs.isEmpty else { return [] }
         let visibleCount = min(expandedLimit, songs.count)
@@ -197,8 +186,6 @@ struct CompactSongsSection: View {
     }
 }
 
-// MARK: - Column & Row
-
 struct CompactSongColumn: View {
     let items: [CompactSongItem]
     let allSongs: [SubsonicSong]
@@ -227,6 +214,7 @@ struct CompactSongColumn: View {
                 }
             }
         }
+        .frame(minWidth: 0, maxWidth: .infinity)
     }
 }
 
@@ -281,16 +269,17 @@ struct CompactSongRow: View {
             HStack(spacing: 4) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(song.displayTitle)
-                        .font(.callout)
+                        .font(AMFont.rowTitle)
                         .lineLimit(1)
                         .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     if let sub = displaySubtitle, !sub.isEmpty {
                         Text(sub)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(AMFont.rowSubtitle)
+                            .foregroundStyle(AMColor.secondaryText)
                             .lineLimit(1)
                     }
                 }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
 
@@ -304,25 +293,18 @@ struct CompactSongRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+                .help(isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
                 .opacity(isStarred ? 1 : (hovering ? 1 : 0))
                 .allowsHitTesting(hovering || isStarred)
 
                 if hovering {
-                    Menu {
-                        SongActionItems(app: app, song: song, onPlay: onPlay)
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
-                    .fixedSize()
+                    SongEllipsisMenu(
+                        song: song,
+                        selection: [song],
+                        foregroundStyle: .secondary,
+                        app: app,
+                        compact: true
+                    )
                     .transition(.opacity)
                 } else {
                     Color.clear
