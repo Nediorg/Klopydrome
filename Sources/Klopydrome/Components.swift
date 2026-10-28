@@ -2,16 +2,13 @@ import SwiftUI
 import NavidromeClient
 import AppKit
 
-/// A single source of truth for motion. One interaction class = one consistent
-/// spring, per the animation-patterns guidance. All springs are disabled for
-/// users who request reduced motion (Reduce Motion in System Settings).
 enum Motion {
     static let hover = Animation.snappy(duration: 0.12, extraBounce: 0)
     static let expand = Animation.snappy(duration: 0.2, extraBounce: 0)
     static let feedback = Animation.snappy(duration: 0.15, extraBounce: 0.1)
 
     static var enabled: Bool {
-        !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && !ProcessInfo.processInfo.isLowPowerModeEnabled
     }
 
     static func spring(_ base: Animation) -> Animation {
@@ -19,7 +16,6 @@ enum Motion {
     }
 }
 
-/// Subtle brighten on hover for icon buttons (Apple Music-style feedback).
 struct HoverBrighten: ViewModifier {
     @State private var hovering = false
 
@@ -37,10 +33,6 @@ extension View {
     }
 }
 
-/// Visible, rectangular hover for icon-only buttons. A squircle fills the whole
-/// button frame on hover, and the hit shape is the SAME rectangle as the fill —
-/// so the entire button is hoverable and clickable, not just the glyph. Corners
-/// stay rect-ish to read as a normal toolbar button (no round "puffed" padding).
 struct HoverFill: ViewModifier {
     var fill: Color = Color.primary.opacity(0.1)
     var cornerRadius: CGFloat = 6
@@ -76,8 +68,6 @@ extension View {
     }
 }
 
-/// Pins an empty-state block to the top of the content area (just under the
-/// header row) instead of letting it float in the vertical center of the window.
 extension View {
     func emptyStatePinnedToTop(topPadding: CGFloat = 48) -> some View {
         self
@@ -86,26 +76,24 @@ extension View {
     }
 }
 
-/// Async cover artwork with disk+memory caching and a graceful placeholder.
-/// Corner radius scales with size (large covers ~12pt, small thumbnails ~4pt).
 struct SongMetadataGrid: View {
     let song: SubsonicSong
 
     private var rows: [(label: String, value: String?)] {
         [
-            ("Альбом", song.album),
-            ("Исполнитель", song.artist),
-            ("Альбомный исполнитель", song.albumArtist),
-            ("Год", song.year.map(String.init)),
-            ("Жанр", song.genre),
-            ("Битрейт", song.bitRate.map { "\($0) kbps" }),
-            ("Формат", song.suffix?.uppercased()),
-            ("Длительность", song.duration.map { Player.format(seconds: Double($0)) }),
-            ("Номер трека", song.track.map(String.init)),
-            ("Диск", song.discNumber.map(String.init)),
-            ("Размер", song.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }),
-            ("Прослушиваний", song.playCount.map(String.init)),
-            ("Путь", song.path),
+            ("Album", song.album),
+            ("Artist", song.artist),
+            ("Album Artist", song.albumArtist),
+            ("Year", song.year.map(String.init)),
+            ("Genre", song.genre),
+            ("Bitrate", song.bitRate.map { "\($0) kbps" }),
+            ("Format", song.suffix?.uppercased()),
+            ("Duration", song.duration.map { Player.format(seconds: Double($0)) }),
+            ("Track Number", song.track.map(String.init)),
+            ("Disc Number", song.discNumber.map(String.init)),
+            ("Size", song.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }),
+            ("Plays", song.playCount.map(String.init)),
+            ("Path", song.path),
             ("MusicBrainz ID", song.musicBrainzId)
         ]
     }
@@ -129,12 +117,6 @@ struct SongMetadataGrid: View {
     }
 }
 
-/// Seek bar for the mini player: a thin track with the current position filled,
-/// drag to scrub, click to jump. Custom (not the native `Slider`) because the
-/// macOS `Slider`'s invisible hit area extends past the visible track, which
-/// made its draggable bounds drift off the track and shadow the rating stars
-/// directly above it. A bounded `DragGesture` keeps the hit target exactly on the
-/// track.
 struct PlaybackSlider: View {
     @Environment(AppState.self) private var app
 
@@ -142,7 +124,6 @@ struct PlaybackSlider: View {
     var progressColor: Color = AMColor.accent
     var progressOpacity: Double = 1
 
-    /// Progress preview while the user drags; nil falls back to live player time.
     @State private var dragProgress: CGFloat?
 
     private let trackHeight: CGFloat = 6
@@ -172,7 +153,7 @@ struct PlaybackSlider: View {
             .contentShape(Rectangle())
             .gesture(drag(width: width))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Позиция воспроизведения".localized)
+            .accessibilityLabel("Playback position".localized)
             .accessibilityValue(app.player.formattedCurrentTime())
             .accessibilityAdjustableAction { direction in
                 let step = direction == .increment ? 10.0 : -10.0
@@ -200,16 +181,6 @@ struct PlaybackSlider: View {
     }
 }
 
-/// Apple Music-style 0–5 star rating control. Shows the song's rating; clicking
-/// a star sets it (re-clicking the current star clears it). `app` is passed
-/// explicitly: no `@Environment` here, because this view is also rendered inside
-/// `Table` cells, which don't reliably inherit the SwiftUI environment.
-///
-/// Hover preview is computed from the continuous cursor position across the
-/// whole control, so the visual gap between glyphs can't reset it (per-glyph
-/// `onHover` fired leave→enter across each gap and flickered the fill).
-/// Click hitboxes reach into the gap too — each button pads into the space
-/// shared with its neighbor.
 struct RatingStars: View {
     let song: SubsonicSong
     let app: AppState
@@ -247,11 +218,6 @@ struct RatingStars: View {
             case .active(let point):
                 let slot = effectiveTrackWidth / 5
                 let newStar = slot > 0 ? min(5, max(1, Int(point.x / slot) + 1)) : nil
-                // Write ONLY on an actual star change: onContinuousHover
-                // fires per mouse-move event (60–120 Hz even inside one
-                // glyph), and every redundant @State write invalidates and
-                // re-renders the control — flooding the main actor and
-                // delaying the click's own render behind the flood.
                 if newStar != hoveredStar { hoveredStar = newStar }
             case .ended:
                 if hoveredStar != nil { hoveredStar = nil }
@@ -260,7 +226,7 @@ struct RatingStars: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Рейтинг".localized)
+        .accessibilityLabel("Rating".localized)
         .accessibilityValue(L10n.format("format.rating.outOfFive", rating))
         .contentShape(Rectangle())
 
@@ -274,7 +240,6 @@ struct RatingStars: View {
     }
 }
 
-/// Ellipsis action button triggering the song context menu.
 struct SongEllipsisMenu: View {
     let song: SubsonicSong
     var selection: [SubsonicSong] = []
@@ -306,62 +271,65 @@ struct SongEllipsisMenu: View {
                 .foregroundStyle(foregroundStyle)
                 .brightness(isHovering && !compact ? 0.14 : 0)
 
-            EllipsisClickTrigger(
-                onMouseDown: { event, view in
-                    guard let resolvedApp else { return }
-                    let targets: [SubsonicSong] = {
-                        if let resolveSelection {
-                            let resolved = resolveSelection()
-                            return resolved.count > 1 ? resolved : [song]
-                        }
-                        return selection.isEmpty ? [song] : selection
-                    }()
-                    let menu = buildSongActionMenu(
-                        for: song,
-                        app: resolvedApp,
-                        selection: targets,
-                        playlist: playlist,
-                        playlistIndex: playlistIndex,
-                        extraActions: extraActions
-                    )
-                    NSMenu.popUpContextMenu(menu, with: event, for: view)
-                },
-                onHover: { hovering in
-                    isHovering = hovering
-                }
-            )
+            EllipsisClickTrigger { event, view in
+                guard let resolvedApp else { return }
+                let targets: [SubsonicSong] = {
+                    if let resolveSelection {
+                        let resolved = resolveSelection()
+                        return resolved.count > 1 ? resolved : [song]
+                    }
+                    return selection.isEmpty ? [song] : selection
+                }()
+                let menu = buildSongActionMenu(
+                    for: song,
+                    app: resolvedApp,
+                    selection: targets,
+                    playlist: playlist,
+                    playlistIndex: playlistIndex,
+                    extraActions: extraActions
+                )
+                NSMenu.popUpContextMenu(menu, with: event, for: view)
+            }
         }
         .frame(width: resolvedSide, height: resolvedSide)
         .contentShape(Rectangle())
-        .help("Ещё".localized)
-        .accessibilityLabel("Действия для песни".localized)
-        .animation(Motion.spring(Motion.hover), value: isHovering)
+        .help("More".localized)
+        .accessibilityLabel("Song Actions".localized)
+        .onHover { hovering in
+            if !compact {
+                if hovering {
+                    if !ScrollGate.shared.isScrolling {
+                        isHovering = true
+                    }
+                } else if isHovering {
+                    isHovering = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidStart)) { _ in
+            if isHovering {
+                isHovering = false
+            }
+        }
     }
 }
 
-/// Transparent NSView overlay that captures mouseDown to pop up NSMenu immediately,
-/// completely bypassing SwiftUI gesture recognizers (e.g. row selection).
 private struct EllipsisClickTrigger: NSViewRepresentable {
     var onMouseDown: (NSEvent, NSView) -> Void
-    var onHover: (Bool) -> Void
 
     func makeNSView(context: Context) -> EllipsisClickNSView {
         let view = EllipsisClickNSView()
         view.onMouseDown = onMouseDown
-        view.onHover = onHover
         return view
     }
 
     func updateNSView(_ nsView: EllipsisClickNSView, context: Context) {
         nsView.onMouseDown = onMouseDown
-        nsView.onHover = onHover
     }
 }
 
 private final class EllipsisClickNSView: NSView {
     var onMouseDown: ((NSEvent, NSView) -> Void)?
-    var onHover: ((Bool) -> Void)?
-    private var trackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -382,42 +350,15 @@ private final class EllipsisClickNSView: NSView {
         true
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea {
-            removeTrackingArea(trackingArea)
-        }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(area)
-        trackingArea = area
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        onHover?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        onHover?(false)
-    }
-
     override func mouseDown(with event: NSEvent) {
         onMouseDown?(event, self)
-        onHover?(false)
     }
 
     override func rightMouseDown(with event: NSEvent) {
         onMouseDown?(event, self)
-        onHover?(false)
     }
 }
 
-/// Apple Music-style capsule action button (Play / Shuffle / Add) with hover feedback.
-/// Shared by the album and playlist detail pages.
 struct ActionPill: View {
     let title: String
     let systemImage: String
@@ -438,8 +379,6 @@ struct ActionPill: View {
     }
 }
 
-/// The capsule-styled glyph+text used inside `ActionPill`, also usable as a
-/// `Menu` label so a pill can offer a dropdown (e.g. the album "Добавить").
 struct ActionPillLabel: View {
     let title: String
     let systemImage: String
@@ -447,11 +386,11 @@ struct ActionPillLabel: View {
     var hovering = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage).font(.system(size: 12))
-            Text(title.localized).font(.system(size: 13, weight: .semibold))
+        HStack(spacing: 7) {
+            Image(systemName: systemImage).font(AMFont.actionPillIcon)
+            Text(title.localized).font(AMFont.actionPill)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Capsule().fill(fillColor))
         .overlay(Capsule().strokeBorder(filled ? Color.clear : Color.secondary.opacity(0.5)))
@@ -465,7 +404,6 @@ struct ActionPillLabel: View {
     }
 }
 
-/// Round favorite button matching RoundEllipsisMenu for detail-page action rows.
 struct RoundFavoriteButton: View {
     let isStarred: Bool
     var size: CGFloat = 32
@@ -488,7 +426,28 @@ struct RoundFavoriteButton: View {
         .buttonStyle(.plain)
         .frame(width: size, height: size)
         .contentShape(Circle())
-        .help(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
-        .accessibilityLabel(isStarred ? "Убрать из избранного".localized : "В избранное".localized)
+        .help(isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
+        .accessibilityLabel(isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized)
+    }
+}
+
+struct EditRulesButton: View {
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: "gearshape.fill")
+                    .font(.caption2.weight(.semibold))
+                Text("Edit Rules".localized)
+                    .font(.callout.bold())
+            }
+            .foregroundStyle(AMColor.accent)
+            .brightness(hovered ? 0.15 : 0)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
     }
 }
