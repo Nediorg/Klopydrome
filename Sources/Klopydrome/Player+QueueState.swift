@@ -7,8 +7,6 @@ extension Player {
         return queue[currentIndex]
     }
 
-    /// Song presented by Now Playing surfaces. During an active overlap, the
-    /// incoming song is already the listener's destination and is shown first.
     var displaySong: SubsonicSong? {
         guard isCrossfading,
               let successorID = automix.activeCrossfade?.successorID,
@@ -20,21 +18,22 @@ extension Player {
 
     var hasQueue: Bool { !queue.isEmpty }
 
-    /// Removes a song at the specified queue index, adjusting currentIndex appropriately.
     func remove(at index: Int) {
         guard queue.indices.contains(index) else { return }
-        if queue.count == 1 {
+        if queue.count <= 1 {
             setQueue([])
             return
         }
         if index == currentIndex {
-            next()
-            let newIndex = index < queue.count ? index : queue.count - 1
-            if queue.indices.contains(newIndex) {
-                queue.remove(at: newIndex)
-                if currentIndex >= queue.count {
-                    currentIndex = max(0, queue.count - 1)
-                }
+            let nextIndex = (currentIndex + 1 < queue.count) ? currentIndex + 1 : 0
+            let nextSong = queue[nextIndex]
+            queue.remove(at: index)
+            if let newIndex = queue.firstIndex(where: { $0.id == nextSong.id }) {
+                currentIndex = newIndex
+                startCurrent()
+            } else {
+                currentIndex = min(index, queue.count - 1)
+                startCurrent()
             }
         } else {
             queue.remove(at: index)
@@ -44,7 +43,6 @@ extension Player {
         }
     }
 
-    /// Moves songs within the queue (drag-and-drop support).
     func move(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         guard !queue.isEmpty else { return }
         let currentID = currentSong?.id

@@ -1,27 +1,15 @@
 import SwiftUI
 import NavidromeClient
 
-/// One canonical set of per-song actions. This is the single source of truth
-/// for "any song, anywhere" — the Songs-table selection menu, every `SongRow`
-/// right-click and hover ellipsis, and the playback-bar «…» menu for the
-/// current track all build from these items so the actions never drift apart.
-///
 /// The component takes an explicit `AppState` (not `@Environment`) because the
 /// Songs table hosts these menus inside an NSTableView where the SwiftUI
 /// environment is not reliably resolved.
 struct SongActionItems: View {
     let app: AppState
-    /// The song whose state drives the labels (starred / downloaded / rating).
     let song: SubsonicSong
-    /// When rendered inside a playlist row, provides the enclosing playlist context.
     var playlist: PlaylistSummary?
-    /// Concrete position within the playlist, ensuring accurate duplicate removal.
     var playlistIndex: Int?
-    /// Songs the actions apply to (e.g. a table multi-selection). Defaults to
-    /// just `song`.
     var selection: [SubsonicSong] = []
-    /// When set, adds «Слушать» on top. Let the host choose: rows with a
-    /// double-click already play, and the now-playing song is already playing.
     var onPlay: (() -> Void)?
 
     private var effectivePlaylist: PlaylistSummary? {
@@ -49,12 +37,12 @@ struct SongActionItems: View {
 
     var body: some View {
         if let onPlay {
-            Button("Слушать".localized) { onPlay() }
+            Button("Play".localized) { onPlay() }
                 .disabled(!isPlayableOffline)
         }
-        Button("Слушать следующей".localized) { targets.forEach { app.playNext($0) } }
+        Button("Play Next".localized) { app.playNext(targets) }
             .disabled(!isPlayableOffline)
-        Button("В конец очереди".localized) { targets.forEach { app.playLater($0) } }
+        Button("Play Later".localized) { app.playLater(targets) }
             .disabled(!isPlayableOffline)
         Divider()
         AddToPlaylistMenu(app: app, songs: targets)
@@ -67,19 +55,19 @@ struct SongActionItems: View {
                     await app.removeSong(song, from: targetPlaylist, at: playlistIndex)
                 }
             } label: {
-                Label("Убрать из плейлиста".localized, systemImage: "trash")
+                Label("Remove from Playlist".localized, systemImage: "trash")
             }
         }
-        Button((app.isStarred(song) ? "Убрать из избранного" : "В избранное").localized) {
+        Button((app.isStarred(song) ? "Unstar" : "Star").localized) {
             guard app.confirmOfflineAction() else { return }
             targets.forEach { app.toggleStar($0, skipOfflineConfirm: true) }
         }
         if primaryDownloading {
-            Button("Отменить загрузку".localized) {
+            Button("Cancel Download".localized) {
                 targets.forEach { app.cancelSongDownload($0) }
             }
         } else {
-            Button((primaryCached ? "Удалить загрузку" : "Загрузить").localized) {
+            Button((primaryCached ? "Delete Download" : "Download").localized) {
                 if primaryCached {
                     targets.forEach { song in Task { await app.removeFromCache(song) } }
                 } else {
@@ -88,9 +76,9 @@ struct SongActionItems: View {
             }
             .disabled(app.isOfflineSession && !primaryCached)
         }
-        Button("Скачать".localized) { app.downloadTrack(song) }
+        Button("Save File As…".localized) { app.downloadTrack(song) }
             .disabled(app.isOfflineSession && !primaryCached)
-        Menu("Оценить".localized) {
+        Menu("Rate".localized) {
             ForEach(1...5, id: \.self) { star in
                 Button("\(star) \(Pluralized.star(star))") {
                     guard app.confirmOfflineAction() else { return }
@@ -109,7 +97,7 @@ struct SongActionItems: View {
         Button {
             app.playStation(from: song)
         } label: {
-            Label("Создать станцию".localized, systemImage: "dot.radiowaves.left.and.right")
+            Label("Create Station".localized, systemImage: "dot.radiowaves.left.and.right")
         }
         .disabled(app.isOfflineSession)
 
@@ -117,7 +105,7 @@ struct SongActionItems: View {
             Button {
                 app.openAlbumInLibrary(.nowPlayingSummary(from: song, albumID: albumId))
             } label: {
-                Label("Показать альбом в медиатеке".localized, systemImage: "square.stack")
+                Label("Show album in Library".localized, systemImage: "square.stack")
             }
         }
         CollaboratorsMenuItem(song: song, app: app)
@@ -126,13 +114,13 @@ struct SongActionItems: View {
                 Button {
                     app.openPlaylist(targetPlaylist)
                 } label: {
-                    Label("Перейти к плейлисту".localized, systemImage: "music.note.list")
+                    Label("Go to Playlist".localized, systemImage: "music.note.list")
                 }
             } else if case .smartPlaylist(let smart) = app.player.playbackContext {
                 Button {
                     app.openSmartPlaylist(smart)
                 } label: {
-                    Label("Перейти к плейлисту".localized, systemImage: "gearshape")
+                    Label("Go to Playlist".localized, systemImage: "gearshape")
                 }
             }
         }
@@ -141,22 +129,21 @@ struct SongActionItems: View {
         Button {
             app.inspectSong(song)
         } label: {
-            Label("Свойства…".localized, systemImage: "info.circle")
+            Label("Get Info…".localized, systemImage: "info.circle")
         }
         Button {
             let parts = [song.displayTitle, song.artist, song.album].compactMap { $0 }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(parts.joined(separator: " — "), forType: .string)
         } label: {
-            Label("Скопировать".localized, systemImage: "doc.on.doc")
+            Label("Copy".localized, systemImage: "doc.on.doc")
         }
-        Button("Поделиться…".localized) {
+        Button("Share…".localized) {
             app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
         }
     }
 }
 
-/// Lazy menu item that resolves participating artists only when the menu is rendered.
 private struct CollaboratorsMenuItem: View {
     let song: SubsonicSong
     let app: AppState
@@ -171,19 +158,18 @@ private struct CollaboratorsMenuItem: View {
                     }
                 }
             } label: {
-                Label("Перейти к исполнителю".localized, systemImage: "music.mic")
+                Label("Go to Artist".localized, systemImage: "music.mic")
             }
         } else if let singleArtist = collaborators.first {
             Button {
                 app.openArtistInLibrary(singleArtist)
             } label: {
-                Label("Перейти к исполнителю".localized, systemImage: "music.mic")
+                Label("Go to Artist".localized, systemImage: "music.mic")
             }
         }
     }
 }
 
-/// Resolves all participating artists for a track (collaborators, features, album artists).
 enum SongCollaborators {
     @MainActor
     static func parse(from song: SubsonicSong, library: LibraryCache) -> [Artist] {
@@ -197,14 +183,12 @@ enum SongCollaborators {
             resolved.append(artist)
         }
 
-        // 1. Structured OpenSubsonic artists
         if let artists = song.artists, !artists.isEmpty {
             for artist in artists {
                 appendArtist(artist)
             }
         }
 
-        // 2. Parse from song.artist string
         if let raw = song.artist, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             var text = raw
             let delimiters = [" feat. ", " Feat. ", " ft. ", " Ft. ", " & ", ", ", " / ", " vs. ", " vs "]
@@ -226,7 +210,6 @@ enum SongCollaborators {
             }
         }
 
-        // 3. Fallback to song.artistId if nothing resolved
         if resolved.isEmpty, let artistId = song.artistId, let name = song.artist {
             appendArtist(Artist(id: artistId, name: name))
         }

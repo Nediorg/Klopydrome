@@ -4,7 +4,6 @@ import NavidromeClient
 
 // MARK: - AppKit On-Demand Context Menu
 
-/// Surface-specific prefix action for song menus (e.g. «Убрать из плейлиста»).
 public struct SongMenuExtraAction {
     public let title: String
     public let systemImage: String?
@@ -63,25 +62,25 @@ enum SongActionMenuBuilder {
     ) {
         if let onPlay {
             menu.addItem(SongMenuActionItem(
-                title: "Слушать".localized,
+                title: "Play".localized,
                 systemImage: "play.fill",
                 isEnabled: isPlayableOffline,
                 action: onPlay
             ))
         }
         menu.addItem(SongMenuActionItem(
-            title: "Слушать следующей".localized,
+            title: "Play Next".localized,
             systemImage: "text.line.first.and.arrowtriangle.forward",
             isEnabled: isPlayableOffline
         ) {
-            targets.forEach { app.playNext($0) }
+            app.playNext(targets)
         })
         menu.addItem(SongMenuActionItem(
-            title: "В конец очереди".localized,
+            title: "Play Later".localized,
             systemImage: "text.line.last.and.arrowtriangle.forward",
             isEnabled: isPlayableOffline
         ) {
-            targets.forEach { app.playLater($0) }
+            app.playLater(targets)
         })
     }
 
@@ -90,10 +89,10 @@ enum SongActionMenuBuilder {
         targets: [SubsonicSong],
         app: AppState
     ) {
-        let playlistMenu = NSMenu(title: "Добавить в плейлист".localized)
+        let playlistMenu = NSMenu(title: "Add to Playlist".localized)
         playlistMenu.autoenablesItems = false
         playlistMenu.addItem(SongMenuActionItem(
-            title: "Новый плейлист".localized,
+            title: "New Playlist".localized,
             systemImage: "plus.circle"
         ) {
             guard app.confirmOfflineAction() else { return }
@@ -110,7 +109,7 @@ enum SongActionMenuBuilder {
         }
         if !recents.isEmpty {
             playlistMenu.addItem(.separator())
-            let header = NSMenuItem(title: "Недавние".localized, action: nil, keyEquivalent: "")
+            let header = NSMenuItem(title: "Recent".localized, action: nil, keyEquivalent: "")
             header.isEnabled = false
             playlistMenu.addItem(header)
             for playlist in recents {
@@ -124,7 +123,7 @@ enum SongActionMenuBuilder {
         if !playlists.isEmpty {
             playlistMenu.addItem(.separator())
             if !recents.isEmpty {
-                let header = NSMenuItem(title: "Все плейлисты".localized, action: nil, keyEquivalent: "")
+                let header = NSMenuItem(title: "All Playlists".localized, action: nil, keyEquivalent: "")
                 header.isEnabled = false
                 playlistMenu.addItem(header)
             }
@@ -136,7 +135,7 @@ enum SongActionMenuBuilder {
             }
         }
 
-        let parentItem = NSMenuItem(title: "Добавить в плейлист".localized, action: nil, keyEquivalent: "")
+        let parentItem = NSMenuItem(title: "Add to Playlist".localized, action: nil, keyEquivalent: "")
         parentItem.image = NSImage(systemSymbolName: "text.badge.plus", accessibilityDescription: nil)
         parentItem.submenu = playlistMenu
         menu.addItem(parentItem)
@@ -157,7 +156,7 @@ enum SongActionMenuBuilder {
             : app.downloadingSongIDs.contains(song.id)
 
         menu.addItem(SongMenuActionItem(
-            title: (isStarred ? "Убрать из избранного" : "В избранное").localized,
+            title: (isStarred ? "Unstar" : "Star").localized,
             systemImage: isStarred ? "star.slash" : "star"
         ) {
             guard app.confirmOfflineAction() else { return }
@@ -166,13 +165,13 @@ enum SongActionMenuBuilder {
 
         if primaryDownloading {
             menu.addItem(SongMenuActionItem(
-                title: "Отменить загрузку".localized,
+                title: "Cancel Download".localized,
                 systemImage: "xmark.circle"
             ) {
                 targets.forEach { app.cancelSongDownload($0) }
             })
         } else {
-            let title = (primaryCached ? "Удалить загрузку" : "Загрузить").localized
+            let title = (primaryCached ? "Delete Download" : "Download").localized
             let systemImage = primaryCached ? "trash" : "arrow.down.circle"
             menu.addItem(SongMenuActionItem(
                 title: title,
@@ -187,8 +186,8 @@ enum SongActionMenuBuilder {
             })
         }
         menu.addItem(SongMenuActionItem(
-            title: "Скачать".localized,
-            systemImage: "arrow.down",
+            title: "Save File As…".localized,
+            systemImage: "square.and.arrow.down",
             isEnabled: !app.isOfflineSession || primaryCached
         ) {
             app.downloadTrack(song)
@@ -201,7 +200,7 @@ enum SongActionMenuBuilder {
         targets: [SubsonicSong],
         app: AppState
     ) {
-        let rateMenu = NSMenu(title: "Оценить".localized)
+        let rateMenu = NSMenu(title: "Rate".localized)
         rateMenu.autoenablesItems = false
         let currentRating = app.effectiveRating(for: song)
         for star in 1...5 {
@@ -220,7 +219,7 @@ enum SongActionMenuBuilder {
             }
             rateMenu.addItem(item)
         }
-        let parentItem = NSMenuItem(title: "Оценить".localized, action: nil, keyEquivalent: "")
+        let parentItem = NSMenuItem(title: "Rate".localized, action: nil, keyEquivalent: "")
         parentItem.image = NSImage(systemSymbolName: "star", accessibilityDescription: nil)
         parentItem.submenu = rateMenu
         menu.addItem(parentItem)
@@ -232,7 +231,7 @@ enum SongActionMenuBuilder {
         app: AppState
     ) {
         menu.addItem(SongMenuActionItem(
-            title: "Создать станцию".localized,
+            title: "Create Station".localized,
             systemImage: "dot.radiowaves.left.and.right",
             isEnabled: !app.isOfflineSession
         ) {
@@ -241,7 +240,7 @@ enum SongActionMenuBuilder {
 
         if let albumId = song.albumId {
             menu.addItem(SongMenuActionItem(
-                title: "Показать альбом в медиатеке".localized,
+                title: "Show album in Library".localized,
                 systemImage: "square.stack"
             ) {
                 app.openAlbumInLibrary(.nowPlayingSummary(from: song, albumID: albumId))
@@ -250,7 +249,7 @@ enum SongActionMenuBuilder {
 
         let collaborators = SongCollaborators.parse(from: song, library: app.library)
         if collaborators.count > 1 {
-            let parentItem = NSMenuItem(title: "Перейти к исполнителю".localized, action: nil, keyEquivalent: "")
+            let parentItem = NSMenuItem(title: "Go to Artist".localized, action: nil, keyEquivalent: "")
             parentItem.image = NSImage(systemSymbolName: "music.mic", accessibilityDescription: nil)
             let subMenu = NSMenu()
             subMenu.autoenablesItems = false
@@ -263,7 +262,7 @@ enum SongActionMenuBuilder {
             menu.addItem(parentItem)
         } else if let singleArtist = collaborators.first {
             menu.addItem(SongMenuActionItem(
-                title: "Перейти к исполнителю".localized,
+                title: "Go to Artist".localized,
                 systemImage: "music.mic"
             ) {
                 app.openArtistInLibrary(singleArtist)
@@ -276,14 +275,14 @@ enum SongActionMenuBuilder {
     private static func addPlaylistNavigationItem(to menu: NSMenu, app: AppState) {
         if let playerPlaylist = app.player.currentPlaylist {
             menu.addItem(SongMenuActionItem(
-                title: "Перейти к плейлисту".localized,
+                title: "Go to Playlist".localized,
                 systemImage: "music.note.list"
             ) {
                 app.openPlaylist(playerPlaylist)
             })
         } else if case .smartPlaylist(let smart) = app.player.playbackContext {
             menu.addItem(SongMenuActionItem(
-                title: "Перейти к плейлисту".localized,
+                title: "Go to Playlist".localized,
                 systemImage: "gearshape"
             ) {
                 app.openSmartPlaylist(smart)
@@ -297,14 +296,14 @@ enum SongActionMenuBuilder {
         app: AppState
     ) {
         menu.addItem(SongMenuActionItem(
-            title: "Свойства…".localized,
+            title: "Get Info…".localized,
             systemImage: "info.circle"
         ) {
             app.inspectSong(song)
         })
 
         menu.addItem(SongMenuActionItem(
-            title: "Скопировать".localized,
+            title: "Copy".localized,
             systemImage: "doc.on.doc"
         ) {
             let parts = [song.displayTitle, song.artist, song.album].compactMap { $0 }
@@ -313,7 +312,7 @@ enum SongActionMenuBuilder {
         })
 
         menu.addItem(SongMenuActionItem(
-            title: "Поделиться…".localized,
+            title: "Share…".localized,
             systemImage: "square.and.arrow.up"
         ) {
             app.presentShare(ShareTarget(entityID: song.id, title: song.displayTitle, kind: .song))
@@ -354,7 +353,7 @@ extension SongActionMenuBuilder {
               !targetPlaylist.isSmart else { return }
 
         menu.addItem(SongMenuActionItem(
-            title: "Убрать из плейлиста".localized,
+            title: "Remove from Playlist".localized,
             systemImage: "trash"
         ) {
             guard app.confirmOfflineAction() else { return }
@@ -381,8 +380,6 @@ extension SongActionMenuBuilder {
     }
 }
 
-/// Constructs the canonical set of song actions as an `NSMenu` for synchronous display.
-/// Evaluates state only when called on demand (e.g. upon clicking the ellipsis button).
 @MainActor
 func buildSongActionMenu(
     for song: SubsonicSong,
@@ -453,7 +450,6 @@ func buildSongActionMenu(
     return menu
 }
 
-/// Shows the canonical song context menu on demand at the current mouse position.
 @MainActor
 func showSongActionMenu(
     for song: SubsonicSong,

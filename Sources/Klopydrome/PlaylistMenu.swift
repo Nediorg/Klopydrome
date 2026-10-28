@@ -1,21 +1,10 @@
 import SwiftUI
 import NavidromeClient
 
-/// Apple-Music-style context menu for a playlist. This is the single source of
-/// truth for playlist actions — the sidebar rows, the playlists grid tiles and
-/// the detail-window «…» button all build their menus from this component so
-/// the offered actions can never drift apart.
-///
-/// Actions depend on whether the playlist has any songs (an empty playlist only
-/// exposes Edit / Follow / Public / Duplicate / Delete, mirroring Apple Music).
-///
-/// Excluded (tied to iTunes/Apple-only or not applicable):
-/// «Не нравится», «Открыть в новом окне», «Записать на диск».
 struct PlaylistContextMenuItems: View {
     @Environment(AppState.self) private var app
     let playlist: PlaylistSummary
 
-    /// Callbacks wired to the host view so it can present chrome UIs.
     var onRename: () -> Void = {}
     var onEditRules: () -> Void = {}
     var onDelete: () -> Void = {}
@@ -24,12 +13,12 @@ struct PlaylistContextMenuItems: View {
     private var followed: Bool { app.isFollowed(playlist) }
 
     var body: some View {
-        Button("Изменить…".localized) {
+        Button("Edit…".localized) {
             guard app.confirmOfflineAction() else { return }
             onRename()
         }
         if playlist.isSmart {
-            Button("Редактировать правила…".localized) {
+            Button("Edit Rules…".localized) {
                 guard app.confirmOfflineAction() else { return }
                 onEditRules()
             }
@@ -43,44 +32,44 @@ struct PlaylistContextMenuItems: View {
             Button(L10n.format("format.playlist.shuffle", playlist.displayName)) {
                 Task { await app.playShuffled(playlist) }
             }
-            Button("Слушать следующей".localized) {
+            Button("Play Next".localized) {
                 Task { await app.playNext(playlist) }
             }
-            Button("В конец очереди".localized) {
+            Button("Play Later".localized) {
                 Task { await app.playLater(playlist) }
             }
         }
 
         Divider()
-        Button((followed ? "Убрать из избранного" : "Добавить в избранное").localized) {
+        Button((followed ? "Unstar" : "Star").localized) {
             app.toggleFollow(playlist)
         }
-        Button((playlist.isPublic == true ? "Сделать закрытым" : "Сделать открытым").localized) {
+        Button((playlist.isPublic == true ? "Make Private" : "Make Public").localized) {
             guard app.confirmOfflineAction() else { return }
             Task { await app.togglePlaylistVisibility(playlist) }
         }
 
         Divider()
         if app.isPlaylistDownloading(playlist.id) {
-            Button("Отменить загрузку".localized) {
+            Button("Cancel Download".localized) {
                 app.cancelPlaylistDownload(playlist.id)
             }
         } else {
-            Button("Загрузить плейлист".localized) {
+            Button("Download Playlist".localized) {
                 app.cachePlaylist(playlist)
             }
             .disabled(app.isOfflineSession)
         }
         Divider()
-        Button("Дублировать".localized) {
+        Button("Duplicate".localized) {
             guard app.confirmOfflineAction() else { return }
             Task { await app.duplicatePlaylist(playlist) }
         }
-        Button("Поделиться…".localized) {
+        Button("Share…".localized) {
             app.presentShare(ShareTarget(entityID: playlist.id, title: playlist.displayName, kind: .playlist))
         }
         Divider()
-        Button("Удалить из медиатеки".localized, role: .destructive) {
+        Button("Delete from Library".localized, role: .destructive) {
             guard app.confirmOfflineAction() else { return }
             onDelete()
         }
@@ -88,8 +77,6 @@ struct PlaylistContextMenuItems: View {
 }
 
 extension PlaylistDetail {
-    /// The same playlist as its summary form so the shared menu component can
-    /// operate on it unchanged.
     var summary: PlaylistSummary {
         PlaylistSummary(id: id, name: name, comment: comment, owner: owner,
                         coverArt: coverArt, songCount: songCount, duration: duration,
@@ -99,8 +86,6 @@ extension PlaylistDetail {
 }
 
 extension AppState {
-    /// Flips a playlist's public/private flag. Lives next to the shared menu so
-    /// the toggle is the single place the flag is mutated from any surface.
     func togglePlaylistVisibility(_ playlist: PlaylistSummary) async {
         guard let client else { return }
         try? await client.updatePlaylist(id: playlist.id, isPublic: !(playlist.isPublic ?? false))
@@ -112,11 +97,6 @@ extension AppState {
     }
 }
 
-/// Apple-Music-style context menu for a smart playlist. Single source of truth
-/// for smart-playlist actions — the playlists-grid tiles, the sidebar row men
-/// and the detail window's «…» button all build from this, so the offered
-/// actions never drift apart. Actions that need host chrome (rename, delete,
-/// rule editing) are wired through callbacks.
 struct SmartPlaylistContextMenuItems: View {
     @Environment(AppState.self) private var app
     let playlist: SmartPlaylist
@@ -131,8 +111,8 @@ struct SmartPlaylistContextMenuItems: View {
     }
 
     var body: some View {
-        Button("Изменить…") { onRename() }
-        Button("Редактировать правила…") { onEditRules() }
+        Button("Edit…".localized) { onRename() }
+        Button("Edit Rules…".localized) { onEditRules() }
 
         Divider()
         Button(L10n.format("format.playlist.play", playlist.name)) {
@@ -151,10 +131,10 @@ struct SmartPlaylistContextMenuItems: View {
         }
 
         Divider()
-        Button("Поделиться…") {
+        Button("Share…".localized) {
             app.presentShare(ShareTarget(entityID: playlist.id, title: playlist.name, kind: .playlist))
         }
         Divider()
-        Button("Удалить", role: .destructive) { onDelete() }
+        Button("Delete".localized, role: .destructive) { onDelete() }
     }
 }

@@ -2,14 +2,10 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    /// Returns the current shared load snapshot for the requested playlist.
     func playlistLoadState(for playlist: PlaylistSummary) -> PlaylistLoadState? {
         playlistLoadStates[playlist.id]
     }
 
-    /// Starts the one shared request used by the playlist detail view and its
-    /// playback actions. Revalidates from the server on entry while showing cached
-    /// data immediately without a layout jump or loading flicker.
     func loadPlaylistIfNeeded(_ playlist: PlaylistSummary, forceReload: Bool = false) {
         recordPlaylistAccess(playlist.id)
         let existing = playlistLoadStates[playlist.id]
@@ -75,7 +71,6 @@ extension AppState {
         }
     }
 
-    /// Forces a fresh reload of a playlist (used by pull-to-refresh).
     func reloadPlaylist(_ playlist: PlaylistSummary) async {
         loadPlaylistIfNeeded(playlist, forceReload: true)
         if let task = playlistLoadTasks[playlist.id] {
@@ -83,9 +78,6 @@ extension AppState {
         }
     }
 
-    /// Awaits the same request used by the detail UI, then returns its complete
-    /// song array for Player. If cached songs are already present in memory,
-    /// returns them immediately so playback starts with zero delay.
     func playlistSongs(for playlist: PlaylistSummary) async -> [SubsonicSong] {
         loadPlaylistIfNeeded(playlist)
         if let state = playlistLoadState(for: playlist), !state.songs.isEmpty {
@@ -97,56 +89,24 @@ extension AppState {
         return playlistLoadState(for: playlist)?.songs ?? []
     }
 
-    /// Plays a playlist's tracks from the start, sharing the detail request
-    /// with any open playlist screen instead of waiting for its rows to render.
     func play(_ playlist: PlaylistSummary) async {
-        var songs = await playlistSongs(for: playlist)
-        if isOfflineSession {
-            songs = songs.filter { isCached($0) }
-        }
-        guard !songs.isEmpty else { return }
+        let songs = await playlistSongs(for: playlist)
         play(songs, at: 0, context: .playlist(playlist))
     }
 
-    /// Shuffles a playlist's tracks through the shared detail request.
     func playShuffled(_ playlist: PlaylistSummary) async {
-        var songs = await playlistSongs(for: playlist)
-        if isOfflineSession {
-            songs = songs.filter { isCached($0) }
-        }
-        guard !songs.isEmpty else { return }
+        let songs = await playlistSongs(for: playlist)
         playShuffled(songs, context: .playlist(playlist))
     }
 
-    /// Queues a playlist's tracks to play immediately after the current song.
     func playNext(_ playlist: PlaylistSummary) async {
-        var songs = await playlistSongs(for: playlist)
-        if isOfflineSession {
-            songs = songs.filter { isCached($0) }
-        }
-        guard !songs.isEmpty else { return }
-        guard !player.queue.isEmpty else {
-            play(songs, at: 0)
-            return
-        }
-        var queue = player.queue
-        let insertAt = (player.currentIndex + 1) % queue.count
-        queue.insert(contentsOf: songs, at: insertAt)
-        player.queue = queue
+        let songs = await playlistSongs(for: playlist)
+        playNext(songs)
     }
 
-    /// Queues a playlist's tracks at the end of the queue ("В конец очереди").
     func playLater(_ playlist: PlaylistSummary) async {
-        var songs = await playlistSongs(for: playlist)
-        if isOfflineSession {
-            songs = songs.filter { isCached($0) }
-        }
-        guard !songs.isEmpty else { return }
-        guard !player.queue.isEmpty else {
-            play(songs, at: 0)
-            return
-        }
-        player.queue.append(contentsOf: songs)
+        let songs = await playlistSongs(for: playlist)
+        playLater(songs)
     }
 
     func cancelPlaylistLoads() {
@@ -163,8 +123,6 @@ extension AppState {
         playlistLoadStates[playlistID] = nil
     }
 
-    /// Cancels in-flight network streaming for the playlist without wiping its
-    /// loaded in-memory state or songs.
     func cancelPlaylistTask(for playlistID: String) {
         playlistLoadTasks[playlistID]?.cancel()
         playlistLoadTasks[playlistID] = nil
@@ -285,7 +243,6 @@ extension AppState {
         syncPlaylistSummaryWithDetail(detail)
     }
 
-    /// Keeps sidebar summaries and navigation history in sync with fresh detail metadata.
     func syncPlaylistSummaryWithDetail(_ detail: PlaylistDetail) {
         let id = detail.id
         let fresh = detail.summary
@@ -352,7 +309,6 @@ extension AppState {
         )
     }
 
-    /// Debug helper for Developer Mode: simulates a network error on the specified playlist
     func simulatePlaylistLoadError(for playlistID: String, message: String = "The request timed out.") {
         cancelPlaylistLoad(for: playlistID)
         if let summary = library.playlists.first(where: { $0.id == playlistID }) ?? nav.selectedPlaylist {

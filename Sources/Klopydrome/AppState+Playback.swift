@@ -1,16 +1,7 @@
 import Foundation
 import NavidromeClient
 
-// MARK: - Playback engine routing
-
-// Playback runs on one of two engines. The MPV engine (default, selected in
-// Settings) decodes every format the server can send through libmpv and seeks
-// HTTP streams sample-accurately by range-requesting the exact byte offset, so
-// lyric highlights stay locked to the audio. AVFoundation is the opt-out engine
-// for the rare format mpv can't decode.
 extension AppState {
-    /// Resolves the source for the muted MPV preloader. A completed disk-cache
-    /// copy is preferred; otherwise MPV begins buffering the regular stream.
     func setUpNextTrackPreloading() {
         player.automix.onNextTrackPreloadRequest = { [weak self] song in
             guard let self, self.usesMPVEngine else { return nil }
@@ -20,29 +11,16 @@ extension AppState {
             self?.cachedURL(for: song)
         }
     }
-    /// True when playback routes through the MPV engine (the default, or the
-    /// user's explicit choice). When false, AVPlayer is used.
     var usesMPVEngine: Bool { serverConfig.effectivePlaybackEngine == .mpv }
 
-    /// The suffix the chosen engine will actually decode for this song. A
-    /// user-chosen transcode codec wins; the MPV engine decodes any source
-    /// format natively, so only the AVPlayer engine needs the server to
-    /// transcode unsupported formats to mp3.
     func effectiveSuffix(for song: SubsonicSong) -> String {
         if let format = serverConfig.format, !format.isEmpty { return format }
         if !usesMPVEngine, PlaybackFormat.needsTranscode(song.suffix) { return "mp3" }
         return (song.suffix ?? "mp3").lowercased()
     }
 
-    /// Builds a stream URL that will actually play. Honors a user-chosen codec;
-    /// with the MPV engine the original stream is requested (it decodes
-    /// everything itself); only the AVPlayer engine asks the server to
-    /// transcode source formats it can't decode natively.
     func streamURL(for song: SubsonicSong) -> URL? {
         guard let client else { return nil }
-        // MPV probes duration from the demuxer; an estimated Content-Length
-        // (bitrate*duration) for VBR transcodes can make the engine under-report
-        // until fully probed. Prefer chunked without length for MPV.
         let estimate = !usesMPVEngine
         if let format = serverConfig.format, !format.isEmpty {
             return client.streamURL(
@@ -67,9 +45,6 @@ extension AppState {
         )
     }
 
-    /// The suffix used when downloading a track to the stream cache.
-    /// Honors `downloadTranscoded` preference: if true, uses the streaming transcode format;
-    /// if false, uses the original file format (song.suffix).
     func downloadSuffix(for song: SubsonicSong) -> String {
         if serverConfig.effectiveDownloadTranscoded {
             return effectiveSuffix(for: song)
@@ -77,9 +52,6 @@ extension AppState {
         return (song.suffix ?? "mp3").lowercased()
     }
 
-    /// The remote URL used when downloading a track to the stream cache.
-    /// If `downloadTranscoded` is true, downloads using the streaming transcode settings.
-    /// If false, requests raw original audio bytes without transcoding.
     func downloadStreamURL(for song: SubsonicSong) -> URL? {
         guard let client else { return nil }
         if serverConfig.effectiveDownloadTranscoded {
@@ -89,28 +61,19 @@ extension AppState {
             ?? client.streamURL(songId: song.id, maxBitRate: 0, estimateContentLength: false)
     }
 
-    /// Starts playback for a song.
-    /// - Returns `true` when playback has been started, `false` when nothing
-    ///   loaded (no URL could be built).
     func startLocalOrBuffered(_ song: SubsonicSong) -> Bool {
         setUpNextTrackPreloading()
-        // Cached copy — play it directly through the chosen engine.
         if let cached = cachedURL(for: song) {
             play(url: cached)
             return true
         }
 
-        // Record the same MPV playback stream only while it naturally reaches
-        // EOF. There is no second URLSession request, and a skipped or sought
-        // track leaves no persistent partial file.
         guard let url = streamURL(for: song) else { return false }
         let streamRecordURL = beginAutomaticPlaybackCache(for: song)
         play(url: url, streamRecordURL: streamRecordURL)
         return true
     }
 
-    /// Routes a resolved URL to the playback engine chosen in Settings: MPV
-    /// for every format (default), or AVPlayer when the user opted out.
     func play(url: URL, streamRecordURL: URL? = nil) {
         if usesMPVEngine {
             player.playMPV(url, streamRecordURL: streamRecordURL)
@@ -119,7 +82,6 @@ extension AppState {
         }
     }
 
-    /// Sets up playback engine event callbacks and Discord RPC status hooks.
     func configurePlayerLifecycle() {
         player.onDiscordPresenceUpdate = { [weak self] in
             self?.refreshDiscordRichPresence()
@@ -155,87 +117,123 @@ extension AppState {
         }
     }
 
-    /// Queues multiple songs to play immediately after the current track.
+    func playNext(_ song: SubsonicSong) {
+        playNext([song])
+    }
+
     func playNext(_ songs: [SubsonicSong]) {
         guard !songs.isEmpty else { return }
+        let playable = isOfflineSession ? songs.filter { isCached($0) } : songs
+        guard !playable.isEmpty else { return }
         guard !player.queue.isEmpty else {
-            play(songs, at: 0)
+            play(playable, at: 0)
             return
         }
         var queue = player.queue
         let insertAt = min(player.currentIndex + 1, queue.count)
-        queue.insert(contentsOf: songs, at: insertAt)
+        queue.insert(contentsOf: playable, at: insertAt)
         player.queue = queue
     }
 
-    /// Queues multiple songs at the end of the current play queue.
+    func playLater(_ song: SubsonicSong) {
+        playLater([song])
+    }
+
     func playLater(_ songs: [SubsonicSong]) {
         guard !songs.isEmpty else { return }
+        let playable = isOfflineSession ? songs.filter { isCached($0) } : songs
+        guard !playable.isEmpty else { return }
         guard !player.queue.isEmpty else {
-            play(songs, at: 0)
+            play(playable, at: 0)
             return
         }
-        player.queue.append(contentsOf: songs)
+        player.queue.append(contentsOf: playable)
     }
 
     func play(
         _ songs: [SubsonicSong],
         at index: Int = 0,
-        contextTitle: String? = nil,
         context: PlaybackContext? = nil
     ) {
-        let resolvedContext: PlaybackContext? = {
-            if let context { return context }
-            if let contextTitle, !contextTitle.isEmpty { return .general(title: contextTitle) }
-            return nil
-        }()
-        player.setQueue(songs, startAt: index, context: resolvedContext)
+        guard !songs.isEmpty else { return }
+        let playableSongs: [SubsonicSong]
+        let playIndex: Int
+        if isOfflineSession {
+            let targetSong = songs.indices.contains(index) ? songs[index] : nil
+            playableSongs = songs.filter { isCached($0) }
+            guard !playableSongs.isEmpty else { return }
+            if let targetSong, let matchedIndex = playableSongs.firstIndex(where: { $0.id == targetSong.id }) {
+                playIndex = matchedIndex
+            } else {
+                playIndex = 0
+            }
+        } else {
+            playableSongs = songs
+            playIndex = min(max(0, index), songs.count - 1)
+        }
+        player.setQueue(playableSongs, startAt: playIndex, context: context)
     }
 
     func play(
         _ song: SubsonicSong,
-        in queue: [SubsonicSong],
-        contextTitle: String? = nil,
+        in queue: [SubsonicSong] = [],
         context: PlaybackContext? = nil
     ) {
-        let resolvedContext: PlaybackContext? = {
-            if let context { return context }
-            if let contextTitle, !contextTitle.isEmpty { return .general(title: contextTitle) }
-            return nil
-        }()
-        if let index = queue.firstIndex(where: { $0.id == song.id }) {
-            player.setQueue(queue, startAt: index, context: resolvedContext)
-        } else {
-            player.setQueue([song], startAt: 0, context: resolvedContext)
+        if queue.isEmpty {
+            play([song], at: 0, context: context)
+            return
         }
+        let index = queue.firstIndex(where: { $0.id == song.id }) ?? 0
+        play(queue, at: index, context: context)
     }
 
     func playShuffled(
         _ songs: [SubsonicSong],
-        contextTitle: String? = nil,
         context: PlaybackContext? = nil
     ) {
         guard !songs.isEmpty else { return }
-        let resolvedContext: PlaybackContext? = {
-            if let context { return context }
-            if let contextTitle, !contextTitle.isEmpty { return .general(title: contextTitle) }
-            return nil
-        }()
-        player.setQueue(songs.shuffled(), startAt: 0, context: resolvedContext)
+        let playable = isOfflineSession ? songs.filter { isCached($0) } : songs
+        guard !playable.isEmpty else { return }
+        player.setQueue(playable.shuffled(), startAt: 0, context: context)
+    }
+
+    func albumSongs(_ album: SubsonicAlbum) async -> [SubsonicSong] {
+        let localTracks = downloadedSongs.filter { ($0.albumId ?? $0.parent) == album.id }
+        if !localTracks.isEmpty { return localTracks }
+        guard let client else { return [] }
+        return (try? await client.getAlbum(id: album.id))?.song ?? []
     }
 
     func play(_ album: SubsonicAlbum) {
-        let localTracks = downloadedSongs.filter { ($0.albumId ?? $0.parent) == album.id }
-        if !localTracks.isEmpty {
-            play(localTracks, context: .album(album))
-            return
-        }
-        guard let client else { return }
         Task {
-            let songs = (try? await client.getAlbum(id: album.id))?.song ?? []
+            let songs = await albumSongs(album)
             guard !songs.isEmpty else { return }
-            await MainActor.run { play(songs, context: .album(album)) }
+            await MainActor.run { play(songs, at: 0, context: .album(album)) }
         }
+    }
+
+    func playShuffled(_ album: SubsonicAlbum) async {
+        let songs = await albumSongs(album)
+        guard !songs.isEmpty else { return }
+        playShuffled(songs, context: .album(album))
+    }
+
+    func playNext(_ album: SubsonicAlbum) async {
+        let songs = await albumSongs(album)
+        guard !songs.isEmpty else { return }
+        playNext(songs)
+    }
+
+    func playLater(_ album: SubsonicAlbum) async {
+        let songs = await albumSongs(album)
+        guard !songs.isEmpty else { return }
+        playLater(songs)
+    }
+
+    func addAlbum(_ album: SubsonicAlbum, to playlistID: String) async {
+        let songs = await albumSongs(album)
+        guard !songs.isEmpty else { return }
+        await addToPlaylist(songs, playlistID: playlistID)
     }
 
     func playStation(from song: SubsonicSong) {
@@ -257,36 +255,6 @@ extension AppState {
                 play(stationQueue, at: 0)
             }
         }
-    }
-
-    func playNext(_ album: SubsonicAlbum) {
-        guard let client else { return }
-        Task {
-            let songs = (try? await client.getAlbum(id: album.id))?.song ?? []
-            guard !songs.isEmpty else { return }
-            var queue = await MainActor.run { self.player.queue }
-            queue.append(contentsOf: songs)
-            await MainActor.run { self.player.queue = queue }
-        }
-    }
-
-    func playNext(_ song: SubsonicSong) {
-        guard !player.queue.isEmpty else {
-            play([song], at: 0)
-            return
-        }
-        var queue = player.queue
-        let insertAt = (player.currentIndex + 1) % queue.count
-        queue.insert(song, at: insertAt)
-        player.queue = queue
-    }
-
-    func playLater(_ song: SubsonicSong) {
-        guard !player.queue.isEmpty else {
-            play([song], at: 0)
-            return
-        }
-        player.queue.append(song)
     }
 
     func saveQueueToServer() {
@@ -348,7 +316,7 @@ extension AppState {
 
         if startLocalOrBuffered(song) { return }
         guard let url = streamURL(for: song) else {
-            player.lastError = "Этот трек не загружен для оффлайн-прослушивания.".localized
+            player.lastError = "This track is not downloaded for offline listening.".localized
             player.isLoading = false
             return
         }
@@ -407,6 +375,10 @@ extension AppState {
         guard cache != nil else { return false }
         if !cachedStreamKeysSeeded { Task { await seedCachedStreamKeys() } }
         guard !cachedStreamKeys.isEmpty else { return false }
+        let primaryKey = CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
+        if let name = cacheFileName(for: primaryKey), cachedStreamKeys.contains(name) {
+            return true
+        }
         for suffix in candidateSuffixes(for: song) {
             let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
             if let name = cacheFileName(for: key), cachedStreamKeys.contains(name) {

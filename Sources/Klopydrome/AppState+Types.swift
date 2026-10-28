@@ -2,15 +2,10 @@ import Foundation
 import NavidromeClient
 import SwiftUI
 
-/// Subsonic star endpoint names entities by a *type-specific* id list
-/// (songIds / albumIds / artistIds). This lets client code star any entity
-/// without branching on concrete types everywhere.
 enum StarKind: String, Codable, Sendable {
     case song, album, artist, playlist
 }
 
-/// Anything that can be starred (songs, albums, artists): stable `id` plus the
-/// server `starred` snapshot and the entity kind used for the API call.
 protocol Starable {
     var id: String { get }
     var starred: String? { get }
@@ -21,37 +16,32 @@ extension SubsonicSong: Starable { var starKind: StarKind { .song } }
 extension SubsonicAlbum: Starable { var starKind: StarKind { .album } }
 extension Artist: Starable { var starKind: StarKind { .artist } }
 
-/// Structured origin context for playback (playlist, album, artist, or query).
 enum PlaybackContext: Equatable {
     case playlist(PlaylistSummary)
     case smartPlaylist(SmartPlaylist)
     case album(SubsonicAlbum)
-    case artist(Artist)
-    case general(title: String?)
 }
 
-/// Appearance preference (GUIDELINES §16): follow the system or force dark/light.
 enum AppTheme: String, Codable, CaseIterable, Identifiable {
     case system, dark, light
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .system: return "Как в системе"
-        case .dark: return "Тёмная"
-        case .light: return "Светлая"
+        case .system: return "System Default"
+        case .dark: return "Dark Theme"
+        case .light: return "Light Theme"
         }
     }
 }
 
-/// Visual scale of synchronized lyrics lines.
 enum LyricsFontSize: String, Codable, CaseIterable, Identifiable {
     case standard, large, compact
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .standard: return "Обычный"
-        case .large: return "Крупный"
-        case .compact: return "Компактный"
+        case .standard: return "Standard"
+        case .large: return "Large"
+        case .compact: return "Compact"
         }
     }
     var font: Font {
@@ -63,23 +53,18 @@ enum LyricsFontSize: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// Motion and ripple physics style for lyrics advancement.
 enum LyricsAnimationMotion: String, Codable, CaseIterable, Identifiable {
     case smooth, subtle, none
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .smooth: return "Плавная"
-        case .subtle: return "Мягкая"
-        case .none: return "Без анимации"
+        case .smooth: return "Smooth"
+        case .subtle: return "Subtle"
+        case .none: return "No Animation"
         }
     }
 }
 
-/// Audio rendering backend. MPV (libmpv, via MPVKit) decodes every format the
-/// server can send and seeks HTTP streams sample-accurately by range-requesting
-/// the exact byte offset, so lyric highlights stay locked to the audio.
-/// AVFoundation is kept as an opt-out for tracks mpv's build doesn't cover.
 enum PlaybackEngine: String, CaseIterable, Identifiable {
     case mpv
     case avFoundation
@@ -92,7 +77,6 @@ enum PlaybackEngine: String, CaseIterable, Identifiable {
     }
 }
 
-/// Action to take when adding tracks that already exist in the target playlist.
 enum DuplicatePlaylistAction: String, CaseIterable, Codable, Sendable, Identifiable {
     case ask
     case skip
@@ -102,9 +86,9 @@ enum DuplicatePlaylistAction: String, CaseIterable, Codable, Sendable, Identifia
 
     var title: String {
         switch self {
-        case .ask: return "Спрашивать".localized
-        case .skip: return "Пропускать дубликаты".localized
-        case .allow: return "Добавлять копии".localized
+        case .ask: return "Ask".localized
+        case .skip: return "Skip Duplicates".localized
+        case .allow: return "Add Copies".localized
         }
     }
 }
@@ -137,26 +121,23 @@ struct NavigationState {
 
         var title: String {
             switch self {
-            case .home: return "Главная".localized
-            case .playlists: return "Плейлисты".localized
-            case .recentlyAdded: return "Недавно добавленные".localized
-            case .songs: return "Песни".localized
-            case .artists: return "Артисты".localized
-            case .albums: return "Альбомы".localized
-            case .genres: return "Жанры".localized
-            case .favorites: return "Избранное".localized
-            case .search: return "Поиск".localized
+            case .home: return "Home".localized
+            case .playlists: return "Playlists".localized
+            case .recentlyAdded: return "Recently Added".localized
+            case .songs: return "Songs".localized
+            case .artists: return "Artists".localized
+            case .albums: return "Albums".localized
+            case .genres: return "Genres".localized
+            case .favorites: return "Favorite".localized
+            case .search: return "Search".localized
             }
         }
 
-        /// Sections shown as real rows in the sidebar (search is driven by the search field).
         var isSidebarRow: Bool { self != .search }
     }
 
-    /// Key used to persist the user's enabled library sections.
     static let visibleLibrarySectionsKey = "VisibleLibrarySections"
 
-    /// Default set of sections shown under the "Медиатека" header.
     static let defaultVisibleLibrarySections: [Section] = [
         .recentlyAdded,
         .artists,
@@ -165,7 +146,6 @@ struct NavigationState {
         .favorites
     ]
 
-    /// All configurable sections available under the "Медиатека" header.
     static let customizableLibrarySections: [Section] = [
         .recentlyAdded,
         .artists,
@@ -191,19 +171,11 @@ struct NavigationState {
     }
 
     var selected: Section = .home
-    /// Monotonic counter bumped whenever the user explicitly selects a sidebar
-    /// row, even the one already active.
     var navVersion = 0
-    /// Sub-pages opened in the detail column (albums, artists, playlists, songs).
-    /// Pushed pages stack on top of each other and can be popped via the back button
-    /// or cleared by clicking a sidebar item.
     var history: [Destination] = []
-    /// Playlist picked directly from the sidebar; shown in the detail column
-    /// instead of the "All Playlists" grid.
     var selectedPlaylist: PlaylistSummary?
     var searchQuery: String = ""
 
-    /// Active set of library sections shown in the sidebar.
     var visibleLibrarySections: Set<Section> = {
         guard let saved = UserDefaults.standard.stringArray(forKey: visibleLibrarySectionsKey) else {
             return Set(defaultVisibleLibrarySections)
@@ -212,7 +184,6 @@ struct NavigationState {
         return sections.isEmpty ? Set(defaultVisibleLibrarySections) : Set(sections)
     }()
 
-    /// Toggles visibility of a library section, keeping at least one active.
     mutating func toggleLibrarySection(_ section: Section) {
         if visibleLibrarySections.contains(section) {
             guard visibleLibrarySections.count > 1 else { return }
@@ -227,7 +198,6 @@ struct NavigationState {
     }
 }
 
-/// Presentation target for the root-level smart playlist editor modal.
 struct SmartPlaylistEditorTarget: Identifiable {
     let id: String
     let playlist: SmartPlaylist?

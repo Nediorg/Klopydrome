@@ -5,9 +5,6 @@ import AVFoundation
 import MediaPlayer
 import Observation
 
-/// Which audio suffixes AVPlayer can decode natively on macOS. Everything else
-/// (ogg/vorbis, opus, ac3, ape, wma, wv, dsd, …) must be transcoded by the
-/// server — we request that via the Subsonic `stream` `format` parameter.
 enum PlaybackFormat {
     static let nativelyPlayable: Set<String> = [
         "mp3", "mp2", "m4a", "mp4", "m4b", "m4p", "aac", "alac",
@@ -15,12 +12,10 @@ enum PlaybackFormat {
         "mov", "m4v", "3gp", "3g2",
     ]
 
-    /// Suffixes that indicate a lossless source (for UI badges).
     static let lossless: Set<String> = [
         "flac", "alac", "wav", "wave", "aiff", "aif", "aifc", "ape", "wv", "dsf", "dff",
     ]
 
-    /// True when AVPlayer cannot play this suffix and the server must transcode.
     static func needsTranscode(_ suffix: String?) -> Bool {
         guard let suffix = suffix?.lowercased(), !suffix.isEmpty else { return false }
         return !nativelyPlayable.contains(suffix)
@@ -32,9 +27,6 @@ enum PlaybackFormat {
     }
 }
 
-/// AVPlayer-based playback engine. Queue management, transport controls and
-/// position tracking. Source resolution is delegated back to the app through
-/// `onTrackRequest`.
 @MainActor
 @Observable
 final class Player {
@@ -47,14 +39,9 @@ final class Player {
     var queue: [SubsonicSong] = []
     var currentIndex = 0
     var isPlaying = false
-    /// Observable UI state: true only while two MPV contexts overlap.
     var isCrossfading = false
-    /// User preference for preparing the queue successor to eliminate the
-    /// source-resolution pause at a natural track transition.
     var nextTrackPreloadingEnabled = true
     var isLoading = false
-    /// True while AVPlayer is waiting for more data (actual buffering/stall),
-    /// not while we merely cache ahead. Drives the mini-bar's loading sweep.
     var isBuffering = false
     var isCaching = false
     var currentTime: Double = 0
@@ -69,15 +56,11 @@ final class Player {
     var lastError: String?
 
     var shuffle = false
-    /// The user's shuffle choice persists across launches and is applied when
-    /// the next non-empty queue is loaded.
     @ObservationIgnored var shufflePreferenceEnabled = false
     var repeatMode: RepeatMode = .off
 
-    /// Tracks that have been started, most recent last (used by the queue panel History tab).
     var history: [SubsonicSong] = []
 
-    /// Originating playlist, album, or general context for playback.
     var playbackContext: PlaybackContext?
 
     var currentPlaylist: PlaylistSummary? {
@@ -85,34 +68,19 @@ final class Player {
         return nil
     }
 
-    /// Originating playlist or album title for contextual display.
     var queueContextTitle: String? {
-        get {
-            switch playbackContext {
-            case .playlist(let summary):
-                return summary.displayName
-            case .smartPlaylist(let smart):
-                return smart.name
-            case .album(let album):
-                return album.name
-            case .artist(let artist):
-                return artist.name
-            case .general(let title):
-                return title
-            case nil:
-                return nil
-            }
-        }
-        set {
-            if let newValue {
-                playbackContext = .general(title: newValue)
-            } else {
-                playbackContext = nil
-            }
+        switch playbackContext {
+        case .playlist(let summary):
+            return summary.displayName
+        case .smartPlaylist(let smart):
+            return smart.name
+        case .album(let album):
+            return album.displayName
+        case nil:
+            return nil
         }
     }
 
-    /// Formatted subtitle describing the originating playback source (only album or playlist).
     var queueContextSubtitle: String? {
         guard !queue.isEmpty else { return nil }
         switch playbackContext {
@@ -122,26 +90,18 @@ final class Player {
             return String(format: "From %@".localized, summary.displayName)
         case .smartPlaylist(let smart):
             return String(format: "From %@".localized, smart.name)
-        default:
+        case nil:
             return nil
         }
     }
 
-    /// Called when the player needs the app to resolve and start a track.
     var onTrackRequest: ((SubsonicSong) -> Void)?
-    /// Notifies the app after a meaningful playback-state transition.
     @ObservationIgnored var onDiscordPresenceUpdate: (() -> Void)?
-    /// Called when the current item finishes (for advancing the queue).
     var onTrackEnded: (() -> Void)?
     var onTrackCrossfaded: ((SubsonicSong) -> Void)?
     var onStreamRecordFinished: ((URL) -> Void)?
 
-    /// The shared playback engine, lazily initialized on demand when
-    /// the user chooses AVPlayer or MPV falls back to it.
     @ObservationIgnored nonisolated(unsafe) var avPlayer: AVPlayer?
-    /// Active playback engine. MPV by default (every format, sample-accurate
-    /// HTTP seeks — libmpv reads the seektable and range-requests the exact
-    /// byte offset); AVPlayer when the user opts out in Settings.
     enum EngineKind { case avPlayer, mpv }
     var engineKind: EngineKind = .mpv
     var mpvEngine = MPVPlaybackEngine()
@@ -159,72 +119,30 @@ final class Player {
     @ObservationIgnored var systemMediaActivationObserver: NSObjectProtocol?
     var hasReportedFailure = false
 
-    /// True once the current track has been loaded into the active engine, so
-    /// Play can resume it directly instead of re-resolving the source.
     var hasLoadedItem: Bool {
         engineKind == .mpv ? mpvEngine.isLoaded : avPlayer?.currentItem != nil
     }
 
-    /// True while the user is actively scrubbing. The periodic time observer
-    /// is suspended during the scrub so it can't fight the drag preview.
     @ObservationIgnored var isScrubbing = false
 
-    /// Seek position requested before the current item is seekable (track
-    /// still loading/transcoding). Applied once the item is actually loaded,
-    /// so a lyric tap or scrubber drag during load is not lost. Also reused to
-    /// coalesce rapid seeks while a transcode-restart pipe is settling.
     @ObservationIgnored var pendingSeekTime: Double?
 
-    /// Absolute start time of the current MPV stream (seconds). Zero for local
-    /// files and range-seekable streams; after a live-transcode restart it
-    /// holds the `timeOffset` the server started from, mapping mpv's
-    /// pipe-relative clock back to the real track position everywhere (timers,
-    /// lyrics, scrubber, preload/crossfade triggers).
     @ObservationIgnored var mpvStreamOffset: Double = 0
 
-    /// Intended position of the most recent seek, held on screen until the
-    /// engine's real position actually catches up. Prevents the timeline from
-    /// snapping back to 0 (or the pre-seek position) while a fresh load or a
-    /// transcode restart is still landing.
     @ObservationIgnored var heldSeekTarget: Double?
 
-    /// Fractional remainder of a transcode-restart target (seconds past the
-    /// integer `timeOffset` the server starts from). Applied as a small
-    /// in-pipe seek once the fresh pipe is loaded, so playback resumes at the
-    /// exact position the user asked for.
     @ObservationIgnored var transcodeRestartResidual: Double?
 
-    /// True once a restart's fresh pipe has actually been loaded and stepped
-    /// onto its target (residual seek applied, play/pause restored). Ticks
-    /// before that point carry either the old pipe's pre-restart position or
-    /// the newborn pipe's 0 — with the wrong offset added they look like a
-    /// target that's already been reached (or far beyond it) and would release
-    /// the held clock and roll the marker back. Suppressed until this flips.
     @ObservationIgnored var mpvRestartStepped = false
 
-    /// True while the current MPV stream is a server-restarted live transcode
-    /// (a non-seekable pipe). Every later big seek restarts the stream instead
-    /// of relying on libmpv, even if a duration eventually appears.
     @ObservationIgnored var mpvSeekRestartActive = false
 
-    /// Bumped for each MPV load; a stale load's completion must not clobber
-    /// the state of a newer request (rapid seeks, track changes).
     @ObservationIgnored var mpvLoadGeneration = 0
 
-    /// True while a precise seek is still landing (AVPlayer seek is
-    /// asynchronous). The time observer leaves `currentTime` alone then, so
-    /// the lyrics/scrubber don't jump back to the old position mid-flight.
     @ObservationIgnored var isSeekInFlight = false
 
-    /// Monotonic counter so an outdated seek's completion can't clear the
-    /// in-flight flag belonging to a newer seek.
     @ObservationIgnored var seekRequestID = 0
 
-    /// Track length usable before the engine reports one, and as a guard
-    /// against a transcoded stream's under-reported demuxer duration (VBR or
-    /// `estimateContentLength` mismatch). The server's `song.duration` is the
-    /// authoritative length — the scrubber and timers always show the larger
-    /// of the two so a 0:29 / -0:10 negative-remaining glitch can't happen.
     var trackDuration: Double {
         let meta = Double(currentSong?.duration ?? 0)
         if duration > 0 { return max(duration, meta) }
@@ -232,8 +150,6 @@ final class Player {
     }
 
     init() {
-        // The MPV engine drives its own clock; the AVPlayer time observer
-        // must not overwrite `currentTime`/`duration` while it's running.
         setUpMPVEngine()
 
         setupRemoteCommands()
@@ -262,8 +178,6 @@ final class Player {
         center.previousTrackCommand.removeTarget(nil)
         center.changePlaybackPositionCommand.removeTarget(nil)
     }
-
-    // MARK: Queue
 
     func setQueue(
         _ songs: [SubsonicSong],
@@ -304,14 +218,11 @@ final class Player {
         setQueue(songs, startAt: index, autoPlay: true, recordHistory: recordHistory, context: context)
     }
 
-    /// Jump to a specific position within the existing queue (Up Next list).
     func jump(to index: Int) {
         guard queue.indices.contains(index) else { return }
         currentIndex = index
         startCurrent()
     }
-
-    // MARK: Shuffle / repeat
 
     func cycleRepeat() {
         switch repeatMode {
@@ -323,8 +234,6 @@ final class Player {
         updateNowPlayingInfo()
     }
 
-    // MARK: Source resolution
-
     func startCurrent(autoPlay: Bool = true, recordHistory: Bool = true) {
         automix.currentSourceURL = nil
         guard let song = currentSong else { return }
@@ -332,8 +241,6 @@ final class Player {
         mpvLoadGeneration += 1
         if promotePreloadedMPVTrack(for: song, autoPlay: autoPlay, recordHistory: recordHistory) { return }
         resetPreloadedNext()
-        // Stop the current item immediately. If the next track isn't ready yet
-        // (stream resolve / transcode), the previous one must not keep playing.
         avPlayer?.pause()
         avPlayer?.replaceCurrentItem(with: nil)
         mpvEngine.stop()
@@ -350,14 +257,11 @@ final class Player {
         mpvStreamOffset = 0
         mpvSeekRestartActive = false
         mpvRestartStepped = false
-        // A seek requested for the PREVIOUS track must not land on this one.
         pendingSeekTime = nil
         if recordHistory {
             history.append(song)
             if history.count > 500 { history.removeFirst(history.count - 500) }
         }
-        // Publish synchronously while stream resolution is still in flight so
-        // Control Center and media keys do not retain the previous track.
         updateNowPlayingInfo()
         onTrackRequest?(song)
     }
@@ -366,18 +270,10 @@ final class Player {
         history = []
     }
 
-    /// Plays `url` through libmpv (via MPVKit). The default engine: mpv owns
-    /// demuxing, decoding and HTTP-range seeking, so streams and local files
-    /// seek sample-accurately without the hand-rolled decode feeder that
-    /// stuttered under load.
     func cancelStreamRecord() {
         mpvEngine.cancelStreamRecord()
     }
 
-    /// Plays `url` through libmpv (via MPVKit). The default engine: mpv owns
-    /// demuxing, decoding and HTTP-range seeking, so streams and local files
-    /// seek sample-accurately without the hand-rolled decode feeder that
-    /// stuttered under load.
     func playMPV(_ url: URL, streamRecordURL: URL? = nil) {
         mpvFailureFallback.arm(for: url)
         automix.currentSourceURL = url
@@ -397,18 +293,11 @@ final class Player {
         mpvStreamOffset = 0
         mpvSeekRestartActive = false
         mpvRestartStepped = false
-        // Note: isPlaying is NOT set here. It stays in its previous state — false
-        // during a paused queue restore, true when the user hits play. The async
-        // task below only calls mpvEngine.play() when isPlaying is still true.
         loadMPVStream(url: url, streamRecordURL: streamRecordURL)
     }
 }
 
-// MARK: Remote commands / media keys
-
 extension Player {
-    /// Wires media-key (remote-command) handling into the player. Called once
-    /// from `init()`.
     private func setupRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
         enableRemoteCommands(in: center)
