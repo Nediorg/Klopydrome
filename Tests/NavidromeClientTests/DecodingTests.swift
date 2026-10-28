@@ -238,4 +238,20 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(songs[0].artist, "Similar Artist")
         XCTAssertEqual(songs[0].duration, 180)
     }
+
+    func testOpenSubsonicExtensionsParsing() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,
+          "openSubsonicExtensions":[
+            {"name":"formPost","versions":[1]},
+            {"name":"songLyrics","versions":[1,2]}
+          ]}}
+        """
+        let extensions = try decode(json).openSubsonicExtensions ?? []
+        XCTAssertEqual(extensions.count, 2)
+        XCTAssertEqual(extensions[0].name, "formPost")
+        XCTAssertEqual(extensions[0].versions, [1])
+        XCTAssertEqual(extensions[1].name, "songLyrics")
+        XCTAssertEqual(extensions[1].versions, [1, 2])
+    }
 }

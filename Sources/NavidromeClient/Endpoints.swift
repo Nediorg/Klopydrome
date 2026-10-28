@@ -10,6 +10,13 @@ public extension SubsonicClient {
         _ = try await requestEnvelope(endpoint: "ping")
     }
 
+    func getOpenSubsonicExtensions() async throws -> [OpenSubsonicExtension] {
+        let envelope = try await requestEnvelope(endpoint: "getOpenSubsonicExtensions")
+        let exts = envelope.openSubsonicExtensions ?? []
+        self.setSupportedExtensions(Set(exts.map(\.name)))
+        return exts
+    }
+
     // MARK: Browsing
 
     func getArtists() async throws -> [ArtistIndex] {
@@ -125,7 +132,11 @@ public extension SubsonicClient {
         songIds.forEach { params.append(URLQueryItem(name: "id", value: $0)) }
         albumIds.forEach { params.append(URLQueryItem(name: "albumId", value: $0)) }
         artistIds.forEach { params.append(URLQueryItem(name: "artistId", value: $0)) }
-        _ = try await requestEnvelope(endpoint: "star", params: params)
+        if supportedExtensions.contains("formPost") {
+            _ = try await requestPostEnvelope(endpoint: "star", bodyParams: params)
+        } else {
+            _ = try await requestEnvelope(endpoint: "star", params: params)
+        }
     }
 
     func unstar(songIds: [String] = [], albumIds: [String] = [], artistIds: [String] = []) async throws {
@@ -133,7 +144,11 @@ public extension SubsonicClient {
         songIds.forEach { params.append(URLQueryItem(name: "id", value: $0)) }
         albumIds.forEach { params.append(URLQueryItem(name: "albumId", value: $0)) }
         artistIds.forEach { params.append(URLQueryItem(name: "artistId", value: $0)) }
-        _ = try await requestEnvelope(endpoint: "unstar", params: params)
+        if supportedExtensions.contains("formPost") {
+            _ = try await requestPostEnvelope(endpoint: "unstar", bodyParams: params)
+        } else {
+            _ = try await requestEnvelope(endpoint: "unstar", params: params)
+        }
     }
 
     func setRating(_ rating: Int, id: String) async throws {
@@ -246,7 +261,11 @@ public extension SubsonicClient {
         if let isPublic { params.append(URLQueryItem(name: "public", value: isPublic ? "true" : "false")) }
         addSongIds.forEach { params.append(URLQueryItem(name: "songIdToAdd", value: $0)) }
         removeIndexes.forEach { params.append(URLQueryItem(name: "songIndexToRemove", value: String($0))) }
-        _ = try await requestEnvelope(endpoint: "updatePlaylist", params: params)
+        if supportedExtensions.contains("formPost") {
+            _ = try await requestPostEnvelope(endpoint: "updatePlaylist", bodyParams: params)
+        } else {
+            _ = try await requestEnvelope(endpoint: "updatePlaylist", params: params)
+        }
     }
 
     func deletePlaylist(id: String) async throws {
@@ -346,7 +365,11 @@ public extension SubsonicClient {
         var params: [URLQueryItem] = songIds.map { URLQueryItem(name: "id", value: $0) }
         if let currentId { params.append(URLQueryItem(name: "current", value: currentId)) }
         if let position { params.append(URLQueryItem(name: "position", value: String(Int(position)))) }
-        _ = try await requestEnvelope(endpoint: "savePlayQueue", params: params)
+        if supportedExtensions.contains("formPost") {
+            _ = try await requestPostEnvelope(endpoint: "savePlayQueue", bodyParams: params)
+        } else {
+            _ = try await requestEnvelope(endpoint: "savePlayQueue", params: params)
+        }
     }
 
     func getPlayQueue() async throws -> PlayQueuePayload? {

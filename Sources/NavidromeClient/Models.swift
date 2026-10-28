@@ -42,6 +42,7 @@ public struct SubsonicEnvelope: Decodable {
     public let similarSongs2: SongListPayload?
     public let scanStatus: ScanStatus?
     public let shares: SharesPayload?
+    public let openSubsonicExtensions: [OpenSubsonicExtension]?
 
     public final class SubsonicErrorPayload: Decodable {
         public let code: Int
@@ -54,6 +55,16 @@ public struct SubsonicEnvelope: Decodable {
 }
 
 // MARK: - Payloads
+
+public struct OpenSubsonicExtension: Codable, Equatable, Sendable {
+    public let name: String
+    public let versions: [Int]
+
+    public init(name: String, versions: [Int] = []) {
+        self.name = name
+        self.versions = versions
+    }
+}
 
 public struct AlbumList: Codable {
     public let album: [SubsonicAlbum]?

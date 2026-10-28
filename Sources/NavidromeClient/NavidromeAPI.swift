@@ -74,9 +74,16 @@ public final class NavidromeAPI {
     private let username: String
     private let password: String
 
+    private let lock = NSLock()
+    private var _token: String?
+
     /// The currently valid JWT; refreshed on every response via the
     /// `x-nd-authorization` response header.
-    public private(set) var token: String?
+    public var token: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _token
+    }
 
     public init(baseURL: URL, username: String, password: String, session: URLSession? = nil) {
         self.baseURL = baseURL
@@ -99,7 +106,13 @@ public final class NavidromeAPI {
     /// Performs `POST /auth/login` (falling back to legacy `/api/authenticate`)
     /// and caches the JWT. No-op when a token is already present.
     public func login() async throws {
-        if token != nil { return }
+        lock.lock()
+        if _token != nil {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+
         let endpoints = ["auth/login", "api/authenticate"]
         for endpoint in endpoints {
             guard let url = baseURL.appendingPathComponent(endpoint) as URL? else { continue }
@@ -112,7 +125,9 @@ public final class NavidromeAPI {
                 let (data, response) = try await session.data(for: request)
                 if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
                     let login = try JSONDecoder().decode(NdLoginResponse.self, from: data)
-                    token = login.token
+                    lock.lock()
+                    _token = login.token
+                    lock.unlock()
                     return
                 }
             } catch {
@@ -210,7 +225,12 @@ public final class NavidromeAPI {
 
     /// Sends an authenticated request, persisting any JWT rotation from the
     /// response header, and returns the response data.
-    private func send(path: String, method: String, body: Data?) async throws -> (Data, HTTPURLResponse) {
+    private func send(
+        path: String,
+        method: String,
+        body: Data?,
+        isRetry: Bool = false
+    ) async throws -> (Data, HTTPURLResponse) {
         try await login()
         guard let token else { throw NavidromeAPIError.unauthorized }
         guard let url = baseURL.appendingPathComponent(path) as URL? else {
@@ -227,10 +247,19 @@ public final class NavidromeAPI {
         guard let http = response as? HTTPURLResponse else {
             throw NavidromeAPIError.invalidResponse
         }
+        if http.statusCode == 401 && !isRetry {
+            lock.lock()
+            self._token = nil
+            lock.unlock()
+            return try await send(path: path, method: method, body: body, isRetry: true)
+        }
         // Navidrome rotates the JWT on every response; keep the fresh token.
         if let rotated = http.value(forHTTPHeaderField: "x-nd-authorization"),
            rotated.hasPrefix("Bearer ") {
-            self.token = String(rotated.dropFirst("Bearer ".count))
+            let fresh = String(rotated.dropFirst("Bearer ".count))
+            lock.lock()
+            self._token = fresh
+            lock.unlock()
         }
         guard (200..<300).contains(http.statusCode) else {
             throw NavidromeAPIError.http(statusCode: http.statusCode)

@@ -31,16 +31,36 @@ public struct SubsonicConfig: Equatable, Sendable {
 }
 
 /// Thread-safe, stateless HTTP client for the Subsonic (Navidrome) API.
-public final class SubsonicClient {
+public final class SubsonicClient: @unchecked Sendable {
     public let config: SubsonicConfig
     let session: URLSession
+    private var sessionSalt: String
+    private var sessionToken: String
+    private var _supportedExtensions: Set<String> = []
+    private let stateLock = NSLock()
+
+    public var supportedExtensions: Set<String> {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _supportedExtensions
+    }
+
+    public func setSupportedExtensions(_ extensions: Set<String>) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        self._supportedExtensions = extensions
+    }
 
     public init(config: SubsonicConfig, session: URLSession? = nil) {
         self.config = config
+        let salt = Self.randomSalt(length: 16)
+        self.sessionSalt = salt
+        self.sessionToken = Self.md5Hex("\(config.password)\(salt)")
+
         let configuration: URLSessionConfiguration = {
             if let session { return session.configuration }
             let c = URLSessionConfiguration.default
-            c.timeoutIntervalForRequest = 60
+            c.timeoutIntervalForRequest = 15
             c.timeoutIntervalForResource = 3600
             c.waitsForConnectivity = false
             c.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -55,14 +75,24 @@ public final class SubsonicClient {
         }
     }
 
+    public func rotateSessionCredentials() {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        let salt = Self.randomSalt(length: 16)
+        self.sessionSalt = salt
+        self.sessionToken = Self.md5Hex("\(config.password)\(salt)")
+    }
+
     // MARK: - Auth
 
     var authQueryItems: [URLQueryItem] {
+        stateLock.lock()
+        let salt = sessionSalt
+        let token = sessionToken
+        stateLock.unlock()
         var items = [URLQueryItem(name: "u", value: config.username)]
         switch config.authMode {
         case .token:
-            let salt = Self.randomSalt(length: 16)
-            let token = Self.md5Hex("\(config.password)\(salt)")
             items.append(URLQueryItem(name: "t", value: token))
             items.append(URLQueryItem(name: "s", value: salt))
         case .passwordMD5:
@@ -106,20 +136,109 @@ public final class SubsonicClient {
 
     // MARK: - HTTP
 
-    func requestData(endpoint: String, params: [URLQueryItem] = [], json: Bool = true) async throws -> Data {
-        let url = try buildURL(endpoint: endpoint, params: params, json: json)
-        let (data, response) = try await session.data(from: url)
-        if let http = response as? HTTPURLResponse {
-            guard (200..<300).contains(http.statusCode) else {
-                throw SubsonicError.http(status: http.statusCode)
+    private func isTransient(error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost:
+                return true
+            default:
+                return false
             }
         }
-        return data
+        if case SubsonicError.http(let status) = error {
+            return [502, 503, 504].contains(status)
+        }
+        return false
+    }
+
+    func requestData(
+        endpoint: String,
+        params: [URLQueryItem] = [],
+        json: Bool = true,
+        maxAttempts: Int = 3
+    ) async throws -> Data {
+        var lastError: Error?
+        for attempt in 1...maxAttempts {
+            do {
+                let url = try buildURL(endpoint: endpoint, params: params, json: json)
+                let (data, response) = try await session.data(from: url)
+                if let http = response as? HTTPURLResponse {
+                    guard (200..<300).contains(http.statusCode) else {
+                        throw SubsonicError.http(status: http.statusCode)
+                    }
+                }
+                return data
+            } catch {
+                lastError = error
+                if attempt < maxAttempts && isTransient(error: error) {
+                    let delay = Double(attempt) * 0.3
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+                throw error
+            }
+        }
+        throw lastError ?? SubsonicError.server(code: 0, message: "Request failed")
+    }
+
+    func requestPostData(
+        endpoint: String,
+        params: [URLQueryItem] = [],
+        bodyParams: [URLQueryItem] = [],
+        json: Bool = true,
+        maxAttempts: Int = 3
+    ) async throws -> Data {
+        let url = try buildURL(endpoint: endpoint, params: params, json: json)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var comp = URLComponents()
+        comp.queryItems = bodyParams
+        // URLComponents encodes space as %20 but leaves + unescaped. In application/x-www-form-urlencoded,
+        // + represents space, so literal + must be encoded as %2B to prevent server corruption.
+        let bodyString = comp.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        request.httpBody = bodyString?.data(using: .utf8)
+
+        var lastError: Error?
+        for attempt in 1...maxAttempts {
+            do {
+                let (data, response) = try await session.data(for: request)
+                if let http = response as? HTTPURLResponse {
+                    guard (200..<300).contains(http.statusCode) else {
+                        throw SubsonicError.http(status: http.statusCode)
+                    }
+                }
+                return data
+            } catch {
+                lastError = error
+                if attempt < maxAttempts && isTransient(error: error) {
+                    let delay = Double(attempt) * 0.3
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+                throw error
+            }
+        }
+        throw lastError ?? SubsonicError.server(code: 0, message: "Request failed")
     }
 
     /// Performs a request and decodes the common envelope, validating `status == "ok"`.
     func requestEnvelope(endpoint: String, params: [URLQueryItem] = []) async throws -> SubsonicEnvelope {
         let data = try await requestData(endpoint: endpoint, params: params)
+        return try decodeEnvelope(from: data)
+    }
+
+    /// Performs a POST request and decodes the common envelope, validating `status == "ok"`.
+    func requestPostEnvelope(
+        endpoint: String,
+        params: [URLQueryItem] = [],
+        bodyParams: [URLQueryItem] = []
+    ) async throws -> SubsonicEnvelope {
+        let data = try await requestPostData(endpoint: endpoint, params: params, bodyParams: bodyParams)
+        return try decodeEnvelope(from: data)
+    }
+
+    private func decodeEnvelope(from data: Data) throws -> SubsonicEnvelope {
         do {
             let response = try JSONDecoder().decode(SubsonicResponse.self, from: data)
             let envelope = response.subsonicResponse
