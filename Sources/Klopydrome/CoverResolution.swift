@@ -3,25 +3,37 @@ import Foundation
 /// Cover-art resolution requested from the server. `.high` (the ServerConfig
 /// default) requests up to 1000px — sharp on Retina without wasting bandwidth.
 enum CoverResolution: String, Codable, CaseIterable, Identifiable {
-    case original, retina, high, medium, low
+    case high, medium, low
     var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .original: return "Оригинал"
-        case .retina: return "Retina"
-        case .high: return "Высокое"
-        case .medium: return "Среднее"
-        case .low: return "Низкое"
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        switch raw {
+        case "original", "retina", "high":
+            self = .high
+        case "medium":
+            self = .medium
+        case "low":
+            self = .low
+        default:
+            self = .high
         }
     }
 
-    /// Discrete size buckets to prevent cache fragmentation from arbitrary fractional
-    /// or window-resize-dependent pixel values:
+    var label: String {
+        switch self {
+        case .high: return "Высокое".localized
+        case .medium: return "Среднее".localized
+        case .low: return "Экономия трафика".localized
+        }
+    }
+
+    /// Discrete size buckets to prevent cache fragmentation:
     /// - 240: thumbnails (up to 120pt @2x: song rows, search pills, LCD, downloads, avatars)
     /// - 720: cards & headers (up to 360pt @2x: shelves, grids, headers, mini-player)
-    /// - 1200: extra large screens / hero displays
-    /// - 2048: maximum retina ceiling
-    static let buckets = [240, 720, 1200, 2048]
+    /// - 1000: hero displays / maximum retina ceiling
+    static let buckets = [240, 720, 1000]
 
     private static func bucketed(_ pixels: Int, cap: Int) -> Int {
         let target = min(max(1, pixels), cap)
@@ -32,14 +44,11 @@ enum CoverResolution: String, Codable, CaseIterable, Identifiable {
     }
 
     /// Pixel size to request from the server for a given display-pixel need.
-    /// `nil` sends no `size` param (server returns full resolution).
     func requestedSize(forDisplayPixels displayPixels: Int) -> Int? {
         switch self {
-        case .original: return nil
-        case .retina: return Self.bucketed(displayPixels, cap: 2048)
         case .high: return Self.bucketed(displayPixels, cap: 1000)
         case .medium: return Self.bucketed(displayPixels, cap: 500)
-        case .low: return Self.bucketed(displayPixels, cap: 200)
+        case .low: return Self.bucketed(displayPixels, cap: 240)
         }
     }
 

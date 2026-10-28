@@ -73,12 +73,29 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             MainView()
-                .onAppear { CoverArtStore.shared.configure(client: app.client, cache: app.cache) }
+                .onAppear {
+                    CoverArtStore.shared.configure(
+                        client: app.client,
+                        cache: app.cache,
+                        coverResolution: app.serverConfig.coverResolution ?? .high,
+                        adaptiveCellularDataEnabled: app.serverConfig.effectiveAdaptiveCellularDataEnabled
+                    )
+                }
                 .onChange(of: app.isConnected) { _, _ in
-                    CoverArtStore.shared.configure(client: app.client, cache: app.cache)
+                    CoverArtStore.shared.configure(
+                        client: app.client,
+                        cache: app.cache,
+                        coverResolution: app.serverConfig.coverResolution ?? .high,
+                        adaptiveCellularDataEnabled: app.serverConfig.effectiveAdaptiveCellularDataEnabled
+                    )
                 }
                 .onChange(of: app.isOfflineSession) { _, _ in
-                    CoverArtStore.shared.configure(client: app.client, cache: app.cache)
+                    CoverArtStore.shared.configure(
+                        client: app.client,
+                        cache: app.cache,
+                        coverResolution: app.serverConfig.coverResolution ?? .high,
+                        adaptiveCellularDataEnabled: app.serverConfig.effectiveAdaptiveCellularDataEnabled
+                    )
                 }
             // Non-sheet dim: a sheet disables the whole window chrome
             // (the toolbar items look "hidden" until it dismisses).

@@ -73,48 +73,69 @@ extension AppState {
             )
             let client = SubsonicClient(config: config)
             try await pingWithTimeout(client: client)
+            _ = try? await client.getOpenSubsonicExtensions()
 
-            var updatedConfig = serverConfig
-            updatedConfig.url = url
-            updatedConfig.username = username
-            updatedConfig.authMode = authMode
-            updatedConfig.cacheEnabled = cacheEnabled ?? updatedConfig.cacheEnabled
-
-            let newCache = CacheManager(rootURL: CacheManager.root(forServer: base.host ?? "default"))
-            await resetLibraryForConnection(newCache: newCache)
-
-            self.client = client
-            self.navidrome = NavidromeAPI(baseURL: base, username: username, password: password)
-            // Disk-persist the smart-playlist pool so a new session's first
-            // compute can load it instead of re-crawling the whole library.
-            self.smartPlaylistEngine = SmartPlaylistEngine(repo: CachedLibraryRepo(client: client, cache: newCache))
-            resetCacheState()
-            Task { await self.seedCachedStreamKeys() }
-            serverConfig = updatedConfig
-            isOfflineSession = false
-            await setupOfflineRepository(host: base.host ?? "default")
-            await applyCacheLimits()
-            await restoreOfflineCatalog()
-            self.connectionError = nil
-            persist()
-            persistSessionCredentials(username: username, password: password)
-            CoverArtStore.shared.configure(
+            await applySuccessfulConnection(
                 client: client,
-                cache: newCache,
-                coverResolution: serverConfig.coverResolution ?? .high
+                config: config,
+                rawURL: url,
+                cacheEnabled: cacheEnabled
             )
-            if queuePersistenceEnabled {
-                await restoreQueueFromServer()
-            }
-            Task(priority: .utility) { [weak self] in
-                await self?.warmupLibrary()
-            }
-            Task { await self.checkServerScanStatus() }
         } catch {
             connectionError = error.localizedDescription
             self.client = nil
             throw error
         }
+    }
+
+    private func applySuccessfulConnection(
+        client: SubsonicClient,
+        config: SubsonicConfig,
+        rawURL: String,
+        cacheEnabled: Bool?
+    ) async {
+        var updatedConfig = serverConfig
+        updatedConfig.url = rawURL
+        updatedConfig.username = config.username
+        updatedConfig.authMode = config.authMode
+        updatedConfig.cacheEnabled = cacheEnabled ?? updatedConfig.cacheEnabled
+
+        let host = config.baseURL.host ?? "default"
+        let newCache = CacheManager(rootURL: CacheManager.root(forServer: host))
+        await resetLibraryForConnection(newCache: newCache)
+
+        self.client = client
+        self.navidrome = NavidromeAPI(baseURL: config.baseURL, username: config.username, password: config.password)
+        self.smartPlaylistEngine = SmartPlaylistEngine(
+            repo: CachedLibraryRepo(
+                client: client,
+                cache: newCache,
+                localSongs: { [weak self] in self?.library.songs ?? [] }
+            )
+        )
+        resetCacheState()
+        Task { await self.seedCachedStreamKeys() }
+        serverConfig = updatedConfig
+        isOfflineSession = false
+        await setupOfflineRepository(host: host)
+        await applyCacheLimits()
+        await restoreOfflineCatalog()
+        self.connectionError = nil
+        persist()
+        persistSessionCredentials(username: config.username, password: config.password)
+        CoverArtStore.shared.configure(
+            client: client,
+            cache: newCache,
+            coverResolution: serverConfig.coverResolution ?? .high,
+            adaptiveCellularDataEnabled: serverConfig.effectiveAdaptiveCellularDataEnabled
+        )
+        if queuePersistenceEnabled {
+            await restoreQueueFromServer()
+        }
+        Task(priority: .utility) { [weak self] in
+            await self?.warmupLibrary()
+        }
+        Task { await self.checkServerScanStatus() }
     }
 
     private func persistSessionCredentials(username: String, password: String) {

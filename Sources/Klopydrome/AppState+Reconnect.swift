@@ -43,11 +43,20 @@ extension AppState {
 
     /// Invoked when NetworkMonitor detects connectivity restored.
     func handleNetworkRestored() async {
-        guard isOfflineSession,
-              serverConfig.effectiveAutoReconnectEnabled,
-              !serverConfig.effectiveForceOfflineMode,
-              !isReconnecting else { return }
-        _ = await reconnect(silent: true)
+        if isOfflineSession {
+            guard serverConfig.effectiveAutoReconnectEnabled,
+                  !serverConfig.effectiveForceOfflineMode,
+                  !isReconnecting else { return }
+            _ = await reconnect(silent: true)
+        } else {
+            // Online session restored: verify connection, trigger view refresh, flush queued mutations
+            if let client {
+                try? await client.ping()
+                CoverArtStore.shared.invalidateFailedKeys()
+                NotificationCenter.default.post(name: .foregroundRefreshRequested, object: nil)
+                await flushOfflineMutations(promptUser: false)
+            }
+        }
     }
 
     /// Toggles forced offline mode on or off.

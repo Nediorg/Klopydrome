@@ -172,23 +172,20 @@ extension AppState {
         // 1. Instant SSD hydration (0 ms perceived latency)
         await restoreLibraryFromDiskCache()
 
-        // 2. Silent background playlist refresh
-        await refreshPlaylists()
+        // 2. Parallel background warmup, conserving bandwidth on constrained/expensive networks
+        let isConstrained = NetworkMonitor.shared.isConstrained || NetworkMonitor.shared.isExpensive
 
-        // 3. Silent background recent albums prefetch
-        await warmupRecentAlbums()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.refreshPlaylists() }
+            group.addTask { await self.warmupRecentAlbums() }
 
-        // 4. Silent background alphabetical albums prefetch
-        await warmupAlbums()
-
-        // 5. Silent background artist index prefetch
-        await warmupArtists()
-
-        // 6. Silent background genres prefetch
-        await warmupGenres()
-
-        // 7. Background sync of starred items for offline cache if enabled
-        await syncStarredForOfflineCacheIfNeeded()
+            if !isConstrained {
+                group.addTask { await self.warmupAlbums() }
+                group.addTask { await self.warmupArtists() }
+                group.addTask { await self.warmupGenres() }
+                group.addTask { await self.syncStarredForOfflineCacheIfNeeded() }
+            }
+        }
     }
 
     private func warmupRecentAlbums() async {

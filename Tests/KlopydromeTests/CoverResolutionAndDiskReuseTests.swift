@@ -20,10 +20,31 @@ final class CoverResolutionAndDiskReuseTests: XCTestCase {
 
         // Candidate larger sizes for downsampling
         let largerFor240 = CoverResolution.candidateLargerSizes(than: 240)
-        XCTAssertEqual(largerFor240, [720, 1200, 2048, 0])
+        XCTAssertEqual(largerFor240, [720, 1000, 0])
 
         let largerFor720 = CoverResolution.candidateLargerSizes(than: 720)
-        XCTAssertEqual(largerFor720, [1200, 2048, 0])
+        XCTAssertEqual(largerFor720, [1000, 0])
+
+        // Medium resolution (cap 500)
+        let medium = CoverResolution.medium
+        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 72), 240)
+        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 240), 240)
+        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 330), 500)
+        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 720), 500)
+
+        // Low resolution / Data Saver (cap 240)
+        let low = CoverResolution.low
+        XCTAssertEqual(low.requestedSize(forDisplayPixels: 72), 240)
+        XCTAssertEqual(low.requestedSize(forDisplayPixels: 330), 240)
+        XCTAssertEqual(low.requestedSize(forDisplayPixels: 720), 240)
+
+        // Legacy decoding maps original and retina to .high
+        if let decodedOrig = try? JSONDecoder().decode(CoverResolution.self, from: Data("\"original\"".utf8)) {
+            XCTAssertEqual(decodedOrig, .high)
+        }
+        if let decodedRetina = try? JSONDecoder().decode(CoverResolution.self, from: Data("\"retina\"".utf8)) {
+            XCTAssertEqual(decodedRetina, .high)
+        }
     }
 
     func testDiskReuseOfLargerCachedCoverWithoutNetwork() async throws {

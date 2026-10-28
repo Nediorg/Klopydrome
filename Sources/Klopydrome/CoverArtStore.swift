@@ -83,13 +83,26 @@ final class CoverArtStore: @unchecked Sendable {
     private(set) var client: SubsonicClient?
     private(set) var cache: CacheManager?
     private(set) var coverResolution: CoverResolution = .high
+    private(set) var adaptiveCellularDataEnabled: Bool = true
+
+    var effectiveCoverResolution: CoverResolution {
+        if adaptiveCellularDataEnabled && NetworkMonitor.shared.isConstrainedOrExpensive {
+            return .low
+        }
+        return coverResolution
+    }
 
     private init() {
         memory.totalCostLimit = Self.memoryCacheCostLimit
         memory.countLimit = Self.memoryCacheCountLimit
     }
 
-    func configure(client: SubsonicClient?, cache: CacheManager?, coverResolution: CoverResolution = .high) {
+    func configure(
+        client: SubsonicClient?,
+        cache: CacheManager?,
+        coverResolution: CoverResolution? = nil,
+        adaptiveCellularDataEnabled: Bool? = nil
+    ) {
         // A relaunch re-runs MainView's onAppear with the same client instance.
         // Cancelling in-flight fetches then would strand the LCD's cover request
         // (task(id:) never re-fires for an unchanged id), leaving it a placeholder.
@@ -99,7 +112,12 @@ final class CoverArtStore: @unchecked Sendable {
             let identityChanged = self.client !== client
             self.client = client
             self.cache = cache
-            self.coverResolution = coverResolution
+            if let coverResolution {
+                self.coverResolution = coverResolution
+            }
+            if let adaptiveCellularDataEnabled {
+                self.adaptiveCellularDataEnabled = adaptiveCellularDataEnabled
+            }
             guard identityChanged else { return nil }
             // Cancelling the in-flight tasks guarantees no stale (previous-server)
             // result can later clobber the fresh registry or memory cache.
@@ -125,7 +143,7 @@ final class CoverArtStore: @unchecked Sendable {
 
     func cachedImage(coverArt: String?, size: Int) -> NSImage? {
         guard let coverArt, !coverArt.isEmpty else { return nil }
-        let requested = coverResolution.requestedSize(forDisplayPixels: size)
+        let requested = effectiveCoverResolution.requestedSize(forDisplayPixels: size)
         let key = "\(coverArt)-\(requested.map(String.init) ?? "orig")"
         if let exact = memory.object(forKey: key as NSString) {
             return exact
@@ -136,7 +154,7 @@ final class CoverArtStore: @unchecked Sendable {
 
     func image(coverArt: String?, size: Int) async -> ImageBox {
         guard let coverArt, !coverArt.isEmpty else { return ImageBox(image: nil) }
-        let requested = coverResolution.requestedSize(forDisplayPixels: size)
+        let requested = effectiveCoverResolution.requestedSize(forDisplayPixels: size)
         let key = "\(coverArt)-\(requested.map(String.init) ?? "orig")"
         // swiftlint:disable:next line_length
         coverLogger.debug("request coverArt=\(coverArt, privacy: .private) size=\(size) requested=\(requested.map(String.init) ?? "orig", privacy: .private) key=\(key, privacy: .private)")

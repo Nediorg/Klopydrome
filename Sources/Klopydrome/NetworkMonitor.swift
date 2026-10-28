@@ -5,16 +5,35 @@ import Observation
 /// Monitors network interface connectivity to enable automatic reconnection
 /// when network reachability transitions to satisfied.
 @Observable
-@MainActor
-final class NetworkMonitor {
+final class NetworkMonitor: @unchecked Sendable {
     static let shared = NetworkMonitor()
 
     private let monitor: NWPathMonitor
     private let queue = DispatchQueue(label: "com.klopydrome.network-monitor", qos: .utility)
+    private let lock = NSLock()
 
-    var isPathSatisfied: Bool = true
-    var isConstrained: Bool = false
-    var isExpensive: Bool = false
+    @ObservationIgnored private var _isPathSatisfied: Bool = true
+    @ObservationIgnored private var _isConstrained: Bool = false
+    @ObservationIgnored private var _isExpensive: Bool = false
+
+    var isPathSatisfied: Bool {
+        get { lock.withLock { _isPathSatisfied } }
+        set { lock.withLock { _isPathSatisfied = newValue } }
+    }
+
+    var isConstrained: Bool {
+        get { lock.withLock { _isConstrained } }
+        set { lock.withLock { _isConstrained = newValue } }
+    }
+
+    var isExpensive: Bool {
+        get { lock.withLock { _isExpensive } }
+        set { lock.withLock { _isExpensive = newValue } }
+    }
+
+    var isConstrainedOrExpensive: Bool {
+        lock.withLock { _isConstrained || _isExpensive }
+    }
 
     /// Closure invoked on MainActor when network connectivity transitions to satisfied.
     var onConnectivityRestored: (@MainActor () -> Void)?
@@ -22,16 +41,22 @@ final class NetworkMonitor {
     private init() {
         monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let satisfied = path.status == .satisfied
-                let previouslyUnsatisfied = !self.isPathSatisfied
-                self.isPathSatisfied = satisfied
-                self.isConstrained = path.isConstrained
-                self.isExpensive = path.isExpensive
+            guard let self else { return }
+            let satisfied = path.status == .satisfied
+            let constrained = path.isConstrained
+            let expensive = path.isExpensive
 
-                if satisfied && previouslyUnsatisfied {
-                    self.onConnectivityRestored?()
+            let shouldNotify: Bool = self.lock.withLock {
+                let previouslyUnsatisfied = !self._isPathSatisfied
+                self._isPathSatisfied = satisfied
+                self._isConstrained = constrained
+                self._isExpensive = expensive
+                return satisfied && previouslyUnsatisfied
+            }
+
+            if shouldNotify {
+                Task { @MainActor [weak self] in
+                    self?.onConnectivityRestored?()
                 }
             }
         }

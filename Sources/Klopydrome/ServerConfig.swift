@@ -61,6 +61,8 @@ struct ServerConfig: Codable, Equatable {
     var suppressPendingMutations: Bool?
     /// Whether confirmation before starting server library scan is suppressed.
     var suppressServerScanWarning: Bool?
+    /// Whether to conserve data on cellular/expensive/constrained networks.
+    var adaptiveCellularDataEnabled: Bool?
 }
 
 extension ServerConfig {
@@ -110,6 +112,9 @@ extension ServerConfig {
     var effectiveSuppressServerScanWarning: Bool {
         suppressServerScanWarning ?? false
     }
+    var effectiveAdaptiveCellularDataEnabled: Bool {
+        adaptiveCellularDataEnabled ?? true
+    }
 
     static var empty: ServerConfig {
         ServerConfig(url: "", username: "", authMode: .token,
@@ -133,6 +138,7 @@ extension ServerConfig {
                      suppressOfflinePrompts: nil,
                      suppressOfflineActionWarning: nil,
                      suppressPendingMutations: nil,
-                     suppressServerScanWarning: nil)
+                     suppressServerScanWarning: nil,
+                     adaptiveCellularDataEnabled: nil)
     }
 }

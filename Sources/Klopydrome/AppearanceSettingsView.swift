@@ -15,8 +15,14 @@ struct AppearanceSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .onChange(of: app.serverConfig) { _, _ in
+        .onChange(of: app.serverConfig) { _, newConfig in
             app.saveSettings()
+            CoverArtStore.shared.configure(
+                client: app.client,
+                cache: app.cache,
+                coverResolution: newConfig.coverResolution ?? .high,
+                adaptiveCellularDataEnabled: newConfig.effectiveAdaptiveCellularDataEnabled
+            )
         }
     }
 
@@ -29,12 +35,19 @@ struct AppearanceSettingsView: View {
                 }
             }
 
-            Picker("Разрешение обложек".localized, selection: Bindable(app).serverConfig.coverResolution) {
-                Text("Высокое".localized).tag(CoverResolution?.none)
-                ForEach(CoverResolution.allCases.filter { $0 != .high }) { resolution in
-                    Text(resolution.label.localized).tag(CoverResolution?.some(resolution))
+            Picker("Разрешение обложек".localized, selection: Binding<CoverResolution>(
+                get: { app.serverConfig.coverResolution ?? .high },
+                set: { app.serverConfig.coverResolution = $0 }
+            )) {
+                ForEach(CoverResolution.allCases) { resolution in
+                    Text(resolution.label).tag(resolution)
                 }
             }
+
+            Toggle(
+                "Экономить трафик при мобильной сети".localized,
+                isOn: Bindable(app).serverConfig.adaptiveCellularDataEnabled.orTrue
+            )
         } header: {
             Text("Оформление".localized)
         }

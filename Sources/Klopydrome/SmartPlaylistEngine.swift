@@ -32,6 +32,7 @@ final class CachedLibraryRepo: SongRepo {
     private let client: SubsonicClient
     /// Optional disk persistence for the crawled pool (the app's cache manager).
     private let diskCache: CacheManager?
+    private let localSongs: (@MainActor @Sendable () -> [SubsonicSong])?
     private let albumPageSize = 500
     private let genrePageSize = 500
     private let maxSongs = 10_000
@@ -39,9 +40,14 @@ final class CachedLibraryRepo: SongRepo {
     /// How old a persisted pool may get before we treat it as stale and re-crawl.
     private let poolMaxAge: TimeInterval = 12 * 60 * 60
 
-    init(client: SubsonicClient, cache: CacheManager? = nil) {
+    init(
+        client: SubsonicClient,
+        cache: CacheManager? = nil,
+        localSongs: (@MainActor @Sendable () -> [SubsonicSong])? = nil
+    ) {
         self.client = client
         self.diskCache = cache
+        self.localSongs = localSongs
         self.cache.countLimit = 32
         self.cache.totalCostLimit = 16 << 20
     }
@@ -51,21 +57,65 @@ final class CachedLibraryRepo: SongRepo {
         if let hit = cache.object(forKey: key) as? [SubsonicSong] {
             return hit
         }
-        // A still-fresh pool written by a previous run (e.g. before relaunch)
-        // avoids a full-library crawl on the first compute of a new session.
+
+        // 1. Zero network requests: use loaded local library songs if available (no genre filter)
+        if genre == nil, let getLocal = localSongs {
+            let local = await getLocal()
+            if !local.isEmpty {
+                cache.setObject(local as NSArray, forKey: key, cost: local.count * 1024)
+                return local
+            }
+        }
+
+        // 2. A still-fresh pool written by a previous run avoids a crawl
         if let persisted = await loadDisk(genre: genre) {
             cache.setObject(persisted as NSArray, forKey: key, cost: persisted.count * 1024)
             return persisted
         }
+
         let pool: [SubsonicSong]
         if let genre {
             pool = try await crawlSongsByGenre(genre)
         } else {
-            pool = try await crawlAllAlbums()
+            pool = try await fetchAllSongsViaSearchOrCrawl()
         }
         cache.setObject(pool as NSArray, forKey: key, cost: pool.count * 1024)
         await persist(pool: pool, genre: genre)
         return pool
+    }
+
+    private func fetchAllSongsViaSearchOrCrawl() async throws -> [SubsonicSong] {
+        // Try paginated search3 with query: "*" in batches of 500.
+        // This eliminates the 1000+ N+1 album crawl requests, reducing them to ~20 requests.
+        do {
+            var songs: [SubsonicSong] = []
+            var seen = Set<String>()
+            var offset = 0
+            let pageSize = 500
+            while songs.count < maxSongs {
+                try Task.checkCancellation()
+                let result = try await client.search3(
+                    query: "*",
+                    artistCount: 0,
+                    albumCount: 0,
+                    songCount: pageSize,
+                    songOffset: offset
+                )
+                let pageSongs = result.songs
+                if pageSongs.isEmpty { break }
+                for song in pageSongs where seen.insert(song.id).inserted {
+                    songs.append(song)
+                }
+                if pageSongs.count < pageSize { break }
+                offset += pageSize
+            }
+            if !songs.isEmpty {
+                return songs
+            }
+        } catch {
+            // Fall back to crawlAllAlbums if search3 failed
+        }
+        return try await crawlAllAlbums()
     }
 
     func clearMemoryCache() {

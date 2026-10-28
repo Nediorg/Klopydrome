@@ -134,6 +134,28 @@ final class ServerSmartPlaylistTests: XCTestCase {
         XCTAssertEqual(query?.limit, 42)
     }
 
+    @MainActor
+    func testCachedLibraryRepoUsesLocalSongsWithoutNetwork() async throws {
+        let dummyConfig = SubsonicConfig(
+            baseURL: URL(string: "http://127.0.0.1:65534")!,
+            username: "u",
+            password: "p"
+        )
+        let client = SubsonicClient(config: dummyConfig)
+        let local = [
+            SubsonicSong(id: "loc-1", title: "Track One", artist: "Artist A", duration: 200),
+            SubsonicSong(id: "loc-2", title: "Track Two", artist: "Artist B", duration: 150)
+        ]
+        let repo = CachedLibraryRepo(
+            client: client,
+            cache: nil,
+            localSongs: { local }
+        )
+        let songs = try await repo.fetchPool(genre: nil)
+        XCTAssertEqual(songs.count, 2)
+        XCTAssertEqual(songs.map(\.id), ["loc-1", "loc-2"])
+    }
+
     private static func response(for request: URLRequest, body: String) -> (HTTPURLResponse, Data) {
         let response = HTTPURLResponse(
             url: request.url!,
