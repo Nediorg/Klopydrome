@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Owns one native mini-player panel. Artwork and lyrics/queue are sibling
-/// hosting views so the lower section physically slides out of the same window.
 @MainActor
 final class MiniPlayerPanelController: NSObject {
     static let shared = MiniPlayerPanelController()
@@ -14,8 +12,10 @@ final class MiniPlayerPanelController: NSObject {
     private var detailHost: NSHostingView<AnyView>?
     private var detailCollapsedHeightConstraint: NSLayoutConstraint?
     private var detailBottomConstraint: NSLayoutConstraint?
+    private var detailHostHeightConstraint: NSLayoutConstraint?
     private var configuredPanel: AppState.PlayerPanelTab?
     var userCompactSide: CGFloat = MiniPlayerLayout.compactSide
+    var userDetailHeight: CGFloat = MiniPlayerLayout.panelHeight
     private var isAnimatingDetailTransition = false
     private var transitionGeneration = 0
     private weak var app: AppState?
@@ -50,8 +50,6 @@ final class MiniPlayerPanelController: NSObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Returns focus to the main window before navigation consumes a request
-    /// originating from the mini-player's otherwise isolated view hierarchy.
     func closeForLibraryNavigation() {
         panel?.close()
     }
@@ -158,41 +156,33 @@ final class MiniPlayerPanelController: NSObject {
     }
 
     private func presentDetail(_ kind: AppState.PlayerPanelTab, in panel: NSPanel) {
+        let currentFrame = panel.frame
+        let currentWidth = panel.contentRect(forFrameRect: currentFrame).width
         let side = min(
-            max(MiniPlayerLayout.minimumCompactSide, userCompactSide),
+            max(MiniPlayerLayout.minimumCompactSide, currentWidth > 0 ? currentWidth : userCompactSide),
             MiniPlayerLayout.maximumCompactSide
         )
         userCompactSide = side
         installDetailHost(for: kind)
+        detailHostHeightConstraint?.constant = userDetailHeight
         detailCollapsedHeightConstraint?.isActive = false
         detailBottomConstraint?.isActive = true
         detailClipHost?.isHidden = false
-        let targetSize = NSSize(width: side, height: side + MiniPlayerLayout.panelHeight)
+        let targetSize = NSSize(width: side, height: side + userDetailHeight)
         let targetFrame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: targetSize))
 
-        var originX = panel.frame.minX
-        var originY = panel.frame.maxY - targetFrame.height
+        var originX = currentFrame.minX
+        var originY = currentFrame.maxY - targetFrame.height
 
-        if let screen = panel.screen ?? NSScreen.main {
-            let visible = screen.visibleFrame
-            if originX + targetFrame.width > visible.maxX {
-                originX = visible.maxX - targetFrame.width
-            }
-            if originX < visible.minX {
-                originX = visible.minX
-            }
-            if originY < visible.minY {
-                originY = visible.minY
-            }
-            if originY + targetFrame.height > visible.maxY {
-                originY = visible.maxY - targetFrame.height
-            }
+        if let visible = (panel.screen ?? NSScreen.main)?.visibleFrame {
+            originX = min(max(originX, visible.minX), visible.maxX - currentFrame.width)
+            originY = min(max(originY, visible.minY), visible.maxY - targetFrame.height)
         }
 
         let anchored = NSRect(
             x: originX,
             y: originY,
-            width: targetFrame.width,
+            width: currentFrame.width,
             height: targetFrame.height
         )
 
@@ -215,37 +205,28 @@ final class MiniPlayerPanelController: NSObject {
     }
 
     private func dismissDetail(in panel: NSPanel) {
+        let currentFrame = panel.frame
+        let currentWidth = panel.contentRect(forFrameRect: currentFrame).width
         let side = min(
-            max(MiniPlayerLayout.minimumCompactSide, userCompactSide),
+            max(MiniPlayerLayout.minimumCompactSide, currentWidth > 0 ? currentWidth : userCompactSide),
             MiniPlayerLayout.maximumCompactSide
         )
         userCompactSide = side
         let targetSize = NSSize(width: side, height: side)
         let targetFrame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: targetSize))
 
-        var originX = panel.frame.minX
-        var originY = panel.frame.maxY - targetFrame.height
+        var originX = currentFrame.minX
+        var originY = currentFrame.maxY - targetFrame.height
 
-        if let screen = panel.screen ?? NSScreen.main {
-            let visible = screen.visibleFrame
-            if originX + targetFrame.width > visible.maxX {
-                originX = visible.maxX - targetFrame.width
-            }
-            if originX < visible.minX {
-                originX = visible.minX
-            }
-            if originY < visible.minY {
-                originY = visible.minY
-            }
-            if originY + targetFrame.height > visible.maxY {
-                originY = visible.maxY - targetFrame.height
-            }
+        if let visible = (panel.screen ?? NSScreen.main)?.visibleFrame {
+            originX = min(max(originX, visible.minX), visible.maxX - currentFrame.width)
+            originY = min(max(originY, visible.minY), visible.maxY - targetFrame.height)
         }
 
         let anchored = NSRect(
             x: originX,
             y: originY,
-            width: targetFrame.width,
+            width: currentFrame.width,
             height: targetFrame.height
         )
 
@@ -267,6 +248,7 @@ final class MiniPlayerPanelController: NSObject {
                 self?.detailBottomConstraint?.isActive = false
                 self?.detailCollapsedHeightConstraint?.isActive = true
                 self?.detailClipHost?.isHidden = true
+                self?.detailHost?.rootView = AnyView(EmptyView())
                 self?.contentHost?.layoutSubtreeIfNeeded()
             }
         }
@@ -277,6 +259,7 @@ final class MiniPlayerPanelController: NSObject {
         let rootView = AnyView(
             MiniPlayerPanelView(panel: panel)
                 .environment(app)
+                .ignoresSafeArea()
         )
 
         if let detailHost {
@@ -297,6 +280,10 @@ final class MiniPlayerPanelController: NSObject {
         let detailCollapsedHeightConstraint = detailClipHost.heightAnchor.constraint(equalToConstant: 0)
         let detailBottomConstraint = detailClipHost.bottomAnchor.constraint(equalTo: contentHost.bottomAnchor)
         detailBottomConstraint.isActive = false
+
+        let detailHostHeightConstraint = detailHost.heightAnchor.constraint(equalToConstant: userDetailHeight)
+        detailHostHeightConstraint.priority = NSLayoutConstraint.Priority(999)
+
         NSLayoutConstraint.activate([
             detailClipHost.leadingAnchor.constraint(equalTo: contentHost.leadingAnchor),
             detailClipHost.trailingAnchor.constraint(equalTo: contentHost.trailingAnchor),
@@ -305,12 +292,14 @@ final class MiniPlayerPanelController: NSObject {
             detailHost.leadingAnchor.constraint(equalTo: detailClipHost.leadingAnchor),
             detailHost.trailingAnchor.constraint(equalTo: detailClipHost.trailingAnchor),
             detailHost.topAnchor.constraint(equalTo: detailClipHost.topAnchor),
-            detailHost.bottomAnchor.constraint(equalTo: detailClipHost.bottomAnchor)
+            detailHostHeightConstraint,
+            detailHost.bottomAnchor.constraint(greaterThanOrEqualTo: detailClipHost.bottomAnchor)
         ])
         self.detailClipHost = detailClipHost
         self.detailHost = detailHost
         self.detailCollapsedHeightConstraint = detailCollapsedHeightConstraint
         self.detailBottomConstraint = detailBottomConstraint
+        self.detailHostHeightConstraint = detailHostHeightConstraint
     }
 
     private func setTrafficLights(in panel: NSPanel, visible: Bool) {
@@ -321,13 +310,10 @@ final class MiniPlayerPanelController: NSObject {
         ].forEach { panel.standardWindowButton($0)?.isHidden = !visible }
     }
 
-    /// Whether the panel is currently in an interactive live resize gesture.
     var isLiveResizing: Bool {
         panel?.inLiveResize == true
     }
 
-    /// Whether the cursor is anywhere inside the panel, chrome included.
-    /// Backs the hide decision in `MiniPlayerView.updateHover`.
     var isCursorInsidePanel: Bool {
         guard let panel, let content = panel.contentView else { return false }
         if panel.inLiveResize { return true }
@@ -338,7 +324,7 @@ final class MiniPlayerPanelController: NSObject {
 
 extension MiniPlayerPanelController: NSWindowDelegate {
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        if isAnimatingDetailTransition {
+        guard sender.inLiveResize, !isAnimatingDetailTransition else {
             return frameSize
         }
         let requestedContentSize = sender.contentRect(
@@ -358,6 +344,10 @@ extension MiniPlayerPanelController: NSWindowDelegate {
             )
         }
         userCompactSide = contentSize.width
+        if configuredPanel != nil {
+            userDetailHeight = max(MiniPlayerLayout.minimumDetailHeight, contentSize.height - contentSize.width)
+            detailHostHeightConstraint?.constant = userDetailHeight
+        }
         MiniPlayerResizeGeometry.lastDebugLine =
             "req \(Int(requestedContentSize.width))×\(Int(requestedContentSize.height)) "
             + "cur \(Int(currentContentSize.width))×\(Int(currentContentSize.height)) → "
@@ -366,10 +356,15 @@ extension MiniPlayerPanelController: NSWindowDelegate {
     }
 
     func windowDidResize(_ notification: Notification) {
-        guard !isAnimatingDetailTransition, let panel else { return }
-        let contentWidth = panel.contentRect(forFrameRect: panel.frame).width
-        if contentWidth >= MiniPlayerLayout.minimumCompactSide && contentWidth <= MiniPlayerLayout.maximumCompactSide {
-            userCompactSide = contentWidth
+        guard let panel = (notification.object as? NSPanel) ?? self.panel, !isAnimatingDetailTransition else { return }
+        let contentSize = panel.contentRect(forFrameRect: panel.frame).size
+        let width = contentSize.width
+        if width >= MiniPlayerLayout.minimumCompactSide && width <= MiniPlayerLayout.maximumCompactSide {
+            userCompactSide = width
+        }
+        if configuredPanel != nil {
+            userDetailHeight = max(MiniPlayerLayout.minimumDetailHeight, contentSize.height - contentSize.width)
+            detailHostHeightConstraint?.constant = userDetailHeight
         }
     }
 
@@ -421,6 +416,7 @@ extension MiniPlayerPanelController: NSWindowDelegate {
         detailHost = nil
         detailCollapsedHeightConstraint = nil
         detailBottomConstraint = nil
+        detailHostHeightConstraint = nil
         configuredPanel = nil
         isAnimatingDetailTransition = false
         transitionGeneration += 1
@@ -437,60 +433,4 @@ extension Notification.Name {
 
 private final class MiniPlayerHostingView<Content: View>: NSHostingView<Content> {
     override var mouseDownCanMoveWindow: Bool { true }
-}
-
-enum MiniPlayerResizeGeometry {
-    static var lastDebugLine = ""
-
-    /// Sizing for the OPEN detail panel only. A horizontal-only drag keeps the
-    /// WINDOW height fixed: the artwork side follows the requested width and
-    /// takes the difference out of the panel (never below its minimum). Every
-    /// other drag routes the height delta into the panel.
-    static func contentSize(requested: NSSize, current: NSSize) -> NSSize {
-        let side = min(
-            max(MiniPlayerLayout.minimumCompactSide, requested.width),
-            MiniPlayerLayout.maximumCompactSide
-        )
-        let widthChanged = abs(requested.width - current.width) > 0.5
-        let heightChanged = abs(requested.height - current.height) > 0.5
-        if widthChanged && !heightChanged {
-            let height = max(side + MiniPlayerLayout.minimumDetailHeight, current.height)
-            return NSSize(width: side, height: height)
-        }
-        let detailHeight = max(MiniPlayerLayout.minimumDetailHeight, requested.height - side)
-        return NSSize(width: side, height: side + detailHeight)
-    }
-
-    /// Collapsed square sizing without the native aspect ratio (whose clearing
-    /// is unreliable mid-gesture). The side tracks whichever axis the drag is
-    /// actually moving so an edge gesture never fights the perpendicular snap;
-    /// corner drags fall back to the dominant axis.
-    static func collapsedSize(requested: NSSize, current: NSSize) -> NSSize {
-        let widthChanged = abs(requested.width - current.width) > 0.5
-        let heightChanged = abs(requested.height - current.height) > 0.5
-        let side: CGFloat
-        if widthChanged && !heightChanged {
-            side = requested.width
-        } else if heightChanged && !widthChanged {
-            side = requested.height
-        } else {
-            side = max(requested.width, requested.height)
-        }
-        let clamped = min(
-            max(MiniPlayerLayout.minimumCompactSide, side),
-            MiniPlayerLayout.maximumCompactSide
-        )
-        return NSSize(width: clamped, height: clamped)
-    }
-}
-
-enum MiniPlayerLayout {
-    static let compactSide: CGFloat = 420
-    static let minimumCompactSide: CGFloat = 320
-    static let maximumCompactSide: CGFloat = 600
-    static let panelHeight: CGFloat = 300
-    static let minimumDetailHeight: CGFloat = 180
-    static let panelAnimationDuration: TimeInterval = 0.22
-    static let topMenuEdgeInset: CGFloat = 7
-    static let topMenuTrailingInset: CGFloat = 3.5
 }
