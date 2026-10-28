@@ -24,6 +24,7 @@ struct ArtistDetailView: View {
     @State private var albumSort: ArtistAlbumSort = .release
     /// Albums this artist appears on without being the lead/album artist.
     @State var appearsOn: [SubsonicAlbum] = []
+    @State private var hasSearchedAppearsOn = false
     /// Expands the album shelf into a full grid when true; the header chevron toggles it.
     @State private var albumsExpanded = false
     /// Sort direction for the album shelf/grid (descending = newest first by default).
@@ -272,7 +273,7 @@ struct ArtistDetailView: View {
         let (info, _) = await (infoTask, tracksTask)
         artistInfo = info
 
-        if appearsOn.isEmpty {
+        if appearsOn.isEmpty && !hasSearchedAppearsOn {
             await loadAppearsOn(client: client)
         }
     }
@@ -295,6 +296,7 @@ struct ArtistDetailView: View {
 
         if !name.isEmpty,
            let search = try? await client.search3(query: name, artistCount: 0, albumCount: 0, songCount: 500) {
+            hasSearchedAppearsOn = true
             let (lead, guestAlbums) = processSearchSongs(search.songs, artistID: resolvedID, name: name)
             if !lead.isEmpty {
                 allSongs = lead
@@ -315,6 +317,8 @@ struct ArtistDetailView: View {
     /// search3 for the artist name, pick songs where they're the track artist
     /// on an album they don't lead, deduplicated by album id.
     private func loadAppearsOn(client: SubsonicClient) async {
+        guard !hasSearchedAppearsOn else { return }
+        hasSearchedAppearsOn = true
         let name = detail?.name ?? artist.name
         guard !name.isEmpty else { return }
         let result = try? await client.search3(query: name, artistCount: 0, albumCount: 0, songCount: 200)
