@@ -181,7 +181,8 @@ struct ArtistDetailView: View {
             if allSongs.isEmpty {
                 allSongs = await allAlbumSongs()
             }
-            if !allSongs.isEmpty { app.play(allSongs, at: 0) }
+            let toPlay = !allSongs.isEmpty ? allSongs : (topSongs ?? [])
+            if !toPlay.isEmpty { app.play(toPlay, at: 0) }
         }
     }
 
@@ -245,17 +246,19 @@ struct ArtistDetailView: View {
 
     private func loadTracks(client: SubsonicClient, resolvedID: String, name: String) async {
         defer { loadingTopSongs = false }
+        if let cached = await app.cache?.cachedDiscography(for: artist.id), !cached.isEmpty {
+            allSongs = cached
+        }
+
         if !name.isEmpty,
            let nativeTop = try? await client.getTopSongs(artist: name, artistId: resolvedID, count: 27),
            !nativeTop.isEmpty {
             topSongs = nativeTop
-            if allSongs.isEmpty { allSongs = nativeTop }
             return
         }
 
-        if let cached = await app.cache?.cachedDiscography(for: artist.id) {
-            allSongs = cached
-            topSongs = Array(sortTopSongs(cached).prefix(27))
+        if !allSongs.isEmpty {
+            topSongs = Array(sortTopSongs(allSongs).prefix(27))
             return
         }
 

@@ -75,9 +75,14 @@ struct ArtistHeroBanner: View {
         if albumCount > 0 {
             parts.append("\(albumCount) \(Pluralized.album(albumCount))")
         }
-        if !allSongs.isEmpty {
-            parts.append("\(allSongs.count) \(Pluralized.song(allSongs.count))")
-            let totalSeconds = allSongs.reduce(0) { $0 + ($1.duration ?? 0) }
+        let albumSongs = albums.compactMap(\.songCount).reduce(0, +)
+        let albumSeconds = albums.compactMap(\.duration).reduce(0, +)
+
+        let songCount = albumSongs > 0 ? albumSongs : allSongs.count
+        let totalSeconds = albumSeconds > 0 ? albumSeconds : allSongs.reduce(0) { $0 + ($1.duration ?? 0) }
+
+        if songCount > 0 {
+            parts.append("\(songCount) \(Pluralized.song(songCount))")
             if totalSeconds > 0 {
                 parts.append(Player.format(seconds: Double(totalSeconds)))
             }

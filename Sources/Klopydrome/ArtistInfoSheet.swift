@@ -39,11 +39,21 @@ struct ArtistInfoSheet: View {
     }
 
     private var totalDurationSeconds: Int {
-        allSongs.reduce(0) { $0 + ($1.duration ?? 0) }
+        let albumDuration = albums.compactMap(\.duration).reduce(0, +)
+        if albumDuration > 0 { return albumDuration }
+        return allSongs.reduce(0) { $0 + ($1.duration ?? 0) }
+    }
+
+    private var totalSongCount: Int {
+        let albumSongs = albums.compactMap(\.songCount).reduce(0, +)
+        if albumSongs > 0 { return albumSongs }
+        return allSongs.count
     }
 
     private var totalPlays: Int {
-        allSongs.reduce(0) { $0 + ($1.playCount ?? 0) }
+        let albumPlays = albums.compactMap(\.playCount).reduce(0, +)
+        if albumPlays > 0 { return albumPlays }
+        return allSongs.reduce(0) { $0 + ($1.playCount ?? 0) }
     }
 
     var body: some View {
@@ -115,7 +125,7 @@ struct ArtistInfoSheet: View {
             VStack(spacing: 14) {
                 HStack(spacing: 16) {
                     statTile(label: "Albums".localized, value: "\(albums.count)")
-                    statTile(label: "Songs".localized, value: "\(allSongs.count)")
+                    statTile(label: "Songs".localized, value: "\(totalSongCount)")
                     if totalDurationSeconds > 0 {
                         let duration = Player.format(seconds: Double(totalDurationSeconds))
                         statTile(label: "Duration".localized, value: duration)
