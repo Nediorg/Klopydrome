@@ -123,7 +123,6 @@
 "Any rule matches" = "Любое правило";
 "Appearance" = "Внешний вид";
 "Appears on" = "Появляется на";
-"Apple Music" = "Apple Music";
 "Application cache" = "Кэш приложения";
 "Applied to all songs to compensate for audio latency." = "Смещение применяется ко всем песням для компенсации задержки звука.";
 "Applies to streaming and cached downloads. Codec/bitrate require the server to support transcoding." = "Применяется к потокам и загруженному кэшу. Кодек/битрейт требуют поддержки транскодирования на сервере.";
