@@ -6,7 +6,7 @@
 
 Экспериментальный "Apple Music" ahh клиент написаный слопом за 0 тугриков. Работает с [Navidrome][1] и [Subsonic][2]-совместимыми серверами. Приложение написано на SwiftUI, работает с macOS 14.4. Имеет риск адекватной работы.
 <p align="center">
-  <img src=".assets/preview1.webp" alt="Интерфейс">
+  <img src=".assets/preview1.webp" alt="Интерфейс. Карточка альбома, текст">
   <h5>ну вроде норм я попользовался</h5>
 </p>
 
@@ -17,20 +17,26 @@
 
   <ul>
     <br>
-    <li>Кушает ~200 мегабайт ОЗУ;</li>
+    <li>Кушает ~200-400 мегабайт ОЗУ;</li>
     <li>Кэширование аудио и обложек;</li>
     <li>Поддержка транскодинга;</li>
-    <li>Оффлайн-режим (не готов);</li>
+    <li>Оффлайн-режим;</li>
     <li>Синхронизированный текст (и extended LRC тоже);</li>
     <li>Создание нескучных плейлистов (и смарт-плейлистов);</li>
     <li>Поддержка Discord RPC;</li>
     <li>Crossfade и поддержка ReplayGain;</li>
     <li>Мини-плеер;</li>
+    <li>Серверные функции (quick scan, менеджер ссылок);</li>
     <li>Слоп.</li>
   </ul>
 </div>
 
 <br clear="all">
+
+<p align="center">
+  <img src=".assets/preview3.webp" alt="Интерфейс. Карточка альбома">
+  <h5>даже вроде не лагает и бобами не отдаёт</h5>
+</p>
 
 ## Сборка
 
@@ -58,7 +64,7 @@ brew install nasm meson ninja cmake pkg-config wget git
 Для release-версии:
 
 ```sh
-./scripts/build-app.sh --release # или: make release
+./scripts/build-app.sh --release [--no-test --no-lint] # или: make release
 ```
 
 Сборка zip-архива для релиза (в `dist/`):
