@@ -132,24 +132,10 @@ struct SongTable: View {
 
     @Environment(AppState.self) private var app
 
-    private let pageSize = 500
-
-    @State private var displayedCount: Int = 0
-    @State private var displayedSongsCache: [SubsonicSong] = []
-    private var displayedSongs: [SubsonicSong] { displayedSongsCache }
-
-    private func updateDisplayedSongs() {
-        displayedSongsCache = Array(songs.prefix(displayedCount))
-    }
+    private var displayedSongs: [SubsonicSong] { songs }
 
     @State private var selection = Set<SubsonicSong.ID>()
     @State private var hoverManager = RowHoverManager()
-
-    private func prefetchMoreIfNeeded() {
-        guard displayedCount > 0, displayedCount < songs.count else { return }
-        displayedCount = min(displayedCount + pageSize, songs.count)
-        updateDisplayedSongs()
-    }
 
     var body: some View {
         let currentSongID = app.player.currentSong?.id
@@ -171,23 +157,11 @@ struct SongTable: View {
                 .customizationID(column.id)
             }
         }
-        .onAppear {
-            displayedCount = min(pageSize, songs.count)
-            updateDisplayedSongs()
-        }
         .onChange(of: songs) {
-            if songs.count < displayedCount {
-                hoverManager.reset()
-                displayedCount = min(pageSize, songs.count)
-            } else {
-                displayedCount = max(displayedCount, min(pageSize, songs.count))
-            }
-            updateDisplayedSongs()
+            hoverManager.reset()
         }
         .onChange(of: sortOrder) {
             hoverManager.reset()
-            displayedCount = min(pageSize, songs.count)
-            updateDisplayedSongs()
         }
         .tint(AMColor.sidebarSelection)
         .background(
@@ -196,7 +170,7 @@ struct SongTable: View {
                 totalCount: songs.count,
                 hoverManager: hoverManager,
                 rowHeight: 22,
-                onPrefetch: { prefetchMoreIfNeeded() },
+                onPrefetch: nil,
                 songIDAtRow: { [displayedSongs] row in
                     guard row >= 0 && row < displayedSongs.count else { return nil }
                     return displayedSongs[row].id
