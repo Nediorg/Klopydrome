@@ -176,11 +176,16 @@ struct SongTable: View {
             updateDisplayedSongs()
         }
         .onChange(of: songs) {
-            displayedCount = max(displayedCount, min(pageSize, songs.count))
+            if songs.count < displayedCount {
+                hoverManager.reset()
+                displayedCount = min(pageSize, songs.count)
+            } else {
+                displayedCount = max(displayedCount, min(pageSize, songs.count))
+            }
             updateDisplayedSongs()
         }
         .onChange(of: sortOrder) {
-            hoverManager.clearHover()
+            hoverManager.reset()
             displayedCount = min(pageSize, songs.count)
             updateDisplayedSongs()
         }
@@ -188,6 +193,7 @@ struct SongTable: View {
         .background(
             TableTweaks(
                 songCount: displayedSongs.count,
+                totalCount: songs.count,
                 hoverManager: hoverManager,
                 rowHeight: 22,
                 onPrefetch: { prefetchMoreIfNeeded() },
@@ -264,7 +270,7 @@ private struct SongColumnCell: View {
                     .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                TitleEllipsisButton(song: song, app: app)
+                TitleEllipsisButton(song: song, app: app, hoverState: hoverState)
             }
             .padding(.leading, 8)
         case .cloud:
@@ -323,15 +329,20 @@ private struct SongColumnCell: View {
 private struct TitleEllipsisButton: View {
     let song: SubsonicSong
     let app: AppState
+    let hoverState: RowHoverState
 
     var body: some View {
-        SongEllipsisMenu(
-            song: song,
-            foregroundStyle: AMColor.accent,
-            app: app,
-            compact: true,
-            side: 16
-        )
+        if hoverState.isHovered {
+            SongEllipsisMenu(
+                song: song,
+                foregroundStyle: AMColor.accent,
+                app: app,
+                compact: true,
+                side: 16
+            )
+        } else {
+            Color.clear.frame(width: 16, height: 16)
+        }
     }
 }
 

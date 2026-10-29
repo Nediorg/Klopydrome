@@ -35,6 +35,11 @@ final class RowHoverManager {
     func clearHover() {
         setHovered(id: nil)
     }
+
+    func reset() {
+        clearHover()
+        states.removeAll()
+    }
 }
 
 /// Backing NSTableView configuration: full-width rows, row height, and native
@@ -42,6 +47,7 @@ final class RowHoverManager {
 /// without per-cell SwiftUI overhead.
 struct TableTweaks: NSViewRepresentable {
     let songCount: Int
+    var totalCount: Int = 0
     let hoverManager: RowHoverManager
     var rowHeight: CGFloat = 22
     var onPrefetch: (() -> Void)?
@@ -55,6 +61,7 @@ struct TableTweaks: NSViewRepresentable {
 
     func updateNSView(_ view: NSView, context: Context) {
         context.coordinator.songCount = songCount
+        context.coordinator.totalCount = totalCount
         context.coordinator.rowHeight = rowHeight
         context.coordinator.onPrefetch = onPrefetch
         context.coordinator.songIDAtRow = songIDAtRow
@@ -91,6 +98,7 @@ struct TableTweaks: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSResponder {
         var songCount: Int = 0
+        var totalCount: Int = 0
         var rowHeight: CGFloat = 22
         var onPrefetch: (() -> Void)?
         var songIDAtRow: ((Int) -> SubsonicSong.ID?)?
@@ -223,12 +231,15 @@ struct TableTweaks: NSViewRepresentable {
             hoverManager.clearHover()
             if let tableView, let clipView {
                 let visible = tableView.rows(in: clipView.bounds)
-                let maxVisible = visible.location + visible.length
-                if maxVisible >= songCount - 150 && !isPrefetching {
-                    isPrefetching = true
-                    onPrefetch?()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
-                        self?.isPrefetching = false
+                if visible.location != NSNotFound && visible.length > 0 && totalCount > songCount {
+                    let maxVisible = visible.location + visible.length
+                    let prefetchThreshold = max(0, songCount - 100)
+                    if maxVisible >= prefetchThreshold && !isPrefetching {
+                        isPrefetching = true
+                        onPrefetch?()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
+                            self?.isPrefetching = false
+                        }
                     }
                 }
             }
