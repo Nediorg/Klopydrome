@@ -10,11 +10,14 @@ struct PlaylistDetailView: View {
 
     @State private var displayedCount = 0
     @State private var selection = SongRowSelection()
-    @State private var filterText = ""
+    @State var filterText = ""
     @State private var isScrolled = false
     @State private var isSearchExpanded = false
     @State private var showingCommentModal = false
     @State private var commentHovered = false
+    @State var sortOption: PlaylistTrackSort = .playlistOrder
+    @State var sortAscending: Bool = true
+    @State var dropTargetPlaylistIndex: Int?
     private let pageSize = 100
 
     private struct ScrollOffsetKey: PreferenceKey {
@@ -28,17 +31,9 @@ struct PlaylistDetailView: View {
     var rows: [SubsonicSong] { state?.songs ?? [] }
     var loading: Bool { state?.isLoading ?? true }
     var isSyncing: Bool { state?.isSyncing ?? false }
-    private var loadError: String? { state?.error }
-    private var filteredRows: [SubsonicSong] {
-        guard !filterText.isEmpty else { return rows }
-        let query = filterText.localizedLowercase
-        return rows.filter {
-            $0.displayTitle.localizedLowercase.contains(query) ||
-            ($0.artist?.localizedLowercase.contains(query) ?? false) ||
-            ($0.album?.localizedLowercase.contains(query) ?? false)
-        }
-    }
-    private var displayedSongs: [SubsonicSong] { Array(filteredRows.prefix(displayedCount)) }
+    var loadError: String? { state?.error }
+    var filteredRows: [SubsonicSong] { filteredIndexedRows.map(\.song) }
+    var displayedSongs: [SubsonicSong] { Array(filteredRows.prefix(displayedCount)) }
 
     private var topBar: some View {
         let barOpaque = isScrolled || isSearchExpanded || !filterText.isEmpty
@@ -46,10 +41,25 @@ struct PlaylistDetailView: View {
             title: isScrolled ? currentDetail.displayName : "",
             searchText: $filterText,
             isLoading: isScrolled && isSyncing,
-            filteredCount: filterText.isEmpty ? nil : filteredRows.count,
+            filteredCount: filterText.isEmpty ? nil : filteredIndexedRows.count,
             totalCount: filterText.isEmpty ? nil : rows.count,
             isSearchExpanded: $isSearchExpanded
-        )
+        ) {
+            Picker("Sort".localized, selection: $sortOption) {
+                ForEach(PlaylistTrackSort.allCases) { option in
+                    Text(option.label.localized).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+
+            Divider()
+
+            Picker("Order".localized, selection: $sortAscending) {
+                Text("Ascending".localized).tag(true)
+                Text("Descending".localized).tag(false)
+            }
+            .pickerStyle(.inline)
+        }
         .padding(.horizontal, 20)
         .background {
             if barOpaque {
@@ -138,6 +148,21 @@ struct PlaylistDetailView: View {
                                 onSelect: { selection.toggle(item.song.id, allSongs: filteredRows) }
                             )
                             .equatable()
+                            .modifier(PlaylistRowReorderModifier(
+                                isEnabled: isReorderingEnabled,
+                                playlistIndex: item.playlistIndex,
+                                dropTargetIndex: dropTargetPlaylistIndex,
+                                onDrop: { payload in
+                                    handlePlaylistReorder(payload, toIndex: item.playlistIndex)
+                                },
+                                onTargetChange: { targeted in
+                                    if targeted {
+                                        dropTargetPlaylistIndex = item.playlistIndex
+                                    } else if dropTargetPlaylistIndex == item.playlistIndex {
+                                        dropTargetPlaylistIndex = nil
+                                    }
+                                }
+                            ))
                             .padding(.leading, -22)
                             .padding(.trailing, 26)
                         }
@@ -147,6 +172,9 @@ struct PlaylistDetailView: View {
                                 .onAppear {
                                     displayedCount = min(displayedCount + pageSize, filteredRows.count)
                                 }
+                        }
+                        if filterText.isEmpty && featuredArtists.count >= 2 {
+                            featuredArtistsSection
                         }
                     }
                 }
@@ -207,8 +235,64 @@ struct PlaylistDetailView: View {
             )
         }
     }
+}
 
-    private var currentDetail: PlaylistDetail {
+// MARK: - Header & Metadata
+
+extension PlaylistDetailView {
+    var sortedIndexedRows: [(playlistIndex: Int, song: SubsonicSong)] {
+        let base = rows.enumerated().map { (playlistIndex: $0.offset, song: $0.element) }
+        guard sortOption != .playlistOrder else {
+            return sortAscending ? base : base.reversed()
+        }
+
+        return base.sorted { lhs, rhs in
+            let result: ComparisonResult
+            switch sortOption {
+            case .title:
+                result = lhs.song.displayTitle.localizedCaseInsensitiveCompare(rhs.song.displayTitle)
+            case .artist:
+                result = (lhs.song.artist ?? "").localizedCaseInsensitiveCompare(rhs.song.artist ?? "")
+            case .album:
+                result = (lhs.song.album ?? "").localizedCaseInsensitiveCompare(rhs.song.album ?? "")
+            case .duration:
+                result = NSNumber(value: lhs.song.duration ?? 0).compare(NSNumber(value: rhs.song.duration ?? 0))
+            case .rating:
+                result = NSNumber(value: lhs.song.userRating ?? 0).compare(NSNumber(value: rhs.song.userRating ?? 0))
+            case .playCount:
+                result = NSNumber(value: lhs.song.playCount ?? 0).compare(NSNumber(value: rhs.song.playCount ?? 0))
+            case .added:
+                result = (lhs.song.created ?? "").compare(rhs.song.created ?? "")
+            case .playlistOrder:
+                result = .orderedSame
+            }
+            if result == .orderedSame {
+                return lhs.playlistIndex < rhs.playlistIndex
+            }
+            return sortAscending ? (result == .orderedAscending) : (result == .orderedDescending)
+        }
+    }
+
+    var filteredIndexedRows: [(playlistIndex: Int, song: SubsonicSong)] {
+        guard !filterText.isEmpty else { return sortedIndexedRows }
+        let query = filterText.localizedLowercase
+        return sortedIndexedRows.filter {
+            $0.song.displayTitle.localizedLowercase.contains(query) ||
+            ($0.song.artist?.localizedLowercase.contains(query) ?? false) ||
+            ($0.song.album?.localizedLowercase.contains(query) ?? false)
+        }
+    }
+
+    var isReorderingEnabled: Bool {
+        !currentDetail.isSmart &&
+        app.canEditPlaylist(currentDetail.summary) &&
+        filterText.isEmpty &&
+        sortOption == .playlistOrder &&
+        sortAscending &&
+        !app.isOfflineSession
+    }
+
+    var currentDetail: PlaylistDetail {
         state?.detail ?? PlaylistDetail(
             id: playlist.id,
             name: playlist.name,
@@ -225,7 +309,7 @@ struct PlaylistDetailView: View {
         )
     }
 
-    private func header(_ detail: PlaylistDetail) -> some View {
+    func header(_ detail: PlaylistDetail) -> some View {
         let trimmedComment = detail.comment?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let hasComment = !trimmedComment.isEmpty
 
@@ -259,13 +343,13 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func editRulesButton(_ detail: PlaylistDetail) -> some View {
+    func editRulesButton(_ detail: PlaylistDetail) -> some View {
         EditRulesButton {
             app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: detail.summary))
         }
     }
 
-    private func commentButton(title: String, comment: String) -> some View {
+    func commentButton(title: String, comment: String) -> some View {
         Button {
             showingCommentModal = true
         } label: {
@@ -288,46 +372,26 @@ struct PlaylistDetailView: View {
         }
         return rows
     }
-
 }
 
 // MARK: - Playlist Song List Section
 
 extension PlaylistDetailView {
-    private struct IdentifiedSong: Identifiable {
-        let displayIndex: Int
-        let playlistIndex: Int
-        let song: SubsonicSong
-        let id: String
-    }
-
-    private var identifiedSongs: [IdentifiedSong] {
+    private var identifiedSongs: [PlaylistIndexedSong] {
         var counts: [String: Int] = [:]
-        let query = filterText.localizedLowercase
-        var result: [IdentifiedSong] = []
-        var displayIdx = 0
+        var result: [PlaylistIndexedSong] = []
 
-        for (playlistIdx, song) in rows.enumerated() {
-            if !query.isEmpty {
-                let matches = song.displayTitle.localizedLowercase.contains(query) ||
-                    (song.artist?.localizedLowercase.contains(query) ?? false) ||
-                    (song.album?.localizedLowercase.contains(query) ?? false)
-                guard matches else { continue }
-            }
+        for (displayIdx, item) in filteredIndexedRows.prefix(displayedCount).enumerated() {
+            let occ = counts[item.song.id, default: 0]
+            counts[item.song.id] = occ + 1
+            let id = occ == 0 ? item.song.id : "\(item.song.id)_\(occ)"
 
-            guard displayIdx < displayedCount else { break }
-
-            let occ = counts[song.id, default: 0]
-            counts[song.id] = occ + 1
-            let id = occ == 0 ? song.id : "\(song.id)_\(occ)"
-
-            result.append(IdentifiedSong(
+            result.append(PlaylistIndexedSong(
                 displayIndex: displayIdx,
-                playlistIndex: playlistIdx,
-                song: song,
+                playlistIndex: item.playlistIndex,
+                song: item.song,
                 id: id
             ))
-            displayIdx += 1
         }
         return result
     }

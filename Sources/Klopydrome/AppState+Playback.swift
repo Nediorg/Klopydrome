@@ -185,6 +185,22 @@ extension AppState {
         player.remove(at: index)
     }
 
+    func insertIntoQueue(_ songs: [SubsonicSong], at index: Int) {
+        let playable = isOfflineSession ? songs.filter { isCached($0) } : songs
+        guard !playable.isEmpty else { return }
+        let clampedIndex = min(max(index, 0), player.queue.count)
+        player.queue.insert(contentsOf: playable, at: clampedIndex)
+        if clampedIndex <= player.currentIndex {
+            player.currentIndex += playable.count
+        }
+        player.syncPreloadedNextWithQueue()
+    }
+
+    func moveInQueue(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        player.move(fromOffsets: offsets, toOffset: destination)
+        Task { await saveQueueToServer() }
+    }
+
     func clearHistory() {
         player.clearHistory()
     }

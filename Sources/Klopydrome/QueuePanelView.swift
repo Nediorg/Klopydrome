@@ -38,6 +38,7 @@ struct QueuePanelView: View {
     @Environment(AppState.self) private var app
     @State private var selectedTab: Tab = .upNext
     @State private var confirmingClear = false
+    @State private var dropTargetIndex: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,18 +88,39 @@ struct QueuePanelView: View {
                             let song = list[index]
                             QueueTrackRow(
                                 song: song,
-                                isCurrent: isCurrent(song),
+                                isCurrent: selectedTab == .upNext ? (index == app.player.currentIndex) : isCurrent(song),
                                 canRemove: selectedTab == .upNext,
                                 onRemove: { app.removeFromQueue(at: index) },
                                 showDivider: index < list.count - 1,
                                 action: { select(song, at: index) }
                             )
+                            .modifier(QueueRowDragDropModifier(
+                                isEnabled: selectedTab == .upNext,
+                                index: index,
+                                songID: song.id,
+                                isDropTarget: dropTargetIndex == index,
+                                onDrop: { payload in
+                                    handleDrop(payload, targetIndex: index)
+                                },
+                                onTargetChange: { targeted in
+                                    if targeted {
+                                        dropTargetIndex = index
+                                    } else if dropTargetIndex == index {
+                                        dropTargetIndex = nil
+                                    }
+                                }
+                            ))
                         }
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                 }
                 .scrollIndicators(.automatic)
+                .dropDestination(for: TrackDragPayload.self) { items, _ in
+                    guard selectedTab == .upNext, let payload = items.first else { return false }
+                    handleDrop(payload, targetIndex: app.player.queue.count)
+                    return true
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -156,6 +178,55 @@ struct QueuePanelView: View {
             app.clearQueue()
         case .history:
             app.clearHistory()
+        }
+    }
+
+    private func handleDrop(_ payload: TrackDragPayload, targetIndex: Int) {
+        switch payload.kind {
+        case .queueItem(let srcIndex, _):
+            guard srcIndex != targetIndex else { return }
+            let destination = srcIndex < targetIndex ? targetIndex + 1 : targetIndex
+            app.moveInQueue(fromOffsets: IndexSet(integer: srcIndex), toOffset: destination)
+        default:
+            Task {
+                let songs = await app.resolveSongs(for: payload)
+                guard !songs.isEmpty else { return }
+                app.insertIntoQueue(songs, at: targetIndex)
+                await app.saveQueueToServer()
+            }
+        }
+    }
+}
+
+private struct QueueRowDragDropModifier: ViewModifier {
+    let isEnabled: Bool
+    let index: Int
+    let songID: String
+    let isDropTarget: Bool
+    let onDrop: (TrackDragPayload) -> Void
+    let onTargetChange: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .draggable(TrackDragPayload.queueItem(index: index, songID: songID))
+                .dropDestination(for: TrackDragPayload.self) { items, _ in
+                    guard let payload = items.first else { return false }
+                    onDrop(payload)
+                    return true
+                } isTargeted: { targeted in
+                    onTargetChange(targeted)
+                }
+                .overlay(alignment: .top) {
+                    if isDropTarget {
+                        Rectangle()
+                            .fill(AMColor.accent)
+                            .frame(height: 2)
+                            .padding(.horizontal, 4)
+                    }
+                }
+        } else {
+            content
         }
     }
 }

@@ -172,6 +172,14 @@ public final class NavidromeAPI {
         return try JSONDecoder().decode(NdShare.self, from: responseData)
     }
 
+    public func movePlaylistTrack(playlistId: String, fromIndex: Int, toIndex: Int) async throws {
+        let body: [String: Any] = ["insert_before": "\(toIndex)"]
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else {
+            throw NavidromeAPIError.invalidRequest
+        }
+        _ = try await send(path: "api/playlist/\(playlistId)/tracks/\(fromIndex)", method: "PUT", body: data)
+    }
+
     // MARK: - Request plumbing
 
     private func request<T: Decodable>(path: String, method: String) async throws -> T {

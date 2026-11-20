@@ -307,6 +307,7 @@ struct AlbumCard: View {
             }
         }
         .onHover { hovering = $0 }
+        .draggable(TrackDragPayload.album(album.id))
         .accessibilityLabel(album.displayName)
         .accessibilityAction(named: isStarred ? "Remove from Favorites".localized : "Add to Favorites".localized) {
             app.toggleStar(album)

@@ -421,4 +421,12 @@ extension AppState {
         invalidatePlaylistDetail(for: playlist.id)
         await refreshPlaylists()
     }
+
+    func movePlaylistTrack(playlistId: String, fromIndex: Int, toIndex: Int) async throws {
+        guard confirmOfflineAction() else { return }
+        if let navidrome {
+            try await navidrome.movePlaylistTrack(playlistId: playlistId, fromIndex: fromIndex, toIndex: toIndex)
+            invalidatePlaylistDetail(for: playlistId)
+        }
+    }
 }

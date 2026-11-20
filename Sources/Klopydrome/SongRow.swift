@@ -35,6 +35,13 @@ struct SongRow: View {
         return resolved.count > 1 ? resolved : [song]
     }
 
+    private var dragPayload: TrackDragPayload {
+        if actionTargets.count == 1, let playlist, let playlistIndex {
+            return .playlistTrack(playlistID: playlist.id, index: playlistIndex, songID: song.id)
+        }
+        return .songs(actionTargets.map(\.id))
+    }
+
     var body: some View {
         HStack(spacing: 6) {
             TrackFavoriteButton(song: song, app: app, isHovered: hovering, size: 16)
@@ -78,6 +85,7 @@ struct SongRow: View {
             }
         }
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
+        .draggable(dragPayload)
         .opacity(isPlayableLocally ? 1.0 : 0.45)
         .onHover { inside in
             isInside = inside

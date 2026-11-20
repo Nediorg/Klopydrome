@@ -107,4 +107,108 @@ extension PlaylistDetailView {
         }
     }
 
+    var featuredArtists: [PlaylistFeaturedArtist] {
+        guard filterText.isEmpty else { return [] }
+        var counts: [String: (id: String, name: String, coverArt: String?, count: Int)] = [:]
+        for song in rows {
+            guard let rawName = song.artist?.trimmingCharacters(in: .whitespacesAndNewlines), !rawName.isEmpty else { continue }
+            let key = rawName.lowercased()
+            let artistID = song.artistId ?? key
+            if let existing = counts[key] {
+                counts[key] = (existing.id, existing.name, existing.coverArt ?? song.coverArt, existing.count + 1)
+            } else {
+                counts[key] = (artistID, rawName, song.coverArt, 1)
+            }
+        }
+        let list = counts.values.map {
+            PlaylistFeaturedArtist(id: $0.id, name: $0.name, coverArt: $0.coverArt, trackCount: $0.count)
+        }
+        return list.sorted {
+            if $0.trackCount != $1.trackCount {
+                return $0.trackCount > $1.trackCount
+            }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    var featuredArtistsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Featured Artists".localized)
+                .font(.title3.weight(.bold))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 20) {
+                    ForEach(featuredArtists.prefix(20)) { featured in
+                        ArtistTile(
+                            artist: Artist(id: featured.id, name: featured.name, coverArt: featured.coverArt),
+                            size: 88,
+                            coverArt: featured.coverArt
+                        )
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(.top, 24)
+        .padding(.bottom, 16)
+    }
+
+    func handlePlaylistReorder(_ payload: TrackDragPayload, toIndex: Int) {
+        guard case .playlistTrack(let pID, let fromIndex, _) = payload.kind,
+              pID == currentDetail.id,
+              fromIndex != toIndex else { return }
+
+        guard var currentState = app.playlistLoadStates[currentDetail.id] else { return }
+        let originalSongs = currentState.songs
+        guard fromIndex >= 0 && fromIndex < originalSongs.count else { return }
+
+        var updatedSongs = originalSongs
+        let song = updatedSongs.remove(at: fromIndex)
+        let destination = min(max(toIndex, 0), updatedSongs.count)
+        updatedSongs.insert(song, at: destination)
+        currentState.songs = updatedSongs
+        app.playlistLoadStates[currentDetail.id] = currentState
+
+        Task {
+            do {
+                try await app.movePlaylistTrack(playlistId: currentDetail.id, fromIndex: fromIndex, toIndex: toIndex)
+            } catch {
+                if var revertState = app.playlistLoadStates[currentDetail.id] {
+                    revertState.songs = originalSongs
+                    app.playlistLoadStates[currentDetail.id] = revertState
+                }
+            }
+        }
+    }
+}
+
+struct PlaylistRowReorderModifier: ViewModifier {
+    let isEnabled: Bool
+    let playlistIndex: Int
+    let dropTargetIndex: Int?
+    let onDrop: (TrackDragPayload) -> Void
+    let onTargetChange: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .dropDestination(for: TrackDragPayload.self) { items, _ in
+                    guard let payload = items.first else { return false }
+                    onDrop(payload)
+                    return true
+                } isTargeted: { targeted in
+                    onTargetChange(targeted)
+                }
+                .overlay(alignment: .top) {
+                    if dropTargetIndex == playlistIndex {
+                        Rectangle()
+                            .fill(AMColor.accent)
+                            .frame(height: 2)
+                            .padding(.horizontal, 4)
+                    }
+                }
+        } else {
+            content
+        }
+    }
 }

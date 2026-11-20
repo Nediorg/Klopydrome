@@ -176,35 +176,40 @@ struct SongTable: View {
 
     @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
     private func firstColumns(currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
-        makeColumn(.title, currentSongID: currentSongID)
-        makeColumn(.cloud, currentSongID: currentSongID)
-        makeColumn(.duration, currentSongID: currentSongID)
-        makeColumn(.artist, currentSongID: currentSongID)
-        makeColumn(.album, currentSongID: currentSongID)
-        makeColumn(.albumArtist, currentSongID: currentSongID)
-        makeColumn(.genre, currentSongID: currentSongID)
+        makeColumn(.title, currentSongID: currentSongID, selection: selection)
+        makeColumn(.cloud, currentSongID: currentSongID, selection: selection)
+        makeColumn(.duration, currentSongID: currentSongID, selection: selection)
+        makeColumn(.artist, currentSongID: currentSongID, selection: selection)
+        makeColumn(.album, currentSongID: currentSongID, selection: selection)
+        makeColumn(.albumArtist, currentSongID: currentSongID, selection: selection)
+        makeColumn(.genre, currentSongID: currentSongID, selection: selection)
     }
 
     @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
     private func secondColumns(currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
-        makeColumn(.favorite, currentSongID: currentSongID)
-        makeColumn(.plays, currentSongID: currentSongID)
-        makeColumn(.year, currentSongID: currentSongID)
-        makeColumn(.composer, currentSongID: currentSongID)
-        makeColumn(.bitrate, currentSongID: currentSongID)
-        makeColumn(.rating, currentSongID: currentSongID)
-        makeColumn(.added, currentSongID: currentSongID)
+        makeColumn(.favorite, currentSongID: currentSongID, selection: selection)
+        makeColumn(.plays, currentSongID: currentSongID, selection: selection)
+        makeColumn(.year, currentSongID: currentSongID, selection: selection)
+        makeColumn(.composer, currentSongID: currentSongID, selection: selection)
+        makeColumn(.bitrate, currentSongID: currentSongID, selection: selection)
+        makeColumn(.rating, currentSongID: currentSongID, selection: selection)
+        makeColumn(.added, currentSongID: currentSongID, selection: selection)
     }
 
     @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
-    private func makeColumn(_ column: SongColumn, currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+    private func makeColumn(
+        _ column: SongColumn,
+        currentSongID: SubsonicSong.ID?,
+        selection: Set<SubsonicSong.ID>
+    ) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
         TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
             SongColumnCell(
                 column: column,
                 song: song,
                 app: app,
                 hoverState: hoverManager.state(for: song.id),
-                isCurrent: song.id == currentSongID
+                isCurrent: song.id == currentSongID,
+                selection: selection
             )
         }
         .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
@@ -244,10 +249,19 @@ private struct SongColumnCell: View {
     let app: AppState
     let hoverState: RowHoverState
     let isCurrent: Bool
+    let selection: Set<SubsonicSong.ID>
+
+    private var dragPayload: TrackDragPayload {
+        if selection.contains(song.id) && selection.count > 1 {
+            return .songs(Array(selection))
+        }
+        return .song(song.id)
+    }
 
     var body: some View {
         cellContent
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: column.contentAlignment)
+            .draggable(dragPayload)
     }
 
     @ViewBuilder

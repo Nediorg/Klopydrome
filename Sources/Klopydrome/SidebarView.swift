@@ -65,6 +65,16 @@ struct SidebarView: View {
                     }
                     .buttonStyle(.plain)
                     .tag(Selection.playlistID(playlist.id))
+                    .modifier(PlaylistDropTargetModifier(
+                        isEnabled: !playlist.isSmart && app.canEditPlaylist(playlist),
+                        onDrop: { payload in
+                            Task {
+                                let songs = await app.resolveSongs(for: payload)
+                                guard !songs.isEmpty else { return }
+                                await app.addSongsCheckingDuplicates(songs, to: playlist)
+                            }
+                        }
+                    ))
                     .contextMenu {
                         PlaylistContextMenuItems(playlist: playlist) {
                             beginRename(playlist)
@@ -95,6 +105,16 @@ struct SidebarView: View {
                         }
                         .buttonStyle(.plain)
                         .tag(Selection.playlistID(playlist.id))
+                        .modifier(PlaylistDropTargetModifier(
+                            isEnabled: !playlist.isSmart && app.canEditPlaylist(playlist),
+                            onDrop: { payload in
+                                Task {
+                                    let songs = await app.resolveSongs(for: payload)
+                                    guard !songs.isEmpty else { return }
+                                    await app.addSongsCheckingDuplicates(songs, to: playlist)
+                                }
+                            }
+                        ))
                         .contextMenu {
                             PlaylistContextMenuItems(playlist: playlist) {
                                 beginRename(playlist)
@@ -259,5 +279,33 @@ struct SidebarView: View {
 
     private func icon(for section: NavigationState.Section) -> String {
         section.icon
+    }
+}
+
+private struct PlaylistDropTargetModifier: ViewModifier {
+    let isEnabled: Bool
+    let onDrop: (TrackDragPayload) -> Void
+
+    @State private var isTargeted = false
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .overlay {
+                    if isTargeted {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(AMColor.accent, lineWidth: 2)
+                    }
+                }
+                .dropDestination(for: TrackDragPayload.self) { items, _ in
+                    guard let payload = items.first else { return false }
+                    onDrop(payload)
+                    return true
+                } isTargeted: { targeted in
+                    isTargeted = targeted
+                }
+        } else {
+            content
+        }
     }
 }
