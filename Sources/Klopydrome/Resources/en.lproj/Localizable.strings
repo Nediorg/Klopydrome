@@ -853,3 +853,13 @@
 "Your library doesn't have any artists yet." = "Your library doesn't have any artists yet.";
 "Your library doesn't have any songs yet." = "Your library doesn't have any songs yet.";
 "Z-A First" = "Z-A First";
+"Album Information" = "Album Information";
+"Explicit" = "Explicit";
+"Release" = "Release";
+"Release Type" = "Release Type";
+"Record Label" = "Record Label";
+"Contributors" = "Contributors";
+"Discs" = "Discs";
+"Disc %d: \"%@\" (%d tracks)" = "Disc %d: \"%@\" (%d tracks)";
+"Disc %d (%d tracks)" = "Disc %d (%d tracks)";
+"Disc %d: \"%@\"" = "Disc %d: \"%@\"";

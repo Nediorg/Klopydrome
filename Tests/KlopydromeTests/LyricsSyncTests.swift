@@ -398,6 +398,46 @@ final class LyricsSyncTests: XCTestCase {
     }
 }
 
+@MainActor
+final class EnhancedLyricsSyncTests: XCTestCase {
+    func testLyricsStoreBuildSyncedWordsWithServerCues() {
+        let lineText = "Hello world, this is OpenSubsonic"
+        let cues = [
+            LyricsCue(start: 1000, end: 1500, byteStart: 0, byteEnd: 5, value: "Hello "),
+            LyricsCue(start: 1600, end: 2000, byteStart: 6, byteEnd: 12, value: "world, "),
+            LyricsCue(start: 2100, end: 2400, byteStart: 13, byteEnd: 17, value: "this "),
+            LyricsCue(start: 2500, end: 2700, byteStart: 18, byteEnd: 20, value: "is "),
+            LyricsCue(start: 2800, end: 3500, byteStart: 21, byteEnd: 32, value: "OpenSubsonic")
+        ]
+
+        let words = LyricsStore.buildSyncedWords(cues: cues, lineText: lineText, shift: 0)
+        XCTAssertEqual(words.count, 5)
+        XCTAssertEqual(words.map(\.text).joined(), lineText)
+        XCTAssertEqual(words[0].text, "Hello ")
+        XCTAssertEqual(words[0].start, 1.0)
+        XCTAssertEqual(words[0].end, 1.5)
+        XCTAssertEqual(words[1].text, "world, ")
+        XCTAssertEqual(words[4].text, "OpenSubsonic")
+    }
+
+    func testLyricsStoreBuildSyncedWordsWithByteOffsetsFallback() {
+        let lineText = "You and I"
+        // 0..3: "You ", 4..7: "and ", 8..8: "I" (inclusive UTF-8 byte ranges from OpenSubsonic spec)
+        let cues = [
+            LyricsCue(start: 12000, end: 12800, byteStart: 0, byteEnd: 3, value: nil),
+            LyricsCue(start: 12800, end: 13400, byteStart: 4, byteEnd: 7, value: nil),
+            LyricsCue(start: 13400, end: 14200, byteStart: 8, byteEnd: 8, value: nil)
+        ]
+
+        let words = LyricsStore.buildSyncedWords(cues: cues, lineText: lineText, shift: 0)
+        XCTAssertEqual(words.count, 3)
+        XCTAssertEqual(words[0].text, "You ")
+        XCTAssertEqual(words[1].text, "and ")
+        XCTAssertEqual(words[2].text, "I")
+        XCTAssertEqual(words.map(\.text).joined(), lineText)
+    }
+}
+
 // MARK: - Pause Markers
 
 final class LyricsPauseMarkerTests: XCTestCase {

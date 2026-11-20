@@ -11,7 +11,11 @@ extension Player {
         Task { @MainActor in
             guard self.mpvLoadGeneration == generation else { return }
             do {
-                try await mpvEngine.load(url: url, streamRecordURL: streamRecordURL)
+                try await mpvEngine.load(
+                    url: url,
+                    streamRecordURL: streamRecordURL,
+                    replayGain: self.currentSong?.replayGain
+                )
                 guard self.mpvLoadGeneration == generation else { return }
                 self.isBuffering = self.isPlaying ? self.mpvEngine.isBuffering : false
                 if self.mpvSeekRestartActive {

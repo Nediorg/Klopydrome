@@ -25,6 +25,7 @@ struct AlbumDetailView: View {
     }
 
     @State private var loadError: String?
+    @State private var showInfoSheet = false
 
     var body: some View {
         ScrollView {
@@ -67,6 +68,15 @@ struct AlbumDetailView: View {
         }
         .task(id: LoadID(albumID: album.id, offlineSession: app.isOfflineSession)) {
             await load()
+        }
+        .inWindowModal(isPresented: $showInfoSheet) {
+            AlbumInfoSheet(
+                album: album,
+                detail: displayedDetail,
+                songs: orderedSongs
+            ) {
+                showInfoSheet = false
+            }
         }
     }
 
@@ -136,6 +146,10 @@ struct AlbumDetailView: View {
 
     private func metaRow(_ detail: AlbumDetail) -> some View {
         var parts: [String] = []
+        if let type = detail.formattedReleaseType, !type.isEmpty,
+           type.localizedCaseInsensitiveCompare("Album") != .orderedSame {
+            parts.append(type)
+        }
         if let genre = detail.genre, !genre.isEmpty { parts.append(genre) }
         if let year = detail.year { parts.append(String(year)) }
         let total = songs.reduce(0) { $0 + ($1.duration ?? 0) }
@@ -187,8 +201,11 @@ struct AlbumDetailView: View {
                 RoundFavoriteButton(isStarred: app.isStarred(album)) {
                     app.toggleStar(album)
                 }
+                RoundInfoButton(title: "Album Information".localized) {
+                    showInfoSheet = true
+                }
                 RoundEllipsisMenu {
-                    AlbumContextMenuItems(album: album)
+                    AlbumContextMenuItems(album: album, onShowInfo: { showInfoSheet = true })
                 }
                 .help("Album Actions".localized)
             }
@@ -242,7 +259,15 @@ private struct AlbumTrackListSection: View {
             VStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.element.disc) { _, group in
                     if showDiscHeaders {
-                        Text(String(format: "Disc %d".localized, group.disc))
+                        let subtitle = detail.discTitle(for: group.disc)
+                        let discHeader: String = {
+                            if let subtitle, !subtitle.isEmpty {
+                                return String(format: "Disc %d: \"%@\"".localized, group.disc, subtitle)
+                            } else {
+                                return String(format: "Disc %d".localized, group.disc)
+                            }
+                        }()
+                        Text(discHeader)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)

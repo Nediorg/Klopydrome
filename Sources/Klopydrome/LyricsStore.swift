@@ -141,14 +141,19 @@ final class LyricsStore {
     ) async -> CachedLyrics? {
         let entries = try? await client.getLyricsBySongId(id: song.id)
 
-        if let entry = entries?.first(where: { isTimed(entry: $0) }),
+        let mainEntries = entries?.filter { $0.kind == nil || $0.kind == "main" } ?? []
+        let timedEntry = mainEntries.first(where: { isTimed(entry: $0) && $0.cueLine?.isEmpty == false })
+            ?? mainEntries.first(where: { isTimed(entry: $0) })
+            ?? entries?.first(where: { isTimed(entry: $0) })
+
+        if let entry = timedEntry,
            let lines = entry.line, !lines.isEmpty {
             let synced = apply(offset: entry.offset, to: lines)
             let words = wordsByLine(from: entry, offset: entry.offset, lineCount: lines.count)
             return CachedLyrics(syncedLines: synced, wordsByLine: words, plainText: nil)
         }
 
-        if let text = plainText(from: entries), !text.isEmpty {
+        if let text = plainText(from: mainEntries.isEmpty ? entries : mainEntries), !text.isEmpty {
             return CachedLyrics(syncedLines: [], wordsByLine: [:], plainText: text)
         }
 
@@ -200,17 +205,70 @@ final class LyricsStore {
             seen.insert(index)
             guard let cues = cueLine.cue, !cues.isEmpty else { continue }
             let shift = offset ?? 0
-            let words = cues.compactMap { cue -> SyncedWord? in
-                guard let startMs = cue.start, let value = cue.value, !value.isEmpty else { return nil }
-                return SyncedWord(
-                    text: value,
-                    start: (startMs - shift) / 1000,
-                    end: cue.end.map { ($0 - shift) / 1000 }
-                )
-            }
+            let lineText = cueLine.value ?? (entry.line?.indices.contains(index) == true ? entry.line?[index].value : nil)
+            let words = buildSyncedWords(cues: cues, lineText: lineText, shift: shift)
             if !words.isEmpty { result[index] = words }
         }
         return result
+    }
+
+    nonisolated static func buildSyncedWords(cues: [LyricsCue], lineText: String?, shift: Double) -> [SyncedWord] {
+        guard let lineText, !lineText.isEmpty else {
+            return fallbackCues(cues, shift: shift)
+        }
+
+        let utf8Data = Data(lineText.utf8)
+        let hasValidByteOffsets = cues.allSatisfy { cue in
+            guard let bStart = cue.byteStart, let bEnd = cue.byteEnd else { return false }
+            return bStart >= 0 && bEnd <= utf8Data.count && bStart <= bEnd
+        }
+
+        if hasValidByteOffsets && !cues.isEmpty {
+            let words = sliceByteRangeWords(cues: cues, utf8Data: utf8Data, shift: shift)
+            if !words.isEmpty { return words }
+        }
+
+        return fallbackCues(cues, shift: shift)
+    }
+
+    nonisolated private static func fallbackCues(_ cues: [LyricsCue], shift: Double) -> [SyncedWord] {
+        cues.compactMap { cue in
+            guard let startMs = cue.start, let value = cue.value, !value.isEmpty else { return nil }
+            return SyncedWord(
+                text: value,
+                start: (startMs - shift) / 1000,
+                end: cue.end.map { ($0 - shift) / 1000 }
+            )
+        }
+    }
+
+    nonisolated private static func sliceByteRangeWords(cues: [LyricsCue], utf8Data: Data, shift: Double) -> [SyncedWord] {
+        var words: [SyncedWord] = []
+        for cue in cues {
+            guard let startMs = cue.start else { continue }
+            let text: String
+            if let val = cue.value, !val.isEmpty {
+                text = val
+            } else if let bStart = cue.byteStart, let bEnd = cue.byteEnd,
+                      bStart >= 0, bStart <= bEnd {
+                let rangeEnd = min(bEnd + 1, utf8Data.count)
+                if bStart < rangeEnd {
+                    let sub = utf8Data[bStart..<rangeEnd]
+                    text = String(data: sub, encoding: .utf8) ?? ""
+                } else {
+                    continue
+                }
+            } else {
+                continue
+            }
+            guard !text.isEmpty else { continue }
+            words.append(SyncedWord(
+                text: text,
+                start: (startMs - shift) / 1000,
+                end: cue.end.map { ($0 - shift) / 1000 }
+            ))
+        }
+        return words
     }
 
     func cachedDisplayWords(for index: Int) -> [SyncedWord] {

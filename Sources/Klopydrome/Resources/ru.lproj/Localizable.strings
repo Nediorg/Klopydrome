@@ -853,3 +853,13 @@
 "Your library doesn't have any artists yet." = "В вашей медиатеке пока нет исполнителей.";
 "Your library doesn't have any songs yet." = "В вашей медиатеке пока нет песен.";
 "Z-A First" = "Сначала Я-А";
+"Album Information" = "Сведения об альбоме";
+"Explicit" = "Ненормативный контент";
+"Release" = "Релиз";
+"Release Type" = "Тип релиза";
+"Record Label" = "Лейбл";
+"Contributors" = "Участники записи";
+"Discs" = "Диски";
+"Disc %d: \"%@\" (%d tracks)" = "Диск %d: «%@» (%d треков)";
+"Disc %d (%d tracks)" = "Диск %d (%d треков)";
+"Disc %d: \"%@\"" = "Диск %d: «%@»";

@@ -104,7 +104,7 @@ extension Player {
                 _ = await CoverArtStore.shared.image(coverArt: coverArt, size: 240)
             }
         }
-        mpvEngine.append(url: url)
+        mpvEngine.append(url: url, replayGain: song.replayGain)
     }
 
     func syncPreloadedNextWithQueue() {

@@ -268,10 +268,15 @@ struct CompactSongRow: View {
 
             HStack(spacing: 4) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(song.displayTitle)
-                        .font(AMFont.rowTitle)
-                        .lineLimit(1)
-                        .foregroundStyle(isCurrent ? AMColor.accent : .primary)
+                    HStack(spacing: 4) {
+                        Text(song.displayTitle)
+                            .font(AMFont.rowTitle)
+                            .lineLimit(1)
+                            .foregroundStyle(isCurrent ? AMColor.accent : .primary)
+                        if song.isExplicit {
+                            ExplicitBadge()
+                        }
+                    }
                     if let sub = displaySubtitle, !sub.isEmpty {
                         Text(sub)
                             .font(AMFont.rowSubtitle)
@@ -362,6 +367,7 @@ extension CompactSongRow: Equatable {
             && lhs.song.artist == rhs.song.artist
             && lhs.song.album == rhs.song.album
             && lhs.song.duration == rhs.song.duration
+            && lhs.song.isExplicit == rhs.song.isExplicit
             && lhs.subtitle == rhs.subtitle
             && lhs.isCurrent == rhs.isCurrent
     }

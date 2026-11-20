@@ -171,10 +171,15 @@ struct SongRow: View {
                 }
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(song.displayTitle)
-                    .font(AMFont.rowTitle)
-                    .foregroundStyle(fgPrimary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(song.displayTitle)
+                        .font(AMFont.rowTitle)
+                        .foregroundStyle(fgPrimary)
+                        .lineLimit(1)
+                    if song.isExplicit {
+                        ExplicitBadge()
+                    }
+                }
                 if showAlbum {
                     Text(song.displaySubtitle)
                         .font(AMFont.rowSubtitle)
@@ -233,6 +238,7 @@ extension SongRow: Equatable {
             && lhs.song.artist == rhs.song.artist
             && lhs.song.album == rhs.song.album
             && lhs.song.duration == rhs.song.duration
+            && lhs.song.isExplicit == rhs.song.isExplicit
             && lhs.index == rhs.index
             && lhs.showAlbum == rhs.showAlbum
             && lhs.showsArtist == rhs.showsArtist

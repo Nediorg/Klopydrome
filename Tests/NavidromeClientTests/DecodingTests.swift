@@ -254,4 +254,42 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(extensions[1].name, "songLyrics")
         XCTAssertEqual(extensions[1].versions, [1, 2])
     }
+
+    func testOpenSubsonicMetadataDecoding() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,
+          "album":{
+            "id":"al1","name":"Double Album","artist":"Band","year":2024,
+            "releaseTypes":["Album","Live"],
+            "explicitStatus":"explicit",
+            "discTitles":[{"disc":1,"title":"Live in Paris"},{"disc":2,"title":"Acoustic Set"}],
+            "song":[{
+              "id":"s1","title":"Overture","artist":"Band",
+              "displayArtist":"The Great Band",
+              "displayAlbumArtist":"Band Collective",
+              "displayComposer":"Composer One",
+              "explicitStatus":"clean",
+              "contributors":[{"role":"producer","artist":{"id":"ar1","name":"Producer One"}}],
+              "replayGain":{"trackGain":-6.5,"albumGain":-7.2,"trackPeak":0.98,"albumPeak":0.99,"baseGain":-6.5,"fallbackGain":-6.5}
+            }]
+          }
+        }}
+        """
+        let env = try decode(json)
+        guard let album = env.album else { return XCTFail("Missing album") }
+        XCTAssertTrue(album.isExplicit)
+        XCTAssertEqual(album.formattedReleaseType, "Album")
+        XCTAssertEqual(album.discTitle(for: 1), "Live in Paris")
+        XCTAssertEqual(album.discTitle(for: 2), "Acoustic Set")
+        XCTAssertNil(album.discTitle(for: 3))
+
+        let song = album.song?.first
+        XCTAssertNotNil(song)
+        XCTAssertFalse(song!.isExplicit)
+        XCTAssertEqual(song!.resolvedAlbumArtist, "Band Collective")
+        XCTAssertEqual(song!.resolvedComposer, "Composer One")
+        XCTAssertEqual(song!.contributors?.first?.role, "producer")
+        XCTAssertEqual(song!.contributors?.first?.artist.name, "Producer One")
+        XCTAssertEqual(song!.replayGain?.fallbackGain, -6.5)
+    }
 }

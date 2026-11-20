@@ -33,6 +33,18 @@ public struct LyricsCue: Codable, Hashable {
     }
 }
 
+public struct LyricsAgent: Codable, Hashable, Sendable {
+    public let id: String
+    public let role: String?
+    public let name: String?
+
+    public init(id: String, role: String? = nil, name: String? = nil) {
+        self.id = id
+        self.role = role
+        self.name = name
+    }
+}
+
 public struct LyricsCueLine: Codable, Hashable {
     public let index: Int?
     public let start: Double?
@@ -61,9 +73,13 @@ public struct LyricsEntry: Codable {
     public let line: [SyncedLine]?
     public let cueLine: [LyricsCueLine]?
     public let offset: Double?
+    public let kind: String?
+    public let agents: [LyricsAgent]?
+
     public init(artist: String? = nil, title: String? = nil, synced: Bool? = nil,
                 lang: String? = nil, displayArtist: String? = nil, displayTitle: String? = nil,
-                line: [SyncedLine]? = nil, cueLine: [LyricsCueLine]? = nil, offset: Double? = nil) {
+                line: [SyncedLine]? = nil, cueLine: [LyricsCueLine]? = nil, offset: Double? = nil,
+                kind: String? = nil, agents: [LyricsAgent]? = nil) {
         self.artist = artist
         self.title = title
         self.synced = synced
@@ -73,6 +89,8 @@ public struct LyricsEntry: Codable {
         self.line = line
         self.cueLine = cueLine
         self.offset = offset
+        self.kind = kind
+        self.agents = agents
     }
 }
 

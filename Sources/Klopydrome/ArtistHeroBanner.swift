@@ -3,6 +3,7 @@ import NavidromeClient
 import SwiftUI
 
 struct RoundInfoButton: View {
+    var title: String = "Artist Information".localized
     var size: CGFloat = 32
     let action: () -> Void
 
@@ -25,8 +26,8 @@ struct RoundInfoButton: View {
         }
         .buttonStyle(.plain)
         .frame(width: size, height: size)
-        .help("Artist Information".localized)
-        .accessibilityLabel("Artist Information".localized)
+        .help(title)
+        .accessibilityLabel(title)
     }
 }
 

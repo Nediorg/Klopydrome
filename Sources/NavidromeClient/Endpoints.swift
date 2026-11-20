@@ -9,7 +9,7 @@ public extension SubsonicClient {
     func getOpenSubsonicExtensions() async throws -> [OpenSubsonicExtension] {
         let envelope = try await requestEnvelope(endpoint: "getOpenSubsonicExtensions")
         let exts = envelope.openSubsonicExtensions ?? []
-        self.setSupportedExtensions(Set(exts.map(\.name)))
+        self.setOpenSubsonicExtensions(exts)
         return exts
     }
 
@@ -301,11 +301,12 @@ public extension SubsonicClient {
         return login.token
     }
 
-    func getLyricsBySongId(id: String) async throws -> [LyricsEntry] {
-        let params = [
-            URLQueryItem(name: "id", value: id),
-            URLQueryItem(name: "enhanced", value: "true")
-        ]
+    func getLyricsBySongId(id: String, enhanced: Bool? = nil) async throws -> [LyricsEntry] {
+        var params = [URLQueryItem(name: "id", value: id)]
+        let sendEnhanced = enhanced ?? (supportsExtension("songLyrics", version: 2) || !supportsExtension("songLyrics", version: 1))
+        if sendEnhanced {
+            params.append(URLQueryItem(name: "enhanced", value: "true"))
+        }
         let list = try await requestEnvelope(endpoint: "getLyricsBySongId", params: params).lyricsList
         let entries = list?.structuredLyrics ?? list?.lyrics ?? []
         return entries

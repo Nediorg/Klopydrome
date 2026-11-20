@@ -180,7 +180,7 @@ extension Player {
         crossfadeEngine = engine
         crossfadeNextSongID = song.id
         crossfadeSourceURL = url
-        Task { try? await engine.load(url: url, streamRecordURL: nil) }
+        Task { try? await engine.load(url: url, streamRecordURL: nil, replayGain: song.replayGain) }
     }
 
     private func startCrossfade(to next: SubsonicSong) {

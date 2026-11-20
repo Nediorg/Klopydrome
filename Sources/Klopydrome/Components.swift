@@ -83,7 +83,8 @@ struct SongMetadataGrid: View {
         [
             ("Album", song.album),
             ("Artist", song.artist),
-            ("Album Artist", song.albumArtist),
+            ("Album Artist", song.resolvedAlbumArtist),
+            ("Composer", song.resolvedComposer),
             ("Year", song.year.map(String.init)),
             ("Genre", song.genre),
             ("Bitrate", song.bitRate.map { "\($0) kbps" }),
@@ -466,3 +467,15 @@ public struct AdaptiveGridGeometry {
         self.columns = Array(repeating: GridItem(.fixed(width), spacing: gap), count: count)
     }
 }
+
+struct ExplicitBadge: View {
+    var size: CGFloat = 11
+
+    var body: some View {
+        Image(systemName: "e.square.fill")
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(AMColor.secondaryText)
+            .accessibilityLabel("Explicit".localized)
+    }
+}
+

@@ -4,6 +4,7 @@ import NavidromeClient
 struct AlbumContextMenuItems: View {
     @Environment(AppState.self) private var app
     let album: SubsonicAlbum
+    var onShowInfo: (() -> Void)? = nil
 
     private var isStarred: Bool { app.isStarred(album) }
 
@@ -44,6 +45,12 @@ struct AlbumContextMenuItems: View {
         Divider()
         Button("Share…".localized) {
             app.presentShare(ShareTarget(entityID: album.id, title: album.displayName, kind: .album))
+        }
+        if let onShowInfo {
+            Button("Get Info…".localized) {
+                onShowInfo()
+            }
+            .keyboardShortcut("i", modifiers: .command)
         }
     }
 }

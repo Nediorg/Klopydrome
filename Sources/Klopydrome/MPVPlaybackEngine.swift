@@ -31,6 +31,8 @@ final class MPVPlaybackEngine {
 
     var activeEntryID: Int64?
     var appendedEntryID: Int64?
+    var currentTrackReplayGain: SubsonicReplayGain?
+    var appendedTrackReplayGain: SubsonicReplayGain?
 
     var volume: Float = 1.0 {
         didSet { applyVolume() }
@@ -165,8 +167,9 @@ final class MPVPlaybackEngine {
         pump.queue.async { pump.readEvents() }
     }
 
-    func load(url: URL, streamRecordURL: URL? = nil) async throws {
+    func load(url: URL, streamRecordURL: URL? = nil, replayGain: SubsonicReplayGain? = nil) async throws {
         try ensureMpv()
+        currentTrackReplayGain = replayGain
         configureStreamRecord(streamRecordURL)
         activeEntryID = nil
         appendedEntryID = nil
@@ -180,7 +183,18 @@ final class MPVPlaybackEngine {
         currentTimeValue = 0
         duration = 0
         setPaused(!isPlaying)
-        activeEntryID = mpvCommandEntryID(["loadfile", url.absoluteString, "replace"])
+
+        let fallbackDB = AutomixLoudness.fallbackGainDB(
+            mode: replayGainMode,
+            preampDB: replayGainPreampDB,
+            replayGain: replayGain
+        )
+        if let fallbackDB {
+            let opt = "replaygain-fallback=\(AutomixLoudness.formatDecibels(fallbackDB))"
+            activeEntryID = mpvCommandEntryID(["loadfile", url.absoluteString, "replace", "-1", opt])
+        } else {
+            activeEntryID = mpvCommandEntryID(["loadfile", url.absoluteString, "replace"])
+        }
     }
 
     #if DEBUG
@@ -277,8 +291,15 @@ final class MPVPlaybackEngine {
         guard let mpv else { return }
         mpv_set_property_string(mpv, "replaygain", replayGainMode.mpvValue)
         let preamp = AutomixLoudness.formatDecibels(replayGainPreampDB)
-        mpv_set_property_string(mpv, "replaygain-preamp", preamp)
-        mpv_set_property_string(mpv, "replaygain-fallback", preamp)
+        mpv_set_property_string(mpv, "replaygain-preamp", replayGainMode == .off ? "0" : preamp)
+        let fallback = replayGainMode == .off ? "0" : (
+            AutomixLoudness.fallbackGainDB(
+                mode: replayGainMode,
+                preampDB: replayGainPreampDB,
+                replayGain: currentTrackReplayGain
+            ).map { AutomixLoudness.formatDecibels($0) } ?? preamp
+        )
+        mpv_set_property_string(mpv, "replaygain-fallback", fallback)
     }
 
     private func applyAudioFilter() {

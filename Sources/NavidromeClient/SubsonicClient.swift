@@ -33,6 +33,7 @@ public final class SubsonicClient: @unchecked Sendable {
     private var sessionSalt: String
     private var sessionToken: String
     private var _supportedExtensions: Set<String> = []
+    private var _extensionVersions: [String: Set<Int>] = [:]
     private let stateLock = NSLock()
 
     public var supportedExtensions: Set<String> {
@@ -45,6 +46,20 @@ public final class SubsonicClient: @unchecked Sendable {
         stateLock.lock()
         defer { stateLock.unlock() }
         self._supportedExtensions = extensions
+    }
+
+    public func setOpenSubsonicExtensions(_ extensions: [OpenSubsonicExtension]) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        self._supportedExtensions = Set(extensions.map(\.name))
+        self._extensionVersions = Dictionary(uniqueKeysWithValues: extensions.map { ($0.name, Set($0.versions)) })
+    }
+
+    public func supportsExtension(_ name: String, version: Int = 1) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        if version == 1 && _supportedExtensions.contains(name) { return true }
+        return _extensionVersions[name]?.contains(version) == true
     }
 
     public init(config: SubsonicConfig, session: URLSession? = nil) {

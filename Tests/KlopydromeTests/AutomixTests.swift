@@ -154,4 +154,35 @@ final class AutomixTests: XCTestCase {
         config.replayGainMode = .album
         XCTAssertEqual(config.effectiveReplayGainMode, .album)
     }
+
+    func testFallbackGainDBCalculation() {
+        let rg = SubsonicReplayGain(
+            trackGain: -6.5,
+            albumGain: -7.2,
+            trackPeak: 0.95,
+            albumPeak: 0.99,
+            baseGain: -6.5,
+            fallbackGain: -6.5
+        )
+
+        // Off mode always gives 0
+        XCTAssertEqual(AutomixLoudness.fallbackGainDB(mode: .off, preampDB: 2.0, replayGain: rg), 0)
+
+        // Track mode: -6.5 + 1.0 = -5.5
+        let trackGain = AutomixLoudness.fallbackGainDB(mode: .track, preampDB: 1.0, replayGain: rg)
+        XCTAssertNotNil(trackGain)
+        XCTAssertEqual(trackGain!, -5.5, accuracy: 0.01)
+
+        // Album mode: -7.2 + 0.0 = -7.2
+        let albumGain = AutomixLoudness.fallbackGainDB(mode: .album, preampDB: 0.0, replayGain: rg)
+        XCTAssertNotNil(albumGain)
+        XCTAssertEqual(albumGain!, -7.2, accuracy: 0.01)
+
+        // Peak limiting test: high positive gain limited so peak doesn't clip
+        let highGain = SubsonicReplayGain(trackGain: 15.0, albumGain: 15.0, trackPeak: 0.5, albumPeak: 0.5)
+        // With peak 0.5, max allowable gain = -20 * log10(0.5) = +6.02 dB
+        let limited = AutomixLoudness.fallbackGainDB(mode: .track, preampDB: 0, replayGain: highGain)
+        XCTAssertNotNil(limited)
+        XCTAssertLessThanOrEqual(limited!, 6.03)
+    }
 }

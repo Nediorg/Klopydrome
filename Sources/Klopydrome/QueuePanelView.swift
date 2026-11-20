@@ -196,10 +196,15 @@ struct QueueTrackRow: View {
                 .frame(width: 36, height: 36)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(song.displayTitle)
-                        .font(AMFont.rowTitle)
-                        .foregroundStyle(isCurrent ? AMColor.accent : AMColor.primaryText)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(song.displayTitle)
+                            .font(AMFont.rowTitle)
+                            .foregroundStyle(isCurrent ? AMColor.accent : AMColor.primaryText)
+                            .lineLimit(1)
+                        if song.isExplicit {
+                            ExplicitBadge()
+                        }
+                    }
                     Text(song.displaySubtitle)
                         .font(AMFont.rowSubtitle)
                         .foregroundStyle(AMColor.secondaryText)

@@ -79,12 +79,12 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
         case .duration: return KeyPathComparator(\.duration)
         case .artist: return KeyPathComparator(\.artist)
         case .album: return KeyPathComparator(\.album)
-        case .albumArtist: return KeyPathComparator(\.albumArtist)
+        case .albumArtist: return KeyPathComparator(\.resolvedAlbumArtist)
         case .genre: return KeyPathComparator(\.genre)
         case .favorite: return KeyPathComparator(\.starred)
         case .plays: return KeyPathComparator(\.playCount)
         case .year: return KeyPathComparator(\.year)
-        case .composer: return KeyPathComparator(\.composer)
+        case .composer: return KeyPathComparator(\.resolvedComposer)
         case .bitrate: return KeyPathComparator(\.bitRate)
         case .rating: return KeyPathComparator(\.userRating)
         case .added: return KeyPathComparator(\.created)
@@ -263,6 +263,9 @@ private struct SongColumnCell: View {
                 Text(song.displayTitle)
                     .foregroundStyle(isCurrent ? AMColor.accent : .primary)
                     .lineLimit(1)
+                if song.isExplicit {
+                    ExplicitBadge()
+                }
                 Spacer(minLength: 4)
                 TitleEllipsisButton(song: song, app: app, hoverState: hoverState)
             }
@@ -284,7 +287,7 @@ private struct SongColumnCell: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .albumArtist:
-            Text(song.albumArtist ?? "")
+            Text(song.resolvedAlbumArtist)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .genre:
@@ -302,7 +305,7 @@ private struct SongColumnCell: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         case .composer:
-            Text(song.composer ?? "")
+            Text(song.resolvedComposer ?? "")
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .bitrate:

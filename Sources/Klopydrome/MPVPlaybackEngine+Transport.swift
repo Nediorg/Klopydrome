@@ -3,20 +3,32 @@ import Libmpv
 import NavidromeClient
 
 extension MPVPlaybackEngine {
-    func append(url: URL) {
+    func append(url: URL, replayGain: SubsonicReplayGain? = nil) {
         hasAppendedTrack = true
         appendedURL = url
+        appendedTrackReplayGain = replayGain
         guard mpv != nil else {
             appendedEntryID = nil
             return
         }
-        appendedEntryID = mpvCommandEntryID(["loadfile", url.absoluteString, "append"])
+        let fallbackDB = AutomixLoudness.fallbackGainDB(
+            mode: replayGainMode,
+            preampDB: replayGainPreampDB,
+            replayGain: replayGain
+        )
+        if let fallbackDB {
+            let opt = "replaygain-fallback=\(AutomixLoudness.formatDecibels(fallbackDB))"
+            appendedEntryID = mpvCommandEntryID(["loadfile", url.absoluteString, "append", "-1", opt])
+        } else {
+            appendedEntryID = mpvCommandEntryID(["loadfile", url.absoluteString, "append"])
+        }
     }
 
     func clearAppended() {
         hasAppendedTrack = false
         appendedURL = nil
         appendedEntryID = nil
+        appendedTrackReplayGain = nil
         didAdvanceToAppendedTrack = false
         guard mpv != nil else { return }
         mpvCommand(["playlist-clear"])
@@ -34,6 +46,8 @@ extension MPVPlaybackEngine {
         appendedEntryID = nil
         hasAppendedTrack = false
         appendedURL = nil
+        currentTrackReplayGain = appendedTrackReplayGain
+        appendedTrackReplayGain = nil
         didAdvanceToAppendedTrack = false
         isLoaded = false
         isEnded = false

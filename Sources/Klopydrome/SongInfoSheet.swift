@@ -91,9 +91,14 @@ struct SongInfoSheet: View {
                 .help("Quick Look artwork".localized)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(song.displayTitle)
-                    .font(.title3.bold())
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(song.displayTitle)
+                        .font(.title3.bold())
+                        .lineLimit(1)
+                    if song.isExplicit {
+                        ExplicitBadge(size: 13)
+                    }
+                }
                 if let artist = song.artist {
                     Text(artist)
                         .font(.subheadline)
@@ -117,8 +122,8 @@ struct SongInfoSheet: View {
                 metaRow("Title".localized, value: song.displayTitle)
                 metaRow("Artist".localized, value: song.artist)
                 metaRow("Album".localized, value: song.album)
-                metaRow("Album artist".localized, value: song.albumArtist)
-                metaRow("Composer".localized, value: song.composer)
+                metaRow("Album artist".localized, value: song.resolvedAlbumArtist)
+                metaRow("Composer".localized, value: song.resolvedComposer)
                 metaRow("Genre".localized, value: song.genre)
                 metaRow("Year".localized, value: song.year.map(String.init))
                 metaRow("Track Number".localized, value: song.track.map(String.init))
