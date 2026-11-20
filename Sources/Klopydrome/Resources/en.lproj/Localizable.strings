@@ -863,3 +863,15 @@
 "Disc %d: \"%@\" (%d tracks)" = "Disc %d: \"%@\" (%d tracks)";
 "Disc %d (%d tracks)" = "Disc %d (%d tracks)";
 "Disc %d: \"%@\"" = "Disc %d: \"%@\"";
+"Profiles" = "Profiles";
+"Add Server…" = "Add Server…";
+"Add Server" = "Add Server";
+"Switch" = "Switch";
+"Active" = "Active";
+"Delete Profile" = "Delete Profile";
+"Delete Profile?" = "Delete Profile?";
+"Servers" = "Servers";
+"Saved Servers" = "Saved Servers";
+"Server Name" = "Server Name";
+"Connect a new music library" = "Connect a new music library";
+"Password required." = "Password required.";

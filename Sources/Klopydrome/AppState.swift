@@ -15,6 +15,19 @@ final class AppState {
     @ObservationIgnored var offlineMutationStore: OfflineMutationStore?
     @ObservationIgnored var downloadCancellationTokens: [String: OSAllocatedUnfairLock<Bool>] = [:]
     var serverConfig: ServerConfig = .empty
+    var serverProfiles: [ServerProfile] = []
+    var activeProfileID: UUID?
+    var isSwitchingServer = false
+    var isAddingServer = false
+    var sessionGeneration = 0
+
+    var activeProfile: ServerProfile? {
+        serverProfiles.first(where: { $0.id == activeProfileID })
+    }
+
+    var effectiveStorageKey: String {
+        activeProfile?.storageKey ?? (serverConfig.url.isEmpty ? "default" : (URL(string: serverConfig.url)?.host ?? "default"))
+    }
 
     var player = Player()
     let discordRichPresence = DiscordRichPresence()
@@ -181,6 +194,7 @@ final class AppState {
     var currentCacheTask: Task<Void, Never>?
     var lyricsTask: Task<Void, Never>?
     var scrobbleTask: Task<Void, Never>?
+    var warmupTask: Task<Void, Never>?
 
     @ObservationIgnored
     var starOverrides: [String: Bool] = [:]
@@ -253,31 +267,31 @@ final class AppState {
     }
 
     private func loadPersisted() {
-        guard let data = UserDefaults.standard.data(forKey: configKey),
-              let config = try? JSONDecoder().decode(ServerConfig.self, from: data) else {
-            return
+        if let data = UserDefaults.standard.data(forKey: configKey),
+           let config = try? JSONDecoder().decode(ServerConfig.self, from: data) {
+            serverConfig = config
         }
-        serverConfig = config
-        if !config.url.isEmpty, let host = URL(string: config.url)?.host {
-            let initialCache = CacheManager(rootURL: CacheManager.root(forServer: host))
+        loadProfiles()
+        if !serverConfig.url.isEmpty {
+            let initialCache = CacheManager(rootURL: CacheManager.root(forServer: effectiveStorageKey))
             self.cache = initialCache
             CoverArtStore.shared.configure(
                 client: nil,
                 cache: initialCache,
-                coverResolution: config.coverResolution ?? .high,
-                adaptiveCellularDataEnabled: config.effectiveAdaptiveCellularDataEnabled
+                coverResolution: serverConfig.coverResolution ?? .high,
+                adaptiveCellularDataEnabled: serverConfig.effectiveAdaptiveCellularDataEnabled
             )
         }
         player.configureCrossfade(
-            enabled: config.effectiveAutomixEnabled,
-            fadeDuration: config.effectiveAutomixFadeDuration,
-            applyToAlbums: config.effectiveAutomixApplyToAlbums
+            enabled: serverConfig.effectiveAutomixEnabled,
+            fadeDuration: serverConfig.effectiveAutomixFadeDuration,
+            applyToAlbums: serverConfig.effectiveAutomixApplyToAlbums
         )
         player.configureReplayGain(
-            mode: config.effectiveReplayGainMode,
-            preampDB: config.effectiveReplayGainPreampDB
+            mode: serverConfig.effectiveReplayGainMode,
+            preampDB: serverConfig.effectiveReplayGainPreampDB
         )
-        player.configureSilenceTrim(mode: config.effectiveSilenceTrimMode)
+        player.configureSilenceTrim(mode: serverConfig.effectiveSilenceTrimMode)
     }
 
     func persist() {

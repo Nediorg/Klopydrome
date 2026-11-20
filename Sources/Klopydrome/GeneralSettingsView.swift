@@ -4,9 +4,14 @@ import NavidromeClient
 struct GeneralSettingsView: View {
     @Environment(AppState.self) private var app
     @State private var showLogout = false
+    @State private var profileToDelete: ServerProfile?
 
     var body: some View {
         Form {
+            if !app.serverProfiles.isEmpty {
+                profilesSection
+            }
+
             accountSection
 
             offlineSection
@@ -16,6 +21,72 @@ struct GeneralSettingsView: View {
         .onChange(of: app.serverConfig) { _, _ in
             app.saveSettings()
             app.refreshDiscordRichPresence()
+        }
+    }
+
+    private var profilesSection: some View {
+        Section("Profiles".localized) {
+            ForEach(app.serverProfiles) { profile in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(profile.name)
+                                .font(.body.weight(profile.id == app.activeProfileID ? .semibold : .regular))
+                            if profile.id == app.activeProfileID {
+                                Text("Active".localized)
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        Text("\(profile.username) @ \(profile.url)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if profile.id != app.activeProfileID {
+                        Button("Switch".localized) {
+                            Task { await app.switchToProfile(profile) }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    Button(role: .destructive) {
+                        profileToDelete = profile
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Delete Profile".localized)
+                }
+            }
+
+            Button("Add Server…".localized) {
+                app.isAddingServer = true
+            }
+        }
+        .confirmationDialog(
+            "Delete Profile?".localized,
+            isPresented: Binding(
+                get: { profileToDelete != nil },
+                set: { if !$0 { profileToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete".localized, role: .destructive) {
+                if let profile = profileToDelete {
+                    app.deleteProfile(profile)
+                }
+                profileToDelete = nil
+            }
+            Button("Cancel".localized, role: .cancel) {
+                profileToDelete = nil
+            }
         }
     }
 

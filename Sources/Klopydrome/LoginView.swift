@@ -44,6 +44,7 @@ struct LoginView: View {
     @State private var urlText = ""
     @State private var username = ""
     @State private var password = ""
+    @State private var serverName = ""
     @State private var authMode: AuthMode = .token
     @State private var showPassword = false
     @State private var busy = false
@@ -63,7 +64,7 @@ struct LoginView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 10) {
-                Image(systemName: "person.crop.circle")
+                Image(systemName: app.isAddingServer ? "plus.circle" : "person.crop.circle")
                     .font(.system(size: 32, weight: .light))
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 56, height: 56)
@@ -72,16 +73,53 @@ struct LoginView: View {
                             .fill(Color.accentColor.opacity(0.12))
                     )
                     .accessibilityHidden(true)
-                Text("Welcome".localized)
+                Text((app.isAddingServer ? "Add Server" : "Welcome").localized)
                     .font(.title2.bold())
-                Text("To continue, sign in to your account".localized)
+                Text((app.isAddingServer ? "Connect a new music library" : "To continue, sign in to your account").localized)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+
+                if !app.isAddingServer && app.serverProfiles.count > 1 {
+                    Menu {
+                        ForEach(app.serverProfiles) { profile in
+                            Button(profile.name) {
+                                selectProfile(profile)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "server.rack")
+                            Text(app.activeProfile?.name ?? "Saved Servers".localized)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    }
+                    .menuStyle(.borderlessButton)
+                }
             }
             .padding(.top, 12)
 
             VStack(alignment: .leading, spacing: 18) {
+                if app.isAddingServer {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Server Name".localized)
+                            .font(.subheadline.weight(.medium))
+
+                        TextField("My Server".localized, text: $serverName)
+                            .textFieldStyle(.plain)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.horizontal, 8)
+                            .loginFieldChrome(isFocused: false) {}
+                            .disableAutocorrection(true)
+                            .accessibilityLabel("Server Name".localized)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Server address".localized)
                         .font(.subheadline.weight(.medium))
@@ -178,26 +216,21 @@ struct LoginView: View {
                 )
             }
 
-            Button {
-                connect()
-            } label: {
-                if busy {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Signing In…".localized)
+            Group {
+                if app.isAddingServer {
+                    HStack(spacing: 12) {
+                        Button("Cancel".localized) {
+                            app.isAddingServer = false
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+
+                        actionButton
                     }
-                    .frame(maxWidth: .infinity)
                 } else {
-                    Text("Sign In".localized)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
+                    actionButton
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(busy || serverAddress.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                      || username.isEmpty || password.isEmpty)
-            .keyboardShortcut(.defaultAction)
             .confirmationDialog(
                 "Connect over an insecure connection?".localized,
                 isPresented: $confirmInsecure,
@@ -264,8 +297,51 @@ struct LoginView: View {
             }
         }
     }
+}
 
-    private func prefill() {
+private extension LoginView {
+    var actionButton: some View {
+        Button {
+            connect()
+        } label: {
+            if busy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Signing In…".localized)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                Text((app.isAddingServer ? "Add Server" : "Sign In").localized)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(busy || serverAddress.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                  || username.isEmpty || password.isEmpty)
+        .keyboardShortcut(.defaultAction)
+    }
+
+    func selectProfile(_ profile: ServerProfile) {
+        urlText = profile.url
+        username = profile.username
+        authMode = profile.authMode
+        serverName = profile.name
+        password = app.passwordForProfile(profile) ?? ""
+        app.activeProfileID = profile.id
+        app.persistProfiles()
+    }
+
+    func prefill() {
+        if app.isAddingServer {
+            urlText = ""
+            username = ""
+            password = ""
+            serverName = ""
+            authMode = .token
+            return
+        }
         if urlText.isEmpty {
             urlText = app.serverConfig.url
             username = app.serverConfig.username
@@ -276,7 +352,7 @@ struct LoginView: View {
         }
     }
 
-    private func connect(allowInsecureHTTP: Bool = false) {
+    func connect(allowInsecureHTTP: Bool = false) {
         let address = serverAddress
         if address.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
         if !allowInsecureHTTP && address.scheme == .http {
@@ -288,8 +364,17 @@ struct LoginView: View {
         Task {
             defer { busy = false }
             do {
-                try await app.connect(url: address.url, username: username, password: password,
-                                      authMode: authMode, allowInsecureHTTP: allowInsecureHTTP)
+                try await app.connect(
+                    url: address.url,
+                    username: username,
+                    password: password,
+                    authMode: authMode,
+                    allowInsecureHTTP: allowInsecureHTTP,
+                    profileName: serverName.isEmpty ? nil : serverName
+                )
+                if app.isAddingServer {
+                    app.isAddingServer = false
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }

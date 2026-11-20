@@ -133,7 +133,7 @@ struct CacheSettingsView: View {
             Task { await app.applyCacheLimits() }
             app.saveSettings()
         }
-        .task(id: reloadToken) {
+        .task(id: "\(reloadToken)|\(app.sessionGeneration)") {
             normalizeCacheLimits()
             await reloadUsage()
         }

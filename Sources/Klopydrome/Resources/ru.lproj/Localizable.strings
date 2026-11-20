@@ -863,3 +863,15 @@
 "Disc %d: \"%@\" (%d tracks)" = "Диск %d: «%@» (%d треков)";
 "Disc %d (%d tracks)" = "Диск %d (%d треков)";
 "Disc %d: \"%@\"" = "Диск %d: «%@»";
+"Profiles" = "Профили";
+"Add Server…" = "Добавить сервер…";
+"Add Server" = "Добавить сервер";
+"Switch" = "Переключить";
+"Active" = "Активный";
+"Delete Profile" = "Удалить профиль";
+"Delete Profile?" = "Удалить профиль?";
+"Servers" = "Серверы";
+"Saved Servers" = "Сохранённые серверы";
+"Server Name" = "Название сервера";
+"Connect a new music library" = "Подключите новую медиатеку";
+"Password required." = "Требуется пароль.";

@@ -93,6 +93,7 @@ struct DetailColumn: View {
     var body: some View {
         ZStack(alignment: .trailing) {
             DetailView()
+                .id(app.sessionGeneration)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if app.queuePanelVisible {

@@ -3,7 +3,7 @@ import SwiftData
 import NavidromeClient
 
 extension SwiftDataOfflineRepository {
-    public static func storeURL(forServer host: String) -> URL {
+    public static func serverDirectory(forServer host: String, create: Bool = false) -> URL {
         let safeHost = host
             .replacingOccurrences(of: ":", with: "-")
             .replacingOccurrences(of: "/", with: "-")
@@ -11,11 +11,18 @@ extension SwiftDataOfflineRepository {
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
-            create: true
+            create: create
         ))?.appendingPathComponent("Klopydrome", isDirectory: true)
         let base = appSupport ?? FileManager.default.temporaryDirectory
         let serverDir = base.appendingPathComponent(safeHost.isEmpty ? "default" : safeHost, isDirectory: true)
-        try? FileManager.default.createDirectory(at: serverDir, withIntermediateDirectories: true)
+        if create {
+            try? FileManager.default.createDirectory(at: serverDir, withIntermediateDirectories: true)
+        }
+        return serverDir
+    }
+
+    public static func storeURL(forServer host: String) -> URL {
+        let serverDir = serverDirectory(forServer: host, create: true)
         return serverDir.appendingPathComponent("OfflineLibrary.store")
     }
 

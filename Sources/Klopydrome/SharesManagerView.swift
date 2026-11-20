@@ -37,7 +37,7 @@ struct SharesManagerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
+        .task(id: app.sessionGeneration) {
             await load()
         }
         .onChange(of: app.isConnected) { _, isConnected in

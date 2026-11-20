@@ -145,7 +145,7 @@ struct SidebarView: View {
         .searchable(text: Bindable(app).nav.searchQuery, placement: .sidebar, prompt: Text("Search".localized))
         .submitLabel(.search)
         .onSubmit(of: .search) { submitSearch() }
-        .task(id: app.isConnected) { await loadPlaylists() }
+        .task(id: "\(app.isConnected)|\(app.sessionGeneration)") { await loadPlaylists() }
     }
 
     private func select(_ newValue: Selection) {

@@ -24,9 +24,35 @@ struct AppCommandMenus: Commands {
         }
         playbackMenu
         controlsMenu
+        serversMenu
         viewMenu
         CommandGroup(replacing: .windowArrangement) {}
         CommandGroup(replacing: .windowList) {}
+    }
+
+    @CommandsBuilder
+    private var serversMenu: some Commands {
+        CommandMenu("Servers".localized) {
+            ForEach(app.serverProfiles) { profile in
+                Button {
+                    Task { await app.switchToProfile(profile) }
+                } label: {
+                    HStack {
+                        Text(profile.name)
+                        if profile.id == app.activeProfileID {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .disabled(profile.id == app.activeProfileID)
+            }
+            if !app.serverProfiles.isEmpty {
+                Divider()
+            }
+            Button("Add Server…".localized) {
+                app.isAddingServer = true
+            }
+        }
     }
 
     @CommandsBuilder

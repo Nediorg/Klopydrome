@@ -9,12 +9,13 @@ struct SidebarStatusCard: View {
         case applyingChanges
         case scanningLibrary
         case offline(canReconnect: Bool)
+        case profile(name: String)
     }
 
     static func resolveStatus(for app: AppState) -> StatusState? {
         if app.isFlushingOfflineMutations {
             return .applyingChanges
-        } else if app.isReconnecting || app.isConnecting {
+        } else if app.isReconnecting || app.isConnecting || app.isSwitchingServer {
             return .connecting
         } else if app.isServerScanning {
             return .scanningLibrary
@@ -22,6 +23,8 @@ struct SidebarStatusCard: View {
             return .offline(
                 canReconnect: !app.serverConfig.effectiveForceOfflineMode
             )
+        } else if app.serverProfiles.count > 1, let profile = app.activeProfile {
+            return .profile(name: profile.name)
         }
         return nil
     }
@@ -63,6 +66,10 @@ struct SidebarStatusCard: View {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.orange)
+        case .profile:
+            Image(systemName: "server.rack")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -76,6 +83,8 @@ struct SidebarStatusCard: View {
             return "Scanning media library…".localized
         case .offline:
             return "Offline Mode".localized
+        case .profile(let name):
+            return name
         }
     }
 
@@ -100,6 +109,33 @@ struct SidebarStatusCard: View {
             } else {
                 Color.clear
             }
+        case .profile:
+            Menu {
+                ForEach(app.serverProfiles) { profile in
+                    Button {
+                        Task { await app.switchToProfile(profile) }
+                    } label: {
+                        HStack {
+                            Text(profile.name)
+                            if profile.id == app.activeProfileID {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .disabled(profile.id == app.activeProfileID)
+                }
+                Divider()
+                Button("Add Server…".localized) {
+                    app.isAddingServer = true
+                }
+            } label: {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
         }
     }
 }

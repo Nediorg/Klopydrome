@@ -2,10 +2,25 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
-    func passwordForLoginPrefill() -> String? {
+    func passwordForLoginPrefill(for profile: ServerProfile? = nil) -> String? {
+        let target = profile ?? activeProfile
+        if let target {
+            if let pw = KeychainStore.password(account: target.keychainAccount), !pw.isEmpty {
+                cachedKeychainPassword = pw
+                didReadKeychainPassword = true
+                return pw
+            }
+            if let pw = KeychainStore.password(account: target.username), !pw.isEmpty {
+                cachedKeychainPassword = pw
+                didReadKeychainPassword = true
+                return pw
+            }
+        }
         if didReadKeychainPassword { return cachedKeychainPassword }
         didReadKeychainPassword = true
-        cachedKeychainPassword = KeychainStore.password(account: serverConfig.username)
+        if !serverConfig.username.isEmpty {
+            cachedKeychainPassword = KeychainStore.password(account: serverConfig.username)
+        }
         return cachedKeychainPassword
     }
 
@@ -241,16 +256,16 @@ extension AppState {
         isPreparingOfflineSession = true
         defer { isPreparingOfflineSession = false }
 
-        guard !serverConfig.url.isEmpty,
-              let host = URL(string: serverConfig.url)?.host else {
+        guard !serverConfig.url.isEmpty else {
             return false
         }
 
-        let offlineCache = CacheManager(rootURL: CacheManager.root(forServer: host))
+        let storageKey = effectiveStorageKey
+        let offlineCache = CacheManager(rootURL: CacheManager.root(forServer: storageKey))
         cache = offlineCache
         resetCacheState()
         await seedCachedStreamKeys()
-        await setupOfflineRepository(host: host)
+        await setupOfflineRepository(host: storageKey)
 
         let downloadedTracks = (try? await offlineRepository?.fetchDownloadedTracks())?
             .filter { isCached($0) } ?? []
@@ -405,11 +420,14 @@ extension AppState {
     }
 
     var shouldShowLoginView: Bool {
-        !isLaunching &&
-        !isConnected &&
-        !isOfflineSession &&
-        !isPreparingOfflineSession &&
-        !isReconnecting &&
-        !isBackgroundReconnecting
+        isAddingServer || (
+            !isLaunching &&
+            !isConnected &&
+            !isOfflineSession &&
+            !isPreparingOfflineSession &&
+            !isReconnecting &&
+            !isBackgroundReconnecting &&
+            !isSwitchingServer
+        )
     }
 }

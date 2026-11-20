@@ -60,7 +60,9 @@ extension AppState {
         password: String,
         authMode: AuthMode,
         cacheEnabled: Bool? = nil,
-        allowInsecureHTTP: Bool = false
+        allowInsecureHTTP: Bool = false,
+        profileName: String? = nil,
+        profileID: UUID? = nil
     ) async throws {
         isConnecting = true
         defer { isConnecting = false }
@@ -81,7 +83,9 @@ extension AppState {
                 config: config,
                 rawURL: url,
                 cacheEnabled: cacheEnabled,
-                allowInsecureHTTP: allowInsecureHTTP
+                allowInsecureHTTP: allowInsecureHTTP,
+                profileName: profileName,
+                profileID: profileID
             )
         } catch {
             connectionError = error.localizedDescription
@@ -90,12 +94,64 @@ extension AppState {
         }
     }
 
+    private func resolveConnectionProfile(
+        rawURL: String,
+        config: SubsonicConfig,
+        allowInsecureHTTP: Bool,
+        profileName: String?,
+        profileID: UUID?
+    ) -> ServerProfile {
+        let storageKey = ServerProfile.makeStorageKey(url: rawURL, username: config.username)
+        let resolvedName = (profileName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? profileName!
+            : (URL(string: rawURL)?.host ?? "Navidrome")
+
+        var profile: ServerProfile
+        if let profileID, let idx = serverProfiles.firstIndex(where: { $0.id == profileID }) {
+            profile = serverProfiles[idx]
+            profile.name = resolvedName
+            profile.url = rawURL
+            profile.username = config.username
+            profile.authMode = config.authMode
+            profile.allowInsecureHTTP = allowInsecureHTTP
+            profile.storageKey = storageKey
+            profile.lastConnectedAt = Date()
+            serverProfiles[idx] = profile
+        } else if let idx = serverProfiles.firstIndex(where: { $0.storageKey == storageKey }) {
+            profile = serverProfiles[idx]
+            profile.name = resolvedName
+            profile.url = rawURL
+            profile.username = config.username
+            profile.authMode = config.authMode
+            profile.allowInsecureHTTP = allowInsecureHTTP
+            profile.lastConnectedAt = Date()
+            serverProfiles[idx] = profile
+        } else {
+            profile = ServerProfile(
+                id: profileID ?? UUID(),
+                name: resolvedName,
+                url: rawURL,
+                username: config.username,
+                authMode: config.authMode,
+                allowInsecureHTTP: allowInsecureHTTP,
+                storageKey: storageKey,
+                lastConnectedAt: Date()
+            )
+            serverProfiles.append(profile)
+        }
+        activeProfileID = profile.id
+        persistProfiles()
+        return profile
+    }
+
     private func applySuccessfulConnection(
         client: SubsonicClient,
         config: SubsonicConfig,
         rawURL: String,
         cacheEnabled: Bool?,
-        allowInsecureHTTP: Bool = false
+        allowInsecureHTTP: Bool = false,
+        profileName: String? = nil,
+        profileID: UUID? = nil
     ) async {
         var updatedConfig = serverConfig
         updatedConfig.url = rawURL
@@ -104,9 +160,15 @@ extension AppState {
         updatedConfig.cacheEnabled = cacheEnabled ?? updatedConfig.cacheEnabled
         updatedConfig.allowInsecureHTTP = allowInsecureHTTP || rawURL.hasPrefix("http://")
 
-        let host = config.baseURL.host ?? "default"
-        let newCache = CacheManager(rootURL: CacheManager.root(forServer: host))
+        let profile = resolveConnectionProfile(
+            rawURL: rawURL,
+            config: config,
+            allowInsecureHTTP: updatedConfig.allowInsecureHTTP ?? false,
+            profileName: profileName,
+            profileID: profileID
+        )
 
+        let newCache = CacheManager(rootURL: CacheManager.root(forServer: profile.storageKey))
         self.client = client
         self.cache = newCache
         CoverArtStore.shared.configure(
@@ -117,7 +179,22 @@ extension AppState {
         )
 
         await resetLibraryForConnection(newCache: newCache)
+        serverConfig = updatedConfig
 
+        await setupConnectionSession(
+            client: client,
+            config: config,
+            profile: profile,
+            newCache: newCache
+        )
+    }
+
+    private func setupConnectionSession(
+        client: SubsonicClient,
+        config: SubsonicConfig,
+        profile: ServerProfile,
+        newCache: CacheManager
+    ) async {
         self.navidrome = NavidromeAPI(baseURL: config.baseURL, username: config.username, password: config.password)
         self.smartPlaylistEngine = SmartPlaylistEngine(
             repo: CachedLibraryRepo(
@@ -128,26 +205,26 @@ extension AppState {
         )
         resetCacheState()
         await seedCachedStreamKeys()
-        serverConfig = updatedConfig
         isOfflineSession = false
-        await setupOfflineRepository(host: host)
+        await setupOfflineRepository(host: profile.storageKey)
         await restoreOfflineCatalog()
         await applyCacheLimits()
         self.connectionError = nil
         persist()
-        persistSessionCredentials(username: config.username, password: config.password)
+        persistSessionCredentials(profile: profile, password: config.password)
         if queuePersistenceEnabled {
             await restoreQueueFromServer()
         }
-        Task(priority: .utility) { [weak self] in
+        warmupTask = Task(priority: .utility) { [weak self] in
             await self?.warmupLibrary()
         }
         Task { await self.checkServerScanStatus() }
     }
 
-    private func persistSessionCredentials(username: String, password: String) {
+    private func persistSessionCredentials(profile: ServerProfile, password: String) {
         if !didReadKeychainPassword || cachedKeychainPassword != password {
-            try? KeychainStore.save(password: password, account: username)
+            try? KeychainStore.save(password: password, account: profile.keychainAccount)
+            try? KeychainStore.save(password: password, account: profile.username)
         }
         cachedKeychainPassword = password
         didReadKeychainPassword = true
@@ -164,51 +241,13 @@ extension AppState {
     }
 
     func disconnect() {
-        discordRichPresence.clear()
-        discordConnectionStatus = .idle
-        discordSnoozeSongID = nil
-        discordAlbumArtworkURLs = [:]
-        discordArtworkUnavailableAlbumIDs = []
-        discordArtworkLoadingAlbumIDs = []
-        cancelAutomaticPlaybackCache()
-        cancelPlaylistLoads()
-        isOfflineSession = false
-        cachedKeychainPassword = nil
-        didReadKeychainPassword = false
-        player.setQueue([])
-        client = nil
-        navidrome = nil
-        cache = nil
-        lyrics.reset()
-        currentCacheTask?.cancel()
-        currentCacheTask = nil
-        smartPlaylistEngine = nil
-        lyricsTask?.cancel()
-        lyricsTask = nil
-        scrobbleTask?.cancel()
-        scrobbleTask = nil
-        downloadingSongIDs = []
-        downloadingSongs = []
-        activeDownloadTasks = []
-        downloadProgress = [:]
-        downloadedSongs = []
-        cancelledDownloads = []
-        activeCacheTasks = []
-        downloadCancellationTokens = [:]
-        offlineRepository = nil
-        currentOfflineHost = nil
-        cachedStreamKeys = []
-        cachedStreamKeysSeeded = false
-        player.isCaching = false
-        library = LibraryCache()
-        withMutation(keyPath: \.starOverrides) { starOverrides = [:] }
-        withMutation(keyPath: \.ratingOverrides) { ratingOverrides = [:] }
-        availableGenres = []
-        stopScanStatusPolling()
-        CoverArtStore.shared.configure(client: nil, cache: nil)
-        UserDefaults.standard.removeObject(forKey: configKey)
-        KeychainStore.delete(account: serverConfig.username)
-        serverConfig = .empty
+        teardownActiveSession()
+        serverConfig.url = ""
+        serverConfig.username = ""
+        serverConfig.serverName = ""
+        activeProfileID = nil
+        persistProfiles()
+        persist()
     }
 
     private func normalize(url rawString: String, allowInsecureHTTP: Bool = false) throws -> URL {
