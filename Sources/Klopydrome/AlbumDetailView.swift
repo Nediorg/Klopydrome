@@ -201,9 +201,6 @@ struct AlbumDetailView: View {
                 RoundFavoriteButton(isStarred: app.isStarred(album)) {
                     app.toggleStar(album)
                 }
-                RoundInfoButton(title: "Album Information".localized) {
-                    showInfoSheet = true
-                }
                 RoundEllipsisMenu {
                     AlbumContextMenuItems(album: album, onShowInfo: { showInfoSheet = true })
                 }

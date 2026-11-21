@@ -13,7 +13,7 @@ struct ArtistInfoSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private func close() {
+    func close() {
         if let onDismiss {
             onDismiss()
         } else {
@@ -21,36 +21,36 @@ struct ArtistInfoSheet: View {
         }
     }
 
-    private var artistName: String {
+    var artistName: String {
         detail.name ?? artist.name
     }
 
-    private var yearsRange: String? {
+    var yearsRange: String? {
         let years = (albums.compactMap(\.year) + allSongs.compactMap(\.year)).filter { $0 > 0 }
         guard let minYear = years.min(), let maxYear = years.max() else { return nil }
         if minYear == maxYear { return "\(minYear)" }
         return "\(minYear) — \(maxYear)"
     }
 
-    private var allGenres: [String] {
+    var allGenres: [String] {
         let set = Set(albums.compactMap(\.genre) + allSongs.compactMap(\.genre))
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         return Array(set).sorted()
     }
 
-    private var totalDurationSeconds: Int {
+    var totalDurationSeconds: Int {
         let albumDuration = albums.compactMap(\.duration).reduce(0, +)
         if albumDuration > 0 { return albumDuration }
         return allSongs.reduce(0) { $0 + ($1.duration ?? 0) }
     }
 
-    private var totalSongCount: Int {
+    var totalSongCount: Int {
         let albumSongs = albums.compactMap(\.songCount).reduce(0, +)
         if albumSongs > 0 { return albumSongs }
         return allSongs.count
     }
 
-    private var totalPlays: Int {
+    var totalPlays: Int {
         let albumPlays = albums.compactMap(\.playCount).reduce(0, +)
         if albumPlays > 0 { return albumPlays }
         return allSongs.reduce(0) { $0 + ($1.playCount ?? 0) }
@@ -191,22 +191,28 @@ struct ArtistInfoSheet: View {
         }
     }
 
-    private func cleanBiography(_ raw: String) -> LocalizedStringKey {
+    static func cleanBiographyText(_ raw: String, lastFmUrl: String?) -> String {
         var text = raw
-        if let lastFm = artistInfo?.lastFmUrl, !lastFm.isEmpty {
+        if let lastFm = lastFmUrl, !lastFm.isEmpty {
             text = text.replacingOccurrences(
                 of: "<a href=\"[^\"]+\">Read more on Last.fm</a>",
                 with: "[Read more on Last.fm](\(lastFm))",
                 options: .regularExpression
             )
-            text = text.replacingOccurrences(
-                of: "Read more on Last.fm",
-                with: "[Read more on Last.fm](\(lastFm))"
-            )
+            if !text.contains("[Read more on Last.fm]") {
+                text = text.replacingOccurrences(
+                    of: "Read more on Last.fm",
+                    with: "[Read more on Last.fm](\(lastFm))"
+                )
+            }
         }
         text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return LocalizedStringKey(text)
+        return text
+    }
+
+    private func cleanBiography(_ raw: String) -> LocalizedStringKey {
+        LocalizedStringKey(Self.cleanBiographyText(raw, lastFmUrl: artistInfo?.lastFmUrl))
     }
 
     private var linksSection: some View {

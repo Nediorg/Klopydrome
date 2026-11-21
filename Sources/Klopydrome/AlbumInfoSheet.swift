@@ -2,16 +2,33 @@ import AppKit
 import NavidromeClient
 import SwiftUI
 
+enum AlbumInfoTab: String, CaseIterable, Identifiable {
+    case details
+    case discs
+    case contributors
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .details: return "Details".localized
+        case .discs: return "Discs".localized
+        case .contributors: return "Contributors".localized
+        }
+    }
+}
+
 struct AlbumInfoSheet: View {
     let album: SubsonicAlbum
     let detail: AlbumDetail
     let songs: [SubsonicSong]
     var onDismiss: (() -> Void)?
 
-    @Environment(AppState.self) private var app
+    @Environment(AppState.self) var app
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: AlbumInfoTab = .details
 
-    private func close() {
+    func close() {
         if let onDismiss {
             onDismiss()
         } else {
@@ -19,40 +36,114 @@ struct AlbumInfoSheet: View {
         }
     }
 
-    private var albumTitle: String {
+    var body: some View {
+        let tabs = Self.availableTabs(for: detail, songs: songs)
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+
+            if tabs.count > 1 {
+                Picker("", selection: $selectedTab) {
+                    ForEach(tabs) { tab in
+                        Text(tab.title).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 14)
+            }
+
+            Divider()
+
+            Group {
+                switch selectedTab {
+                case .details:
+                    detailsTab
+                case .discs:
+                    discsTab
+                case .contributors:
+                    contributorsTab
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            footer
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+        }
+        .frame(width: 520, height: 490)
+    }
+}
+
+// MARK: - Data & Pure Calculations
+
+extension AlbumInfoSheet {
+    var albumTitle: String {
         detail.displayName.isEmpty ? album.displayName : detail.displayName
     }
 
-    private var artistName: String {
+    var artistName: String {
         detail.displayArtist ?? detail.artist ?? album.artist ?? "Unknown Artist".localized
     }
 
-    private var isExplicit: Bool {
+    var isExplicit: Bool {
         album.isExplicit || detail.isExplicit || songs.contains(where: \.isExplicit)
     }
 
-    private var totalDurationSeconds: Int {
+    var totalDurationSeconds: Int {
         let dur = detail.duration ?? 0
         if dur > 0 { return dur }
         return songs.reduce(0) { $0 + ($1.duration ?? 0) }
     }
 
-    private var totalSongCount: Int {
+    var totalSongCount: Int {
         detail.songCount ?? songs.count
     }
 
-    private var totalPlays: Int {
+    var totalPlays: Int {
         let plays = detail.playCount ?? 0
         if plays > 0 { return plays }
         return songs.reduce(0) { $0 + ($1.playCount ?? 0) }
     }
 
-    private var groupedDiscs: [(disc: Int, songs: [SubsonicSong])] {
+    var groupedDiscs: [(disc: Int, songs: [SubsonicSong])] {
+        Self.groupDiscs(songs)
+    }
+
+    var uniqueComposers: [String] {
+        Self.extractComposers(from: songs)
+    }
+
+    var contributorsByRole: [(role: String, artists: [String])] {
+        Self.extractContributors(from: songs)
+    }
+
+    var headerTertiaryLine: String? {
+        var parts: [String] = []
+        if let releaseType = detail.formattedReleaseType {
+            parts.append(releaseType)
+        }
+        if let year = detail.year {
+            parts.append(String(year))
+        }
+        if let genre = detail.genre, !genre.isEmpty {
+            parts.append(genre)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    static func groupDiscs(_ songs: [SubsonicSong]) -> [(disc: Int, songs: [SubsonicSong])] {
         let grouped = Dictionary(grouping: songs, by: { $0.discNumber ?? 1 })
         return grouped.keys.sorted().map { (disc: $0, songs: grouped[$0]!) }
     }
 
-    private var uniqueComposers: [String] {
+    static func extractComposers(from songs: [SubsonicSong]) -> [String] {
         let all = songs.compactMap(\.resolvedComposer)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -60,13 +151,13 @@ struct AlbumInfoSheet: View {
         return all.filter { seen.insert($0).inserted }
     }
 
-    private var contributorsByRole: [(role: String, artists: [String])] {
+    static func extractContributors(from songs: [SubsonicSong]) -> [(role: String, artists: [String])] {
         var map: [String: [String]] = [:]
         for song in songs {
             guard let contribs = song.contributors else { continue }
-            for c in contribs {
-                let role = c.role.capitalized
-                let name = c.artist.name
+            for contrib in contribs {
+                let role = contrib.role.capitalized
+                let name = contrib.artist.name
                 if !map[role, default: []].contains(name) {
                     map[role, default: []].append(name)
                 }
@@ -75,67 +166,39 @@ struct AlbumInfoSheet: View {
         return map.keys.sorted().map { (role: $0, artists: map[$0]!) }
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            headerBar
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    heroProfile
-                    statisticsSection
-                    metadataSection
-                    if groupedDiscs.count > 1 || (detail.discTitles?.isEmpty == false) {
-                        discsSection
-                    }
-                    if !uniqueComposers.isEmpty || !contributorsByRole.isEmpty {
-                        contributorsSection
-                    }
-                }
-                .padding(24)
-            }
+    static func availableTabs(for detail: AlbumDetail, songs: [SubsonicSong]) -> [AlbumInfoTab] {
+        var tabs: [AlbumInfoTab] = [.details]
+        let discs = groupDiscs(songs)
+        if discs.count > 1 || (detail.discTitles?.isEmpty == false) {
+            tabs.append(.discs)
         }
-        .frame(width: 500, height: 560)
-    }
-
-    private var headerBar: some View {
-        HStack {
-            Text("Album Information".localized)
-                .font(.headline)
-            Spacer()
-            Button {
-                close()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.cancelAction)
-            .help("Close".localized)
-            .accessibilityLabel("Close".localized)
+        if !extractComposers(from: songs).isEmpty || !extractContributors(from: songs).isEmpty {
+            tabs.append(.contributors)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        return tabs
     }
+}
 
-    private var heroProfile: some View {
+// MARK: - Subviews
+
+extension AlbumInfoSheet {
+    var header: some View {
         HStack(spacing: 16) {
             QuickLookCover(
                 coverArt: album.coverArt,
-                size: 72,
+                size: 64,
                 cornerRadius: 6,
                 shadow: false,
                 title: albumTitle
             )
-            .frame(width: 72, height: 72)
+            .frame(width: 64, height: 64)
+            .help("Quick Look artwork".localized)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(albumTitle)
-                        .font(.title2.bold())
-                        .lineLimit(2)
+                        .font(.title3.bold())
+                        .lineLimit(1)
                     if isExplicit {
                         ExplicitBadge(size: 13)
                     }
@@ -148,106 +211,119 @@ struct AlbumInfoSheet: View {
                     }
                 } label: {
                     Text(artistName)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(AMColor.accent)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 .buttonStyle(.plain)
 
-                if let version = detail.version, !version.isEmpty {
-                    Text(version)
+                if let tertiary = headerTertiaryLine {
+                    Text(tertiary)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
             }
+            Spacer()
         }
     }
 
-    private var statisticsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Library".localized)
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 16) {
-                statTile(label: "Tracks".localized, value: "\(totalSongCount)")
-                if totalDurationSeconds > 0 {
-                    let duration = Player.format(seconds: Double(totalDurationSeconds))
-                    statTile(label: "Duration".localized, value: duration)
-                }
-                if totalPlays > 0 {
-                    statTile(label: "Plays".localized, value: "\(totalPlays)")
-                }
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(AMColor.surfaceLight))
-        }
-    }
-
-    private var metadataSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Release".localized)
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-
+    var detailsTab: some View {
+        ScrollView {
             VStack(spacing: 12) {
+                metaRow("Album".localized, value: albumTitle)
+                metaRow("Artist".localized, value: artistName)
+                if let version = detail.version, !version.isEmpty {
+                    metaRow("Release".localized, value: version)
+                }
                 if let releaseType = detail.formattedReleaseType {
                     metaRow("Release Type".localized, value: releaseType)
                 }
-                if let year = detail.year {
-                    metaRow("Year".localized, value: String(year))
-                }
-                if let genre = detail.genre, !genre.isEmpty {
-                    metaRow("Genre".localized, value: genre)
-                }
+                metaRow("Year".localized, value: detail.year.map(String.init))
+                metaRow("Genre".localized, value: detail.genre)
                 if let label = detail.recordType, !label.isEmpty, label != detail.formattedReleaseType {
                     metaRow("Record Label".localized, value: label)
                 }
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(AMColor.surfaceLight))
-        }
-    }
-
-    private var discsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Discs".localized)
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(groupedDiscs, id: \.disc) { item in
-                    let subtitle = detail.discTitle(for: item.disc)
-                    let count = item.songs.count
-                    let label: String = {
-                        if let subtitle, !subtitle.isEmpty {
-                            return String(format: "Disc %d: \"%@\" (%d tracks)".localized, item.disc, subtitle, count)
-                        } else {
-                            return String(format: "Disc %d (%d tracks)".localized, item.disc, count)
-                        }
-                    }()
-
-                    HStack(spacing: 10) {
-                        Image(systemName: "opticaldisc")
-                            .font(.system(size: 13))
-                            .foregroundStyle(AMColor.accent)
-                        Text(label)
-                            .font(.callout.weight(.medium))
-                            .foregroundStyle(.primary)
-                        Spacer()
-                    }
+                metaRow("Tracks".localized, value: "\(totalSongCount) \(Pluralized.song(totalSongCount))")
+                if totalDurationSeconds > 0 {
+                    metaRow("Duration".localized, value: Player.format(seconds: Double(totalDurationSeconds)))
+                }
+                if totalPlays > 0 {
+                    metaRow("Plays".localized, value: "\(totalPlays)")
+                }
+                if let created = detail.created {
+                    metaRow("Added".localized, value: SubsonicDate.longDate(created))
                 }
             }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(AMColor.surfaceLight))
+            .padding(.top, 4)
         }
     }
 
-    private var contributorsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Contributors".localized)
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
+    var discsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(groupedDiscs, id: \.disc) { item in
+                    discSection(item)
+                }
+            }
+            .padding(.top, 4)
+            .padding(.horizontal, 4)
+        }
+    }
 
+    private func discSection(_ item: (disc: Int, songs: [SubsonicSong])) -> some View {
+        let subtitle = detail.discTitle(for: item.disc)
+        let count = item.songs.count
+        let headerTitle: String = {
+            if let subtitle, !subtitle.isEmpty {
+                return String(format: "Disc %d: \"%@\" (%d tracks)".localized, item.disc, subtitle, count)
+            } else {
+                return String(format: "Disc %d (%d tracks)".localized, item.disc, count)
+            }
+        }()
+        let discDuration = item.songs.reduce(0) { $0 + ($1.duration ?? 0) }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(headerTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                if discDuration > 0 {
+                    Text(Player.format(seconds: Double(discDuration)))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(AMColor.secondaryText)
+                }
+            }
+
+            Divider()
+
+            VStack(spacing: 4) {
+                ForEach(item.songs) { song in
+                    HStack(spacing: 10) {
+                        Text(song.track.map(String.init) ?? "—")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(AMColor.secondaryText)
+                            .frame(width: 24, alignment: .trailing)
+                        Text(song.displayTitle)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        if let dur = song.duration {
+                            Text(Player.format(seconds: Double(dur)))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(AMColor.secondaryText)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    var contributorsTab: some View {
+        ScrollView {
             VStack(spacing: 12) {
                 if !uniqueComposers.isEmpty {
                     metaRow("Composer".localized, value: uniqueComposers.joined(separator: ", "))
@@ -256,32 +332,31 @@ struct AlbumInfoSheet: View {
                     metaRow(item.role, value: item.artists.joined(separator: ", "))
                 }
             }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(AMColor.surfaceLight))
+            .padding(.top, 4)
         }
     }
 
-    private func statTile(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.callout.weight(.medium))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func metaRow(_ label: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+    private func metaRow(_ label: String, value: String?) -> some View {
+        HStack(alignment: .top, spacing: 10) {
             Text(label)
                 .font(.callout)
                 .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            Text(value)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: 140, alignment: .trailing)
+            Text(value ?? "—")
+                .font(.callout)
+                .foregroundStyle(value == nil ? .tertiary : .primary)
+                .textSelection(.enabled)
+            Spacer()
+        }
+    }
+
+    var footer: some View {
+        HStack {
+            Spacer()
+            Button("Done".localized) {
+                close()
+            }
+            .keyboardShortcut(.defaultAction)
         }
     }
 }
