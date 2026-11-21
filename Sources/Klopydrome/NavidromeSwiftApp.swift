@@ -174,6 +174,7 @@ struct ContentView: View {
         window.backgroundColor = NSColor.clear
         window.tabbingMode = .disallowed
         if let toolbar = window.toolbar {
+            toolbar.showsBaselineSeparator = false
             toolbar.allowsUserCustomization = false
             toolbar.autosavesConfiguration = false
             toolbar.displayMode = .iconOnly
@@ -181,19 +182,8 @@ struct ContentView: View {
         window.titlebarSeparatorStyle = .none
         TitlebarPassThrough.configureWindow(window)
         DispatchQueue.main.async { [weak window] in
-            func clearMenuRecursively(in view: NSView) {
-                if String(describing: type(of: view)).contains("Toolbar") {
-                    view.menu = nil
-                }
-                for sub in view.subviews { clearMenuRecursively(in: sub) }
-            }
             guard let window else { return }
-            if let root = window.contentView?.superview {
-                clearMenuRecursively(in: root)
-            }
-            if let content = window.contentView {
-                clearMenuRecursively(in: content)
-            }
+            Self.sanitizeWindowViews(window)
         }
         let floor = NSSize(width: LayoutMetrics.windowMinWidth, height: 600)
         window.contentMinSize = floor
@@ -203,6 +193,36 @@ struct ContentView: View {
             frame.size.width = max(frame.size.width, floor.width)
             frame.size.height = max(frame.size.height, floor.height)
             window.setFrame(frame, display: true)
+        }
+    }
+
+    private static func sanitizeWindowViews(_ window: NSWindow) {
+        func clearMenuRecursively(in view: NSView) {
+            if String(describing: type(of: view)).contains("Toolbar") {
+                view.menu = nil
+            }
+            for sub in view.subviews { clearMenuRecursively(in: sub) }
+        }
+        func stripTitlebarDecorations(in view: NSView) {
+            if view is NSVisualEffectView {
+                view.isHidden = true
+            }
+            let typeName = String(describing: type(of: view))
+            if typeName.contains("Separator") {
+                view.isHidden = true
+            }
+            for sub in view.subviews { stripTitlebarDecorations(in: sub) }
+        }
+        if let root = window.contentView?.superview {
+            clearMenuRecursively(in: root)
+            if let container = root.subviews.first(where: {
+                String(describing: type(of: $0)).contains("NSTitlebarContainerView")
+            }) {
+                stripTitlebarDecorations(in: container)
+            }
+        }
+        if let content = window.contentView {
+            clearMenuRecursively(in: content)
         }
     }
 

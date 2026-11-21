@@ -5,7 +5,7 @@ let package = Package(
     name: "Klopydrome",
     defaultLocalization: "en",
     platforms: [
-        .macOS("14.4")
+        .macOS("14.0")
     ],
     products: [
         .library(name: "NavidromeClient", targets: ["NavidromeClient"]),

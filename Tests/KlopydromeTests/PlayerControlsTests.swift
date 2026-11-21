@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import Klopydrome
 import NavidromeClient
@@ -127,5 +128,32 @@ final class PlayerControlsTests: XCTestCase {
         let preferences = PlaybackExitPreferences.load(from: defaults)
         XCTAssertEqual(preferences.volume, 1, accuracy: 0.0001)
         XCTAssertTrue(preferences.shuffleEnabled)
+    }
+
+    // MARK: - AVPlayer Error Formatting
+
+    func testFormatAVPlayerErrorIncludesErrorCodes() {
+        let error = NSError(domain: AVFoundationErrorDomain, code: -11850)
+        let formatted = Player.formatAVPlayerError(error)
+        XCTAssertTrue(formatted.contains("AVErrorServerIncorrectlyConfigured"))
+        XCTAssertTrue(formatted.contains("-11850"))
+    }
+
+    func testFormatAVPlayerErrorWithUnderlyingError() {
+        let underlying = NSError(domain: "CoreMediaErrorDomain", code: -12884)
+        let error = NSError(
+            domain: AVFoundationErrorDomain,
+            code: -11850,
+            userInfo: [NSUnderlyingErrorKey: underlying]
+        )
+        let formatted = Player.formatAVPlayerError(error)
+        XCTAssertTrue(formatted.contains("-11850"))
+        XCTAssertTrue(formatted.contains("CoreMediaErrorDomain"))
+        XCTAssertTrue(formatted.contains("-12884"))
+    }
+
+    func testFormatAVPlayerErrorNilFallback() {
+        let formatted = Player.formatAVPlayerError(nil)
+        XCTAssertEqual(formatted, L10n.text("format.player.unavailable"))
     }
 }

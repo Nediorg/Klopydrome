@@ -2,7 +2,7 @@
 
 ## What this is
 - A macOS SwiftUI client for the Navidrome / Subsonic API, built as a Swift Package. It is NOT the Navidrome server.
-- Four targets in `Package.swift`: `NavidromeClient` (library: HTTP client, API models, cache) and `Klopydrome` (executable SwiftUI app, macOS 14.4+) plus `NavidromeClientTests` / `KlopydromeTests`. `Klopydrome` depends on `NavidromeClient`.
+- Four targets in `Package.swift`: `NavidromeClient` (library: HTTP client, API models, cache) and `Klopydrome` (executable SwiftUI app, macOS 14.0+) plus `NavidromeClientTests` / `KlopydromeTests`. `Klopydrome` depends on `NavidromeClient`.
 - Do not edit `docs/` (upstream Navidrome server docs, reference only). Ignore `.build/` (artifacts), `dist/` (release zips), and `vendor/` (audio engine fork).
 
 ## Project Structure & Core Subsystems
@@ -10,7 +10,7 @@
   - Networking & Endpoints: `SubsonicClient.swift`, `Endpoints.swift`, `NavidromeAPI.swift`.
   - API Models: `Models.swift`, `PlaylistModels.swift`, `LyricsModels.swift`, `SubsonicError.swift`.
   - HTTP & Disk Cache: `CacheManager.swift` (`~/Library/Caches/NavidromeSwift`), ETag/SWR caching.
-- **`Sources/Klopydrome/`**: Main macOS SwiftUI client application (macOS 14.4+).
+- **`Sources/Klopydrome/`**: Main macOS SwiftUI client application (macOS 14.0+).
   - **State Orchestrator (`AppState`)**: Central `@Observable` environment object. Domain logic is split into focused extensions (`AppState+Playback`, `AppState+TrackDownload`, `AppState+Offline`, `AppState+OfflineCaching`, `AppState+LibraryWarmup`, `AppState+PlaylistDuplicates`, etc.).
   - **Audio Engine (`Player`)**: Coordinates queue, track transitions, crossfade, and seek via `MPVPlaybackEngine` (wrapping Libmpv). Automix transition analysis in `AutomixTransitionAnalysis.swift`.
   - **Navigation & Shell**: `MainView`, `SidebarView`, `DetailColumn`. History routes through in-memory `app.nav.history: [Destination]`.
@@ -75,6 +75,11 @@
 - **NavigationSplitView detail navigation must use in-memory history**: Never nest a `NavigationStack` inside the `NavigationSplitView` detail column. All detail sub-pages route through `app.nav.history: [Destination]` and `app.navigateBack()`.
 - **Detail views must fill all space**: Every detail view inside `DetailColumn` must specify `.frame(maxWidth: .infinity, maxHeight: .infinity)` before `.safeAreaInset` is applied.
 - Automix transitions are analysis-only (`Player+TransitionAnalysis.swift`); rendering stays on the established MPV crossfade.
+- **Cross-version macOS parity & backwards compatibility (macOS 14.0+)**:
+  Because the app supports macOS 14.0+ while development typically occurs on newer macOS releases, always account for platform-level discrepancies between OS versions:
+  - **Window chrome & titlebars**: Older releases like Sonoma inject backdrop materials (`NSVisualEffectView`) and baseline separators across unified toolbars that can bleed into full-height sidebars.
+  - **SwiftUI layout & safe areas**: Modifiers such as `.contentMargins` or `.searchable` placement interact differently with AppKit scroll views across major versions; verify that layout rules do not introduce double-insetting or jumpiness on the minimum deployment target.
+  - **Framework capabilities**: System frameworks (AVFoundation, CoreMedia) have evolving codec and container support across macOS versions; verify codec and playback capabilities against the baseline OS rather than assuming newer host behavior.
 
 ## Code comments & readability (Zero comment bloat)
 - **Code must be self-documenting**: Express intent through clear, concise naming of types, variables, and functions. Do NOT add docstrings (`///`) or inline comments (`//`) that simply restate what the code already says.
@@ -93,6 +98,10 @@
   - Queue operations (`playNext`, `playLater`, `remove`, `clear`) must have unified implementations without diverging overloads for single vs. collection items.
   - Playback source context is restricted strictly to `.album`, `.playlist`, and `.smartPlaylist`. Do not re-introduce synthetic or ad-hoc source types.
 - **No overengineered crutches**: Avoid multi-timer cascades, synthetic data reconstruction, or speculative fallback logic. Keep the control flow direct, linear, and predictable.
+- **Accurate capability gating vs blanket restrictions**: When a feature, format, or codec is genuinely unsupported in the current environment (e.g. on older macOS versions or under a specific audio engine), clearly reflect that in the UI by disabling the control rather than letting the user trigger a doomed action. However:
+  1. Strictly scope the restriction to the genuinely affected OS versions or configurations (e.g. via `#available(...)`), never disabling features for users on newer systems where they work natively.
+  2. Verify that the SwiftUI control actually reflects the disabled state in AppKit (for example, AppKit `NSPopUpButton` does not cleanly render `.disabled(...)` on individual menu items).
+  3. Never silently mutate user settings in `.onChange` without explicit user intent or visible feedback.
 - **Auto Layout & NSHostingView Container Geometry**:
   - When hosting scrollable SwiftUI views (`ScrollView`, `List`, `LazyVStack`) in an `NSHostingView` inside an AppKit clipping container or drawer:
     1. **Never leave `NSHostingView` unconstrained in the scroll axis**: An unconstrained height (`bottomAnchor >= clipHost.bottomAnchor` without an explicit upper bound) causes SwiftUI to report its entire content height (e.g. 20,000+ pt for 400+ rows) as fitting size. This causes `ScrollView.bounds.height == content.height`, completely breaking `LazyVStack` virtualization (eagerly realizing all rows) and destroying scrollability (rubber-banding at 0 without scrolling).
@@ -143,6 +152,7 @@
 - **English canonical keys only**: All localization keys in Swift code MUST be in English (e.g. `"Show".localized`, `"Quick Access".localized`). Never write Russian string literals as localization keys in Swift source files (e.g. forbidden: `"Показать".localized`).
 - **1:1 key parity**: `en.lproj/Localizable.strings` and `ru.lproj/Localizable.strings` must maintain exact 1:1 key parity. `en.lproj` must never contain Cyrillic keys.
 - Do not use the app brand name in locale strings. Use generic wording ("Кэш приложения" / "Application cache", not "Кэш Klopydrome").
+- **Reuse canonical strings & semantic unification**: Avoid adding bespoke, one-off localization keys for single narrow occasions or edge-case errors. Prioritize reusing existing canonical strings (`"Playback Error"`, `"Unavailable"`, `"Connection Failed"`, `"Cancel"`). When introducing new localization keys, formulate them as reusable, generalized phrases that can serve multiple related contexts and screens across the app.
 
 ## Deterministic & locale-agnostic testing
 - Tests must be deterministic regardless of system language or region settings.

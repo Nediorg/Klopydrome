@@ -142,20 +142,8 @@ struct SongTable: View {
 
         Table(displayedSongs, selection: $selection, sortOrder: $sortOrder,
               columnCustomization: $columnCustomization) {
-            TableColumnForEach(SongColumn.allCases) { (column: SongColumn) in
-                TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
-                    SongColumnCell(
-                        column: column,
-                        song: song,
-                        app: app,
-                        hoverState: hoverManager.state(for: song.id),
-                        isCurrent: song.id == currentSongID
-                    )
-                }
-                .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
-                .alignment(column.alignment)
-                .customizationID(column.id)
-            }
+            firstColumns(currentSongID: currentSongID)
+            secondColumns(currentSongID: currentSongID)
         }
         .onChange(of: songs) {
             hoverManager.reset()
@@ -190,6 +178,44 @@ struct SongTable: View {
         let run = songs.filter { ids.contains($0.id) }
         guard let first = run.first else { return }
         app.play(first, in: songs)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func firstColumns(currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        makeColumn(.title, currentSongID: currentSongID)
+        makeColumn(.cloud, currentSongID: currentSongID)
+        makeColumn(.duration, currentSongID: currentSongID)
+        makeColumn(.artist, currentSongID: currentSongID)
+        makeColumn(.album, currentSongID: currentSongID)
+        makeColumn(.albumArtist, currentSongID: currentSongID)
+        makeColumn(.genre, currentSongID: currentSongID)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func secondColumns(currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        makeColumn(.favorite, currentSongID: currentSongID)
+        makeColumn(.plays, currentSongID: currentSongID)
+        makeColumn(.year, currentSongID: currentSongID)
+        makeColumn(.composer, currentSongID: currentSongID)
+        makeColumn(.bitrate, currentSongID: currentSongID)
+        makeColumn(.rating, currentSongID: currentSongID)
+        makeColumn(.added, currentSongID: currentSongID)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func makeColumn(_ column: SongColumn, currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+            SongColumnCell(
+                column: column,
+                song: song,
+                app: app,
+                hoverState: hoverManager.state(for: song.id),
+                isCurrent: song.id == currentSongID
+            )
+        }
+        .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+        .alignment(column.alignment)
+        .customizationID(column.id)
     }
 
     fileprivate static func addedDateText(_ iso: String?) -> String {

@@ -19,6 +19,13 @@ extension SwiftDataOfflineRepository {
         return serverDir.appendingPathComponent("OfflineLibrary.store")
     }
 
+    private static func removeStoreFiles(at url: URL) {
+        let fm = FileManager.default
+        try? fm.removeItem(at: url)
+        try? fm.removeItem(at: URL(fileURLWithPath: url.path + "-wal"))
+        try? fm.removeItem(at: URL(fileURLWithPath: url.path + "-shm"))
+    }
+
     public static func makeDefault(serverHost: String) throws -> SwiftDataOfflineRepository {
         let schema = Schema([
             OfflineArtist.self,
@@ -28,9 +35,15 @@ extension SwiftDataOfflineRepository {
             OfflinePlaylistEntry.self
         ])
         let storeLocation = storeURL(forServer: serverHost)
-        let config = ModelConfiguration(url: storeLocation)
-        let container = try ModelContainer(for: schema, configurations: [config])
-        return SwiftDataOfflineRepository(modelContainer: container)
+        let config = ModelConfiguration(schema: schema, url: storeLocation)
+        do {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            return SwiftDataOfflineRepository(modelContainer: container)
+        } catch {
+            removeStoreFiles(at: storeLocation)
+            let container = try ModelContainer(for: schema, configurations: [config])
+            return SwiftDataOfflineRepository(modelContainer: container)
+        }
     }
 
     public static func makeInMemory() throws -> SwiftDataOfflineRepository {
@@ -41,7 +54,7 @@ extension SwiftDataOfflineRepository {
             OfflinePlaylist.self,
             OfflinePlaylistEntry.self
         ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
         return SwiftDataOfflineRepository(modelContainer: container)
     }

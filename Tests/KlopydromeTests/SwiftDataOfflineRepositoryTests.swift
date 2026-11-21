@@ -15,6 +15,11 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
         repository = nil
     }
 
+    func testMakeDefaultOnDisk() throws {
+        let repo = try SwiftDataOfflineRepository.makeDefault(serverHost: "testHost_\(UUID().uuidString)")
+        XCTAssertNotNil(repo)
+    }
+
     func testTrackCRUD() async throws {
         let song = SubsonicSong(
             id: "song-1",

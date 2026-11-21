@@ -14,7 +14,10 @@ extension AppState {
     var usesMPVEngine: Bool { serverConfig.effectivePlaybackEngine == .mpv }
 
     func effectiveSuffix(for song: SubsonicSong) -> String {
-        if let format = serverConfig.format, !format.isEmpty { return format }
+        if let format = serverConfig.format, !format.isEmpty {
+            if !usesMPVEngine && format.lowercased() == "opus" { return "mp3" }
+            return format
+        }
         if !usesMPVEngine, PlaybackFormat.needsTranscode(song.suffix) { return "mp3" }
         return (song.suffix ?? "mp3").lowercased()
     }
@@ -23,10 +26,11 @@ extension AppState {
         guard let client else { return nil }
         let estimate = !usesMPVEngine
         if let format = serverConfig.format, !format.isEmpty {
+            let requestedFormat: String? = (!usesMPVEngine && format.lowercased() == "opus") ? "mp3" : format
             return client.streamURL(
                 songId: song.id,
                 maxBitRate: serverConfig.maxBitRate,
-                format: format,
+                format: requestedFormat,
                 estimateContentLength: estimate
             )
         }

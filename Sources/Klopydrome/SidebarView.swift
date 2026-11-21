@@ -112,7 +112,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .contentMargins(.top, LayoutMetrics.trafficLightInset, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {

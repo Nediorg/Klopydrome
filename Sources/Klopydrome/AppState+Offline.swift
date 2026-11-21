@@ -58,9 +58,13 @@ extension AppState {
         if offlineRepository != nil && currentOfflineHost == host {
             return
         }
-        guard let repository = try? SwiftDataOfflineRepository.makeDefault(serverHost: host) else {
-            return
+        let repository: SwiftDataOfflineRepository?
+        if let onDisk = try? SwiftDataOfflineRepository.makeDefault(serverHost: host) {
+            repository = onDisk
+        } else {
+            repository = try? SwiftDataOfflineRepository.makeInMemory()
         }
+        guard let repository else { return }
         self.offlineRepository = repository
         self.currentOfflineHost = host
         self.offlineMutationStore = OfflineMutationStore(serverHost: host)

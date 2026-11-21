@@ -36,9 +36,12 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
+                let isOpusUnavailable = app.serverConfig.effectivePlaybackEngine == .avFoundation
                 Picker("Codec".localized, selection: $app.serverConfig.format) {
                     Text("Original".localized).tag(String?.none)
-                    Text("Opus").tag(String?.some("opus"))
+                    Text(isOpusUnavailable ? "Opus (\("Unavailable".localized))" : "Opus")
+                        .tag(String?.some("opus"))
+                        .disabled(isOpusUnavailable)
                     Text("MP3").tag(String?.some("mp3"))
                     Text("M4A (AAC)").tag(String?.some("m4a"))
                     Text("FLAC").tag(String?.some("flac"))

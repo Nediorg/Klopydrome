@@ -8,7 +8,7 @@ extension Player {
     func ensureAVPlayer() -> AVPlayer {
         if let existing = avPlayer { return existing }
         let player = AVPlayer()
-        player.automaticallyWaitsToMinimizeStalling = false
+        player.automaticallyWaitsToMinimizeStalling = true
         player.volume = outputGain
 
         timeObserverToken = player.addPeriodicTimeObserver(
@@ -24,9 +24,12 @@ extension Player {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             Task { @MainActor [weak self] in
-                self?.onTrackEnded?()
+                guard let self,
+                      let finishedItem = notification.object as? AVPlayerItem,
+                      finishedItem == self.avPlayer?.currentItem else { return }
+                self.onTrackEnded?()
             }
         }
 
@@ -63,7 +66,8 @@ extension Player {
         mpvRestartStepped = false
         heldSeekTarget = nil
         transcodeRestartResidual = nil
-        isLoading = false
+        isLoading = true
+        isBuffering = true
         isCaching = false
         lastError = nil
         hasReportedFailure = false
@@ -76,10 +80,12 @@ extension Player {
 
     func observeItemStatus(_ item: AVPlayerItem) {
         itemStatusObserver?.invalidate()
-        itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+        itemStatusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if item.status == .readyToPlay {
+                    self.isLoading = false
+                    self.isBuffering = false
                     self.applyPendingSeekIfNeeded()
                     if self.isPlaying {
                         self.avPlayer?.play()
@@ -92,12 +98,49 @@ extension Player {
         }
     }
 
+    private static func avErrorCodeName(_ code: Int) -> String? {
+        switch AVError.Code(rawValue: code) {
+        case .unknown: return "AVErrorUnknown"
+        case .fileFormatNotRecognized: return "AVErrorFileFormatNotRecognized"
+        case .serverIncorrectlyConfigured: return "AVErrorServerIncorrectlyConfigured"
+        case .failedToParse: return "AVErrorFailedToParse"
+        case .undecodableMediaData: return "AVErrorUndecodableMediaData"
+        case .contentIsNotAuthorized: return "AVErrorContentIsNotAuthorized"
+        case .operationNotSupportedForAsset: return "AVErrorOperationNotSupportedForAsset"
+        case .decoderNotFound: return "AVErrorDecoderNotFound"
+        default: return nil
+        }
+    }
+
+    static func formatAVPlayerError(_ error: Error?) -> String {
+        guard let error else {
+            return L10n.text("format.player.unavailable")
+        }
+        let nsError = error as NSError
+        let errorIdentifier: String
+        if nsError.domain == AVFoundationErrorDomain, let name = avErrorCodeName(nsError.code) {
+            errorIdentifier = "\(name), \(nsError.code)"
+        } else {
+            errorIdentifier = "\(nsError.domain), \(nsError.code)"
+        }
+
+        let fullCode: String
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            fullCode = "(\(errorIdentifier), \(underlying.domain) \(underlying.code))"
+        } else {
+            fullCode = "(\(errorIdentifier))"
+        }
+
+        return L10n.format("format.player.failure", fullCode)
+    }
+
     func handleFailure(_ error: Error?) {
         guard !hasReportedFailure else { return }
         hasReportedFailure = true
-        lastError = L10n.text("format.player.unavailable")
+        lastError = Self.formatAVPlayerError(error)
         isPlaying = false
         isLoading = false
+        isBuffering = false
         updateNowPlayingInfo()
     }
 

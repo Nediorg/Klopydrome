@@ -826,6 +826,7 @@
 "Try changing the query or filter settings." = "Попробуйте изменить запрос или параметры фильтра.";
 "Try changing your query." = "Попробуйте изменить запрос.";
 "Turn Off" = "Выключить";
+"Unavailable" = "Недоступно";
 "Undo" = "Отменить";
 "Unexpected server response." = "Неожиданный ответ сервера.";
 "Unknown" = "Неизвестно";
