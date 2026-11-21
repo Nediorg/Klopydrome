@@ -9,11 +9,12 @@ struct CacheSettingsView: View {
     @State private var usedCovers = 0
     @State private var usedMetadata = 0
     @State private var reloadToken = 0
-    private let megabyte = 1024 * 1024
-    private let defaultStreamLimit = 1_500
-    private let defaultTotalLimit = 2_000
-    private var defaultStreamBytes: Int { defaultStreamLimit * megabyte }
-    private var defaultTotalBytes: Int { defaultTotalLimit * megabyte }
+    private let mib = 1024 * 1024
+    private let gib = 1024 * 1024 * 1024
+    private let defaultStreamLimit = 2
+    private let defaultTotalLimit = 4
+    private var defaultStreamBytes: Int { defaultStreamLimit * gib }
+    private var defaultTotalBytes: Int { defaultTotalLimit * gib }
     private var configuredStreamLimit: Int? {
         app.serverConfig.streamCacheLimitBytes
     }
@@ -110,7 +111,6 @@ struct CacheSettingsView: View {
             Section("Cache Limits".localized) {
                 CacheBudgetSection(
                     title: "Audio Cache".localized,
-                    details: "Includes downloaded and streamed tracks.".localized,
                     selectedLimit: configuredStreamLimit,
                     automaticValue: effectiveStreamLimit,
                     choices: CacheLimitPreset.all,
@@ -118,7 +118,6 @@ struct CacheSettingsView: View {
                 )
                 CacheBudgetSection(
                     title: "Total Cache".localized,
-                    details: "Includes audio, covers, and metadata.".localized,
                     selectedLimit: configuredTotalLimit,
                     automaticValue: effectiveTotalLimit,
                     choices: CacheLimitPreset.all,
@@ -171,6 +170,28 @@ struct CacheSettingsView: View {
     }
 
     private func normalizeCacheLimits() {
+        let legacyMap: [Int: Int] = [
+            500_000_000: 512 * mib,
+            1_000_000_000: 1 * gib,
+            1_500 * mib: 2 * gib,
+            1_500_000_000: 2 * gib,
+            2_000 * mib: 2 * gib,
+            2_000_000_000: 2 * gib,
+            5_000 * mib: 5 * gib,
+            5_000_000_000: 5 * gib,
+            10_000 * mib: 10 * gib,
+            10_000_000_000: 10 * gib,
+            25_000 * mib: 25 * gib,
+            25_000_000_000: 25 * gib,
+            50_000 * mib: 50 * gib,
+            50_000_000_000: 50 * gib
+        ]
+        if let s = app.serverConfig.streamCacheLimitBytes, let migrated = legacyMap[s] {
+            app.serverConfig.streamCacheLimitBytes = migrated
+        }
+        if let t = app.serverConfig.totalCacheLimitBytes, let migrated = legacyMap[t] {
+            app.serverConfig.totalCacheLimitBytes = migrated
+        }
         guard let streamLimit = app.serverConfig.streamCacheLimitBytes else { return }
         guard let total = app.serverConfig.totalCacheLimitBytes else {
             if streamLimit > defaultTotalBytes {
@@ -216,11 +237,11 @@ private struct CacheUsageOverview: View {
     }
 
     private var totalDescription: String {
-        ByteCountFormatter.string(fromByteCount: Int64(usedTotal), countStyle: .file)
+        ByteCountFormatter.string(fromByteCount: Int64(usedTotal), countStyle: .binary)
     }
 
     private var limitDescription: String {
-        ByteCountFormatter.string(fromByteCount: Int64(effectiveLimit), countStyle: .file)
+        ByteCountFormatter.string(fromByteCount: Int64(effectiveLimit), countStyle: .binary)
     }
 
     private var segments: [CacheUsageSegment] {
@@ -308,13 +329,12 @@ private struct CacheUsageLegendItem: View {
     }
 
     private func format(_ bytes: Int) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .binary)
     }
 }
 
 private struct CacheBudgetSection: View {
     let title: String
-    let details: String
     let selectedLimit: Int?
     let automaticValue: Int
     let choices: [CacheLimitPreset]
@@ -324,7 +344,7 @@ private struct CacheBudgetSection: View {
         CacheLimitPreset.title(for: selectedLimit ?? automaticValue)
             ?? ByteCountFormatter.string(
                 fromByteCount: Int64(selectedLimit ?? automaticValue),
-                countStyle: .file
+                countStyle: .binary
             )
     }
 
@@ -337,14 +357,8 @@ private struct CacheBudgetSection: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title.localized)
-                    .fontWeight(.medium)
-                Text(details.localized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        HStack(alignment: .center, spacing: 12) {
+            Text(title.localized)
 
             Spacer()
 
@@ -378,16 +392,16 @@ private struct CacheLimitPreset: Identifiable {
     var id: Int { bytes }
 
     static let all: [CacheLimitPreset] = [
-        512, 1_024, 1_500, 2_000, 5_000, 10_000, 25_000, 50_000
-    ].map { megabytes in
-        let bytes = megabytes * 1024 * 1024
-        let title = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        512 * 1024 * 1024,
+        1 * 1024 * 1024 * 1024,
+        2 * 1024 * 1024 * 1024,
+        5 * 1024 * 1024 * 1024,
+        10 * 1024 * 1024 * 1024,
+        25 * 1024 * 1024 * 1024,
+        50 * 1024 * 1024 * 1024
+    ].map { bytes in
+        let title = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .binary)
         return CacheLimitPreset(bytes: bytes, title: title)
-    }
-
-    init(megabytes: Int, title: String) {
-        self.bytes = megabytes * 1024 * 1024
-        self.title = title
     }
 
     init(bytes: Int, title: String) {
