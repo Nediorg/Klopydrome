@@ -28,18 +28,15 @@ extension PlaylistDetailView {
 
     func delete(_ detail: PlaylistDetail) {
         guard app.confirmOfflineAction() else { return }
-        guard let client = app.client else { return }
         Task {
-            try? await client.deletePlaylist(id: detail.id)
-            app.invalidatePlaylistDetail(for: detail.id)
-            await app.refreshPlaylists()
+            await app.deletePlaylist(detail.summary)
         }
     }
 
     func kindLine(_ detail: PlaylistDetail) -> some View {
         var parts: [String] = []
         parts.append(detail.isSmart ? "Smart Playlist".localized : "Playlist".localized)
-        if detail.isPublic == true { parts.append("Open".localized) }
+        if detail.isPublic == true { parts.append("Public".localized) }
         return Text(parts.joined(separator: " · "))
             .font(.title2.weight(.regular))
             .foregroundStyle(.secondary)

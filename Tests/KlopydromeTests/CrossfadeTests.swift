@@ -125,4 +125,104 @@ final class CrossfadeTests: XCTestCase {
         XCTAssertEqual(decoded.effectiveAutomixFadeDuration, 7)
         XCTAssertTrue(decoded.effectiveAutomixApplyToAlbums)
     }
+
+    func testShouldCrossfadeRejectsShortIncomingTrack() {
+        let player = Player()
+        let first = mockSong("1", albumId: "a1", duration: 180)
+        let shortNext = mockSong("2", albumId: "a2", duration: 6)
+        player.queue = [first, shortNext]
+        player.currentIndex = 0
+        player.engineKind = .mpv
+        player.configureCrossfade(enabled: true, fadeDuration: 5, applyToAlbums: true)
+
+        XCTAssertFalse(player.shouldCrossfade(to: shortNext))
+    }
+
+    func testPreloadDoesNotAppendToMPVWhenCrossfadeEligible() {
+        let player = Player()
+        let first = mockSong("1", albumId: "a1")
+        let nextDifferentAlbum = mockSong("2", albumId: "a2")
+        player.queue = [first, nextDifferentAlbum]
+        player.currentIndex = 0
+        player.engineKind = .mpv
+        player.configureCrossfade(enabled: true, fadeDuration: 5, applyToAlbums: false)
+        player.onNextTrackPreloadRequest = { _ in URL(fileURLWithPath: "/tmp/next.opus") }
+
+        player.preloadNextMPVTrack(nextDifferentAlbum)
+
+        XCTAssertFalse(player.mpvEngine.hasAppendedTrack)
+        XCTAssertNil(player.preloadedNextSongID)
+    }
+
+    func testCompleteCrossfadeResolvesDuplicateSongIndexCorrectly() {
+        let player = Player()
+        let song1 = mockSong("s1", albumId: "a1")
+        let song2 = mockSong("s2", albumId: "a2")
+        let song1Again = mockSong("s1", albumId: "a1")
+        player.queue = [song1, song2, song1Again]
+        player.currentIndex = 1
+        player.crossfadeEngine = MPVPlaybackEngine()
+        player.isCrossfading = true
+        player.activeCrossfade = ActiveCrossfade(successorID: "s1", startTime: 100, duration: 5)
+
+        player.completeCrossfade()
+
+        XCTAssertEqual(player.currentIndex, 2)
+    }
+
+    func testPauseAndResumeShiftCrossfadeStartTimeInsteadOfAdvancing() {
+        let player = Player()
+        let first = mockSong("1")
+        let second = mockSong("2")
+        player.queue = [first, second]
+        player.currentIndex = 0
+        player.isPlaying = true
+        player.crossfadeEngine = MPVPlaybackEngine()
+        player.isCrossfading = true
+        let initialStart = CFAbsoluteTimeGetCurrent() - 2.0
+        player.activeCrossfade = ActiveCrossfade(successorID: "2", startTime: initialStart, duration: 5)
+
+        player.pause()
+
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertNotNil(player.activeCrossfade?.pausedAt)
+
+        player.activeCrossfade?.pausedAt = CFAbsoluteTimeGetCurrent() - 10.0
+        player.resumeCrossfade()
+
+        XCTAssertNil(player.activeCrossfade?.pausedAt)
+        XCTAssertGreaterThan(player.activeCrossfade?.startTime ?? 0, initialStart + 9.0)
+    }
+
+    func testShuffleAndBeginScrubCancelCrossfade() {
+        let player = Player()
+        let first = mockSong("1")
+        let second = mockSong("2")
+        player.queue = [first, second]
+        player.currentIndex = 0
+        player.isCrossfading = true
+        player.activeCrossfade = ActiveCrossfade(successorID: "2", startTime: 100, duration: 5)
+
+        player.toggleShuffle()
+        XCTAssertFalse(player.isCrossfading)
+        XCTAssertNil(player.activeCrossfade)
+
+        player.isCrossfading = true
+        player.activeCrossfade = ActiveCrossfade(successorID: "2", startTime: 100, duration: 5)
+
+        player.beginScrub()
+        XCTAssertFalse(player.isCrossfading)
+        XCTAssertNil(player.activeCrossfade)
+    }
+
+    func testPlayMPVInitializesDurationFromAPIMetadata() {
+        let player = Player()
+        player.queue = [mockSong("s1", duration: 245)]
+        player.currentIndex = 0
+
+        player.playMPV(URL(string: "http://example.com/rest/stream?id=s1&format=opus")!)
+
+        XCTAssertEqual(player.duration, 245, accuracy: 0.001)
+        XCTAssertEqual(player.trackDuration, 245, accuracy: 0.001)
+    }
 }

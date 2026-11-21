@@ -41,6 +41,7 @@ struct ServerConfig: Codable, Equatable {
     var suppressPendingMutations: Bool?
     var suppressServerScanWarning: Bool?
     var adaptiveCellularDataEnabled: Bool?
+    var allowInsecureHTTP: Bool?
 }
 
 extension ServerConfig {

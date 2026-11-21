@@ -110,13 +110,20 @@ final class AppState {
 
     var showLyrics = true
     var queuePanelVisible = false
-    var scrobblingEnabled = true
+    var scrobblingEnabled: Bool = UserDefaults.standard.object(forKey: "scrobblingEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(scrobblingEnabled, forKey: "scrobblingEnabled")
+        }
+    }
 
     var downloadingSongIDs: Set<String> = []
 
     var downloadingSongs: [SubsonicSong] = []
 
     var activeDownloadTasks: [DownloadTask] = []
+    var isProcessingDownloadQueue = false
+    var activeDownloadWorkerID: UUID?
+    var downloadWorkerTask: Task<Void, Never>?
 
     var downloadProgress: [String: Double] = [:]
 

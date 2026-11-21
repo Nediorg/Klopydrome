@@ -103,7 +103,7 @@ final class Player {
     var onTrackCrossfaded: ((SubsonicSong) -> Void)?
     var onNextTrackPreloadRequest: ((SubsonicSong) -> URL?)?
     var onCachedTrackURLRequest: ((SubsonicSong) -> URL?)?
-    var onStreamRecordFinished: ((URL) -> Void)?
+    var onStreamRecordFinished: ((MPVPlaybackEngine.StreamRecordCompletion) -> Void)?
     var onLocalFilePlaybackFailed: ((SubsonicSong) -> Void)?
 
     @ObservationIgnored nonisolated(unsafe) var avPlayer: AVPlayer?
@@ -160,13 +160,24 @@ final class Player {
 
     @ObservationIgnored var seekRequestID = 0
 
-    var trackDuration: Double {
+    var shouldTrustMPVEngineDuration: Bool {
+        guard engineKind == .mpv, mpvStreamOffset == 0, mpvEngine.duration > 0 else { return false }
         let meta = Double(currentSong?.duration ?? 0)
-        if engineKind == .mpv, mpvStreamOffset == 0, mpvEngine.duration > 0 {
+        guard meta > 0 else { return true }
+        guard !currentSourceIsRemoteTranscode else { return false }
+        let isSeekableOrLocal = mpvEngine.isSeekable
+            || currentSourceURL == nil
+            || currentSourceURL?.isFileURL == true
+        return isSeekableOrLocal && mpvEngine.duration >= meta * 0.8
+    }
+
+    var trackDuration: Double {
+        if shouldTrustMPVEngineDuration {
             return mpvEngine.duration
         }
-        if duration > 0 { return duration }
-        return meta
+        let meta = Double(currentSong?.duration ?? 0)
+        if meta > 0 { return meta }
+        return duration
     }
 
     init() {
@@ -243,13 +254,12 @@ final class Player {
     }
 
     func cycleRepeat() {
-        switch repeatMode {
-        case .off: repeatMode = .all
-        case .all: repeatMode = .one
-        case .one: repeatMode = .off
+        let next: RepeatMode = switch repeatMode {
+        case .off: .all
+        case .all: .one
+        case .one: .off
         }
-        resetPreloadedNext()
-        updateNowPlayingInfo()
+        setRepeatMode(next)
     }
 
     func startCurrent(autoPlay: Bool = true, recordHistory: Bool = true) {
@@ -296,7 +306,7 @@ final class Player {
         lastError = nil
         hasReportedFailure = false
         isBuffering = true
-        duration = 0
+        duration = Double(currentSong?.duration ?? 0)
         let targetSeek = pendingSeekTime ?? (currentTime > 0 ? currentTime : nil)
         resetSeekState()
         currentTime = targetSeek ?? 0

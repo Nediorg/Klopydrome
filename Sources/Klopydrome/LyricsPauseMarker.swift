@@ -94,7 +94,8 @@ struct LyricsPauseMarker: View {
     // MARK: - Motion & Ripple geometry matching KaraokeLine
 
     private var isCurrent: Bool {
-        lineDistance == 0
+        guard let active = activeLineIndex else { return false }
+        return active == index
     }
 
     private var markerScale: CGFloat {

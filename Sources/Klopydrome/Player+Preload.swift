@@ -78,7 +78,8 @@ extension Player {
         isLoading = false
         isPlaying = autoPlay
         currentTime = 0
-        duration = mpvEngine.duration > 0 ? mpvEngine.duration : Double(song.duration ?? 0)
+        duration = 0
+        syncDurationFromMPVEngine()
         lastError = nil
         hasReportedFailure = false
         if recordHistory {
@@ -89,7 +90,8 @@ extension Player {
     }
 
     func preloadNextMPVTrack(_ song: SubsonicSong) {
-        guard preloadedNextSongID != song.id || !mpvEngine.hasAppendedTrack,
+        guard !shouldCrossfade(to: song),
+              preloadedNextSongID != song.id || !mpvEngine.hasAppendedTrack,
               let url = onNextTrackPreloadRequest?(song) else {
             return
         }
@@ -106,11 +108,25 @@ extension Player {
     }
 
     func syncPreloadedNextWithQueue() {
+        let next = nextSongForPreloading
+        let nextID = next?.id
+        if isCrossfading {
+            if activeCrossfade?.successorID != nextID {
+                cancelCrossfade()
+            }
+            return
+        }
+        if crossfadeNextSongID != nil && crossfadeNextSongID != nextID {
+            resetCrossfadePreload()
+        }
         guard engineKind == .mpv, nextTrackPreloadingEnabled else { return }
-        let nextID = nextSongForPreloading?.id
+        if let next, shouldCrossfade(to: next) {
+            resetPreloadedNext()
+            return
+        }
         if preloadedNextSongID != nextID {
             resetPreloadedNext()
-            if isPlaying, !isScrubbing, let next = nextSongForPreloading {
+            if isPlaying, !isScrubbing, let next {
                 preloadNextMPVTrack(next)
             }
         }

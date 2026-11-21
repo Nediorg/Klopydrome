@@ -54,7 +54,7 @@ struct AlbumDetailView: View {
                 }
                 if let artistId = displayedDetail.artistId ?? album.artistId,
                    let name = displayedDetail.artist ?? album.artist, !artistId.isEmpty {
-                    MoreByArtist(artistId: artistId, artistName: name)
+                    MoreByArtist(artistId: artistId, artistName: name, excludingAlbumID: album.id)
                         .padding(.top, 8)
                 }
             }

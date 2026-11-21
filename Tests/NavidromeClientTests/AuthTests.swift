@@ -31,7 +31,8 @@ final class AuthTests: XCTestCase {
         let url = try client.buildURL(endpoint: "ping", params: [], json: true)
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
         let p = query.first { $0.name == "p" }!.value!
-        XCTAssertEqual(p, "enc:\(SubsonicClient.md5Hex("secret"))")
+        XCTAssertEqual(p, "enc:\(SubsonicClient.hexEncodedUTF8("secret"))")
+        XCTAssertEqual(SubsonicClient.hexEncodedUTF8("secret"), "736563726574")
         XCTAssertNil(query.first { $0.name == "t" })
     }
 

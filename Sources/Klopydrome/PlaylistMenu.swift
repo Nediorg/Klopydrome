@@ -5,22 +5,33 @@ struct PlaylistContextMenuItems: View {
     @Environment(AppState.self) private var app
     let playlist: PlaylistSummary
 
-    var onRename: () -> Void = {}
-    var onEditRules: () -> Void = {}
-    var onDelete: () -> Void = {}
+    var onRename: (() -> Void)? = nil
+    var onEditRules: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
 
     private var hasSongs: Bool { (playlist.songCount ?? 0) > 0 }
     private var followed: Bool { app.isFollowed(playlist) }
+    private var canEdit: Bool { app.canEditPlaylist(playlist) }
 
     var body: some View {
-        Button("Edit…".localized) {
-            guard app.confirmOfflineAction() else { return }
-            onRename()
-        }
-        if playlist.isSmart {
-            Button("Edit Rules…".localized) {
+        if canEdit {
+            Button("Edit…".localized) {
                 guard app.confirmOfflineAction() else { return }
-                onEditRules()
+                if let onRename {
+                    onRename()
+                } else {
+                    app.openCreatePlaylist(existing: playlist)
+                }
+            }
+            if playlist.isSmart {
+                Button("Edit Rules…".localized) {
+                    guard app.confirmOfflineAction() else { return }
+                    if let onEditRules {
+                        onEditRules()
+                    } else {
+                        app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: playlist))
+                    }
+                }
             }
         }
 
@@ -44,9 +55,11 @@ struct PlaylistContextMenuItems: View {
         Button((followed ? "Unstar" : "Star").localized) {
             app.toggleFollow(playlist)
         }
-        Button((playlist.isPublic == true ? "Make Private" : "Make Public").localized) {
-            guard app.confirmOfflineAction() else { return }
-            Task { await app.togglePlaylistVisibility(playlist) }
+        if canEdit {
+            Button((playlist.isPublic == true ? "Make Private" : "Make Public").localized) {
+                guard app.confirmOfflineAction() else { return }
+                Task { await app.togglePlaylistVisibility(playlist) }
+            }
         }
 
         Divider()
@@ -68,10 +81,16 @@ struct PlaylistContextMenuItems: View {
         Button("Share…".localized) {
             app.presentShare(ShareTarget(entityID: playlist.id, title: playlist.displayName, kind: .playlist))
         }
-        Divider()
-        Button("Delete from Library".localized, role: .destructive) {
-            guard app.confirmOfflineAction() else { return }
-            onDelete()
+        if canEdit {
+            Divider()
+            Button("Delete from Library".localized, role: .destructive) {
+                guard app.confirmOfflineAction() else { return }
+                if let onDelete {
+                    onDelete()
+                } else {
+                    Task { await app.deletePlaylist(playlist) }
+                }
+            }
         }
     }
 }

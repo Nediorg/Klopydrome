@@ -11,6 +11,13 @@ struct DownloadTask: Identifiable, Equatable {
         case batch(title: String)
     }
 
+    enum State: Equatable {
+        case queued
+        case active
+        case waitingForNetwork
+        case completed
+    }
+
     let id: UUID
     let kind: Kind
     var coverArt: String?
@@ -18,6 +25,7 @@ struct DownloadTask: Identifiable, Equatable {
     var completedSongIDs: Set<String> = []
     var failedSongIDs: Set<String> = []
     var currentSongID: String?
+    var state: State = .queued
 
     var totalCount: Int { songs.count }
     var completedCount: Int { completedSongIDs.count }
@@ -48,6 +56,9 @@ struct DownloadTask: Identifiable, Equatable {
     }
 
     var currentSongSubtitle: String {
+        if state == .waitingForNetwork {
+            return "Offline".localized
+        }
         if let currentSong {
             if let artist = currentSong.artist, !artist.isEmpty {
                 return "\(artist) — \(currentSong.displayTitle)"
@@ -90,13 +101,16 @@ extension AppState {
         guard !targets.isEmpty else { return }
 
         let taskID = UUID()
+        let isFirst = activeDownloadTasks.isEmpty
         let task = DownloadTask(
             id: taskID,
             kind: kind,
             coverArt: coverArt,
             songs: targets,
             completedSongIDs: [],
-            currentSongID: targets.first?.id
+            failedSongIDs: [],
+            currentSongID: targets.first?.id,
+            state: isFirst ? .active : .queued
         )
         activeDownloadTasks.append(task)
         for song in targets {
@@ -104,46 +118,139 @@ extension AppState {
             register(downloading: song)
         }
         if let firstID = targets.first?.id {
-            downloadProgress[firstID] = 0.0
+            if downloadProgress[firstID] == nil {
+                downloadProgress[firstID] = 0.0
+            }
+        }
+        processDownloadQueue()
+    }
+
+    func processDownloadQueue() {
+        guard !isProcessingDownloadQueue else { return }
+        guard let nextIndex = activeDownloadTasks.firstIndex(where: {
+            $0.state == .queued || $0.state == .active || $0.state == .waitingForNetwork
+        }) else {
+            return
         }
 
-        Task {
-            for song in targets {
-                if isDownloadCancelled(songID: song.id) {
-                    continue
-                }
-                if isCached(song) {
-                    await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
-                    continue
-                }
-                await MainActor.run {
-                    setCurrentSong(in: taskID, songID: song.id)
-                    if downloadProgress[song.id] == nil {
-                        downloadProgress[song.id] = 0.0
-                    }
-                }
-                do {
-                    try await downloadToCache(song)
-                    await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
-                } catch is CancellationError {
-                } catch {
-                    await MainActor.run { markSongFailed(in: taskID, songID: song.id) }
-                }
-            }
-            await MainActor.run {
-                activeDownloadTasks.removeAll { $0.id == taskID }
-                unregisterDownload(from: targets)
-            }
+        isProcessingDownloadQueue = true
+        let taskID = activeDownloadTasks[nextIndex].id
+        activeDownloadTasks[nextIndex].state = .active
+        let workerID = UUID()
+        activeDownloadWorkerID = workerID
+
+        downloadWorkerTask = Task { [weak self] in
+            await self?.runDownloadWorker(taskID: taskID, workerID: workerID)
         }
     }
 
+    private func runDownloadWorker(taskID: UUID, workerID: UUID) async {
+        defer {
+            Task { @MainActor [weak self] in
+                guard let self, self.activeDownloadWorkerID == workerID else { return }
+                self.activeDownloadWorkerID = nil
+                self.isProcessingDownloadQueue = false
+                self.processDownloadQueue()
+            }
+        }
+
+        guard let task = activeDownloadTasks.first(where: { $0.id == taskID }) else { return }
+        let remainingSongs = task.songs.filter {
+            !task.completedSongIDs.contains($0.id) && !task.failedSongIDs.contains($0.id)
+        }
+
+        for song in remainingSongs {
+            if Task.isCancelled || isDownloadCancelled(songID: song.id) { break }
+            if isCached(song) {
+                await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
+                continue
+            }
+
+            guard await waitForNetworkConnectivity(taskID: taskID, songID: song.id) else { return }
+
+            await MainActor.run {
+                setCurrentSong(in: taskID, songID: song.id)
+                register(downloading: song)
+                downloadProgress[song.id] = 0.0
+            }
+
+            let success = await executeSongDownloadWithRetry(song, in: taskID)
+            if !success && !Task.isCancelled && !isDownloadCancelled(songID: song.id) {
+                await MainActor.run { markSongFailed(in: taskID, songID: song.id) }
+            }
+        }
+
+        await MainActor.run {
+            activeDownloadTasks.removeAll { $0.id == taskID }
+            unregisterDownload(from: task.songs)
+        }
+    }
+
+    private func waitForNetworkConnectivity(taskID: UUID, songID: String) async -> Bool {
+        while !NetworkMonitor.shared.isPathSatisfied {
+            await MainActor.run { setTaskState(taskID, .waitingForNetwork) }
+            if Task.isCancelled || isDownloadCancelled(songID: songID) { return false }
+            try? await Task.sleep(for: .seconds(2))
+        }
+        await MainActor.run { setTaskState(taskID, .active) }
+        return !Task.isCancelled && !isDownloadCancelled(songID: songID)
+    }
+
+    private func executeSongDownloadWithRetry(_ song: SubsonicSong, in taskID: UUID) async -> Bool {
+        var attempt = 0
+        while attempt < 3 && !Task.isCancelled {
+            do {
+                try await downloadToCache(song)
+                await MainActor.run { markSongCompleted(in: taskID, songID: song.id) }
+                return true
+            } catch is CancellationError {
+                return false
+            } catch let error as URLError where isTransientNetworkError(error) {
+                attempt += 1
+                guard await waitForNetworkConnectivity(taskID: taskID, songID: song.id) else { return false }
+                if attempt < 3 {
+                    try? await Task.sleep(for: .milliseconds(500 * attempt))
+                }
+            } catch {
+                return false
+            }
+        }
+        return false
+    }
+
+    private func isTransientNetworkError(_ error: URLError) -> Bool {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+             .cannotConnectToHost, .dnsLookupFailed, .internationalRoamingOff,
+             .callIsActive, .dataNotAllowed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    func setTaskState(_ taskID: UUID, _ state: DownloadTask.State) {
+        guard let index = activeDownloadTasks.firstIndex(where: { $0.id == taskID }) else { return }
+        activeDownloadTasks[index].state = state
+    }
+
     func cancelDownloadTask(_ task: DownloadTask) {
+        let isCurrent = activeDownloadTasks.first?.id == task.id
+        if isCurrent {
+            activeDownloadWorkerID = nil
+            downloadWorkerTask?.cancel()
+            downloadWorkerTask = nil
+        }
         for song in task.songs {
             cancelDownload(song)
             downloadProgress.removeValue(forKey: song.id)
         }
         activeDownloadTasks.removeAll { $0.id == task.id }
         unregisterDownload(from: task.songs)
+        if isCurrent {
+            isProcessingDownloadQueue = false
+            processDownloadQueue()
+        }
     }
 
     func markSongCompleted(in taskID: UUID, songID: String) {
@@ -217,7 +324,17 @@ extension AppState {
                 }
             }
             if activeDownloadTasks[index].songs.isEmpty {
+                let isCurrent = activeDownloadTasks.first?.id == taskID
+                if isCurrent {
+                    activeDownloadWorkerID = nil
+                    downloadWorkerTask?.cancel()
+                    downloadWorkerTask = nil
+                }
                 activeDownloadTasks.remove(at: index)
+                if isCurrent {
+                    isProcessingDownloadQueue = false
+                    processDownloadQueue()
+                }
             }
         }
         let stillInOtherTask = activeDownloadTasks.contains { $0.songs.contains(where: { $0.id == song.id }) }

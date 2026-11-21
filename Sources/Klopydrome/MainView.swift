@@ -137,18 +137,18 @@ struct DetailView: View {
         if let current = app.nav.history.last {
             switch current {
             case .album(let album):
-                AlbumDetailView(album: album)
+                AlbumDetailView(album: album).id(album.id)
             case .playlist(let playlist):
-                PlaylistDetailView(playlist: playlist)
+                PlaylistDetailView(playlist: playlist).id(playlist.id)
             case .artist(let artist):
-                ArtistDetailView(artist: artist)
+                ArtistDetailView(artist: artist).id(artist.id)
             case .song(let song):
-                SongDetailView(song: song)
+                SongDetailView(song: song).id(song.id)
             case .genre(let genreName):
-                GenreDetailView(genreName: genreName)
+                GenreDetailView(genreName: genreName).id(genreName)
             }
         } else if let playlist = app.nav.selectedPlaylist {
-            PlaylistDetailView(playlist: playlist)
+            PlaylistDetailView(playlist: playlist).id(playlist.id)
         } else {
             switch app.nav.selected {
             case .home: HomeView()
@@ -263,14 +263,14 @@ struct MinimalScrubber: View {
 
             if isLoading {
                 SweepBar(width: width, trackHeight: trackHeight)
-            } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(isLCDHovered ? 0.85 : 0.65))
-                    .frame(height: trackHeight)
-                    .scaleEffect(x: trackProgress, anchor: .leading)
-
-                marker(width: width)
             }
+
+            Rectangle()
+                .fill(Color.secondary.opacity(isLCDHovered ? 0.85 : 0.65))
+                .frame(height: trackHeight)
+                .scaleEffect(x: trackProgress, anchor: .leading)
+
+            marker(width: width)
         }
         .frame(width: width, height: trackHeight)
         .clipped()

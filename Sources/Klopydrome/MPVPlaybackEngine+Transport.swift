@@ -121,7 +121,7 @@ extension MPVPlaybackEngine {
     @discardableResult
     func seek(to seconds: Double) -> Bool {
         guard isLoaded else { return false }
-        streamRecordIsContiguous = false
+        clearStreamRecord(removeFile: true)
         let clamped = max(0, seconds)
         if isPlaying {
             updateBuffering(true)

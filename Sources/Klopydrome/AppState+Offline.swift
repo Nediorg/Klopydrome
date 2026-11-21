@@ -9,14 +9,28 @@ extension AppState {
         return cachedKeychainPassword
     }
 
-    func beginAutomaticPlaybackCache(for song: SubsonicSong) -> URL? {
+    var stagingDirectory: URL? {
+        guard let cache else { return nil }
+        let dir = cache.directory(for: .streams)
+            .deletingLastPathComponent()
+            .appendingPathComponent("staging", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func beginAutomaticPlaybackCache(for song: SubsonicSong, streamURL: URL? = nil) -> URL? {
         cancelAutomaticPlaybackCache()
         guard serverConfig.cacheEnabled, usesMPVEngine, !isCached(song),
               let cache else { return nil }
+        if let streamURL,
+           URLComponents(url: streamURL, resolvingAgainstBaseURL: false)?
+               .queryItems?.contains(where: { $0.name == "timeOffset" }) == true {
+            return nil
+        }
 
-        let directory = cache.directory(for: .streams)
+        let directory = stagingDirectory ?? cache.directory(for: .streams)
             .deletingLastPathComponent()
-            .appendingPathComponent("recording", isDirectory: true)
+            .appendingPathComponent("staging", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let temporaryURL = directory
             .appendingPathComponent(UUID().uuidString)
@@ -30,21 +44,40 @@ extension AppState {
         automaticPlaybackRecording = nil
     }
 
-    func finishAutomaticPlaybackCache(at temporaryURL: URL) async {
+    private func consumeAutomaticPlaybackRecording(matching url: URL) -> (song: SubsonicSong, temporaryURL: URL)? {
         guard let recording = automaticPlaybackRecording,
-              recording.temporaryURL == temporaryURL,
+              recording.temporaryURL == url else {
+            return nil
+        }
+        automaticPlaybackRecording = nil
+        return recording
+    }
+
+    func finishAutomaticPlaybackCache(_ completion: MPVPlaybackEngine.StreamRecordCompletion) async {
+        let temporaryURL = completion.url
+        guard let recording = consumeAutomaticPlaybackRecording(matching: temporaryURL),
               let cache,
               let fileSize = (try? temporaryURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else {
             try? FileManager.default.removeItem(at: temporaryURL)
             return
         }
+        let metaDuration = Double(recording.song.duration ?? 0)
+        let expectedDuration = max(metaDuration, completion.streamDuration)
+        if expectedDuration > 0 {
+            let tolerance = player.silenceTrimMode == .off
+                ? max(4.0, expectedDuration * 0.05)
+                : max(12.0, expectedDuration * 0.15)
+            guard completion.reachedTime + tolerance >= expectedDuration else {
+                try? FileManager.default.removeItem(at: temporaryURL)
+                return
+            }
+        }
         let minBytes = AppState.minimumExpectedCacheBytes(for: recording.song)
-        guard fileSize >= minBytes else {
+        guard fileSize >= minBytes, AudioFileValidator.isValidAudioFile(at: temporaryURL) else {
             try? FileManager.default.removeItem(at: temporaryURL)
             return
         }
 
-        automaticPlaybackRecording = nil
         let key = CacheManager.streamKey(
             songId: recording.song.id,
             suffix: effectiveSuffix(for: recording.song)
@@ -52,8 +85,6 @@ extension AppState {
         do {
             try await cache.moveFile(from: temporaryURL, to: .streams, key: key)
             cachedStreamKeys.insert(cache.fileURL(for: .streams, key: key).lastPathComponent)
-            await persistOfflineSong(recording.song)
-            prependDownloaded(recording.song)
         } catch {
             try? FileManager.default.removeItem(at: temporaryURL)
         }
@@ -85,6 +116,15 @@ extension AppState {
         let tracks = (try? await offlineRepository.fetchDownloadedTracks()) ?? []
         let songs = tracks.filter { isCached($0) }
         replaceDownloadedSongs(songs)
+        await syncProtectedCacheKeys()
+    }
+
+    func syncProtectedCacheKeys() async {
+        guard let cache else { return }
+        let keys = Set(downloadedSongs.flatMap { song in
+            candidateSuffixes(for: song).map { CacheManager.streamKey(songId: song.id, suffix: $0) }
+        })
+        await cache.setProtectedKeys(keys)
     }
 
     var effectiveUsername: String {
@@ -209,7 +249,6 @@ extension AppState {
         let offlineCache = CacheManager(rootURL: CacheManager.root(forServer: host))
         cache = offlineCache
         resetCacheState()
-        await applyCacheLimits()
         await seedCachedStreamKeys()
         await setupOfflineRepository(host: host)
 
@@ -222,6 +261,7 @@ extension AppState {
             return false
         }
         await restoreOfflineLibrary()
+        await applyCacheLimits()
 
         if !isOfflineSession {
             pruneOfflineNavigation()

@@ -172,4 +172,33 @@ final class TranscodeSeekTests: XCTestCase {
         XCTAssertFalse(player.mpvSeekRestartActive)
         XCTAssertEqual(player.mpvStreamOffset, 0)
     }
+
+    @MainActor
+    func testRollingCacheDurationNeverOverridesSongAPIDurationOnTranscodeOrUnseekableStream() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        player.queue = [SubsonicSong(id: "s1", title: "S1", duration: 210)]
+        player.currentIndex = 0
+        player.playMPV(URL(string: "http://host/rest/stream?id=s1&format=opus")!)
+
+        // Simulate rolling mpv cache-secs duration = currentTime + 10.0 on unseekable transcode
+        player.mpvEngine.setDuration(10.0)
+        player.mpvEngine.onTimeUpdate?(5.0)
+        player.mpvEngine.setDuration(15.0)
+
+        XCTAssertEqual(player.duration, 210.0, accuracy: 0.001)
+        XCTAssertEqual(player.trackDuration, 210.0, accuracy: 0.001)
+
+        // Even for non-transcode unseekable HTTP streams, keep API duration over rolling cache estimate
+        player.currentSourceURL = URL(string: "http://host/rest/stream?id=s1")
+        player.mpvEngine.setSeekable(false)
+        player.mpvEngine.setDuration(15.0)
+        XCTAssertEqual(player.trackDuration, 210.0, accuracy: 0.001)
+
+        // When stream IS seekable non-transcode and reports full container duration, accept sub-second accuracy
+        player.mpvEngine.setSeekable(true)
+        player.mpvEngine.setDuration(210.42)
+        XCTAssertEqual(player.trackDuration, 210.42, accuracy: 0.001)
+        XCTAssertEqual(player.duration, 210.42, accuracy: 0.001)
+    }
 }

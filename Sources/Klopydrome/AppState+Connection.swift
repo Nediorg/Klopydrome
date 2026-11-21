@@ -21,7 +21,8 @@ extension AppState {
                 url: self.serverConfig.url,
                 username: self.serverConfig.username,
                 password: password,
-                authMode: self.serverConfig.authMode
+                authMode: self.serverConfig.authMode,
+                allowInsecureHTTP: self.serverConfig.allowInsecureHTTP ?? self.serverConfig.url.hasPrefix("http://")
             )
             await self.flushOfflineMutations(promptUser: true, context: .previousSession)
         } catch is CancellationError {
@@ -79,7 +80,8 @@ extension AppState {
                 client: client,
                 config: config,
                 rawURL: url,
-                cacheEnabled: cacheEnabled
+                cacheEnabled: cacheEnabled,
+                allowInsecureHTTP: allowInsecureHTTP
             )
         } catch {
             connectionError = error.localizedDescription
@@ -92,13 +94,15 @@ extension AppState {
         client: SubsonicClient,
         config: SubsonicConfig,
         rawURL: String,
-        cacheEnabled: Bool?
+        cacheEnabled: Bool?,
+        allowInsecureHTTP: Bool = false
     ) async {
         var updatedConfig = serverConfig
         updatedConfig.url = rawURL
         updatedConfig.username = config.username
         updatedConfig.authMode = config.authMode
         updatedConfig.cacheEnabled = cacheEnabled ?? updatedConfig.cacheEnabled
+        updatedConfig.allowInsecureHTTP = allowInsecureHTTP || rawURL.hasPrefix("http://")
 
         let host = config.baseURL.host ?? "default"
         let newCache = CacheManager(rootURL: CacheManager.root(forServer: host))
@@ -127,8 +131,8 @@ extension AppState {
         serverConfig = updatedConfig
         isOfflineSession = false
         await setupOfflineRepository(host: host)
-        await applyCacheLimits()
         await restoreOfflineCatalog()
+        await applyCacheLimits()
         self.connectionError = nil
         persist()
         persistSessionCredentials(username: config.username, password: config.password)

@@ -16,7 +16,7 @@ public struct PlaylistSummary: Codable, Hashable, Identifiable {
 
     public var displayName: String { name?.isEmpty == false ? name! : id }
 
-    public var isSmart: Bool { validUntil != nil }
+    public var isSmart: Bool { isReadonly != false && validUntil != nil && validUntil?.isEmpty == false }
 
     public init(id: String, name: String? = nil, comment: String? = nil, owner: String? = nil,
                 coverArt: String? = nil, songCount: Int? = nil, duration: Int? = nil, created: String? = nil,
@@ -60,7 +60,7 @@ public struct PlaylistDetail: Codable, Hashable, Identifiable {
 
     public var displayName: String { name?.isEmpty == false ? name! : id }
 
-    public var isSmart: Bool { validUntil != nil }
+    public var isSmart: Bool { isReadonly != false && validUntil != nil && validUntil?.isEmpty == false }
 
     public init(id: String, name: String? = nil, comment: String? = nil, owner: String? = nil,
                 coverArt: String? = nil, songCount: Int? = nil, duration: Int? = nil, created: String? = nil,

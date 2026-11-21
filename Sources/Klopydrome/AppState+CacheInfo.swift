@@ -23,7 +23,7 @@ extension AppState {
         validKeys.reserveCapacity(keys.count)
         for key in keys {
             let url = dir.appendingPathComponent(key)
-            if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size >= 4096 {
+            if AudioFileValidator.isValidAudioFile(at: url) {
                 validKeys.append(key)
             } else {
                 try? FileManager.default.removeItem(at: url)
@@ -34,13 +34,22 @@ extension AppState {
     }
 
     private func pruneStaleRecordings(in cache: CacheManager) {
+        let stagingDir = cache.directory(for: .streams)
+            .deletingLastPathComponent()
+            .appendingPathComponent("staging", isDirectory: true)
+        let activeURL = automaticPlaybackRecording?.temporaryURL
+        if let stagedFiles = try? FileManager.default.contentsOfDirectory(at: stagingDir, includingPropertiesForKeys: nil) {
+            for file in stagedFiles where file != activeURL {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
         let recDir = cache.directory(for: .streams)
             .deletingLastPathComponent()
             .appendingPathComponent("recording", isDirectory: true)
-        guard let files = try? FileManager.default.contentsOfDirectory(at: recDir, includingPropertiesForKeys: nil) else { return }
-        let activeURL = automaticPlaybackRecording?.temporaryURL
-        for file in files where file != activeURL {
-            try? FileManager.default.removeItem(at: file)
+        if let files = try? FileManager.default.contentsOfDirectory(at: recDir, includingPropertiesForKeys: nil) {
+            for file in files where file != activeURL {
+                try? FileManager.default.removeItem(at: file)
+            }
         }
     }
 

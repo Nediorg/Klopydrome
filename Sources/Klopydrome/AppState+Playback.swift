@@ -18,6 +18,7 @@ extension AppState {
             if !usesMPVEngine && format.lowercased() == "opus" { return "mp3" }
             return format
         }
+        if serverConfig.maxBitRate > 0 { return "mp3" }
         if !usesMPVEngine, PlaybackFormat.needsTranscode(song.suffix) { return "mp3" }
         return (song.suffix ?? "mp3").lowercased()
     }
@@ -79,7 +80,7 @@ extension AppState {
 
         guard let url = streamURL(for: song) else { return false }
         if usesMPVEngine {
-            let streamRecordURL = beginAutomaticPlaybackCache(for: song)
+            let streamRecordURL = beginAutomaticPlaybackCache(for: song, streamURL: url)
             play(url: url, streamRecordURL: streamRecordURL)
         } else {
             play(url: url)
@@ -112,8 +113,8 @@ extension AppState {
         player.onTrackPromoted = { [weak self] song in
             self?.handleTrackPromoted(song)
         }
-        player.onStreamRecordFinished = { [weak self] url in
-            Task { await self?.finishAutomaticPlaybackCache(at: url) }
+        player.onStreamRecordFinished = { [weak self] completion in
+            Task { await self?.finishAutomaticPlaybackCache(completion) }
         }
         player.onLocalFilePlaybackFailed = { [weak self] song in
             self?.handleLocalCacheFailure(for: song)
@@ -133,6 +134,9 @@ extension AppState {
             if self.scrobblingEnabled {
                 let id = ended.id
                 Task { try? await self.client?.scrobble(id: id, submission: true) }
+            }
+            if let promoted = self.player.currentSong {
+                self.handleTrackPromoted(promoted)
             }
         }
     }
@@ -229,14 +233,24 @@ extension AppState {
         guard !songs.isEmpty else { return }
         let playable = isOfflineSession ? songs.filter { isCached($0) } : songs
         guard !playable.isEmpty else { return }
-        player.setQueue(playable.shuffled(), startAt: 0, context: context)
+        player.shufflePreferenceEnabled = true
+        let startIndex = Int.random(in: 0..<playable.count)
+        player.setQueue(playable, startAt: startIndex, context: context)
     }
 
     func albumSongs(_ album: SubsonicAlbum) async -> [SubsonicSong] {
+        if !isOfflineSession, let client {
+            if let serverSongs = (try? await client.getAlbum(id: album.id))?.song, !serverSongs.isEmpty {
+                return serverSongs
+            }
+        }
         let localTracks = downloadedSongs.filter { ($0.albumId ?? $0.parent) == album.id }
-        if !localTracks.isEmpty { return localTracks }
-        guard let client else { return [] }
-        return (try? await client.getAlbum(id: album.id))?.song ?? []
+        return localTracks.sorted {
+            let disc0 = $0.discNumber ?? 1
+            let disc1 = $1.discNumber ?? 1
+            if disc0 != disc1 { return disc0 < disc1 }
+            return ($0.track ?? 0) < ($1.track ?? 0)
+        }
     }
 
     func play(_ album: SubsonicAlbum) {
@@ -392,93 +406,10 @@ extension AppState {
             activeCacheTasks.remove(song.id)
             updateCachingFlag()
         }
-        try? await downloadToCache(song)
+        try? await downloadToCache(song, isExplicitDownload: false)
     }
 
     private func updateCachingFlag() {
         player.isCaching = activeCacheTasks.contains(player.currentSong?.id ?? "")
-    }
-
-    func candidateSuffixes(for song: SubsonicSong) -> [String] {
-        var suffixes: [String] = []
-        let download = downloadSuffix(for: song)
-        if !download.isEmpty { suffixes.append(download) }
-        let effective = effectiveSuffix(for: song)
-        if !effective.isEmpty && !suffixes.contains(effective) { suffixes.append(effective) }
-        if let raw = song.suffix?.lowercased(), !raw.isEmpty && !suffixes.contains(raw) {
-            suffixes.append(raw)
-        }
-        for fallback in ["mp3", "flac", "m4a", "opus", "ogg", "aac", "wav"] where !suffixes.contains(fallback) {
-            suffixes.append(fallback)
-        }
-        return suffixes
-    }
-
-    static func minimumExpectedCacheBytes(for song: SubsonicSong) -> Int {
-        if let duration = song.duration, duration > 0 {
-            return max(4096, Int(Double(duration) * 1500 * 0.75))
-        }
-        return 4096
-    }
-
-    func cachedURL(for song: SubsonicSong) -> URL? {
-        guard let cache else { return nil }
-        let minBytes = Self.minimumExpectedCacheBytes(for: song)
-        for suffix in candidateSuffixes(for: song) {
-            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
-            let url = cache.fileURL(for: .streams, key: key)
-            let exists = cachedStreamKeysSeeded
-                ? cachedStreamKeys.contains(url.lastPathComponent)
-                : FileManager.default.fileExists(atPath: url.path)
-            guard exists else { continue }
-
-            if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size >= minBytes {
-                return url
-            } else {
-                try? FileManager.default.removeItem(at: url)
-                cachedStreamKeys.remove(url.lastPathComponent)
-            }
-        }
-        return nil
-    }
-
-    func handleLocalCacheFailure(for song: SubsonicSong) {
-        guard let cache else { return }
-        for suffix in candidateSuffixes(for: song) {
-            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
-            let url = cache.fileURL(for: .streams, key: key)
-            try? FileManager.default.removeItem(at: url)
-            cachedStreamKeys.remove(url.lastPathComponent)
-        }
-        if let stream = streamURL(for: song) {
-            let recordURL = beginAutomaticPlaybackCache(for: song)
-            play(url: stream, streamRecordURL: recordURL)
-        }
-    }
-
-    func isCached(_ song: SubsonicSong) -> Bool {
-        guard cache != nil else { return false }
-        if !cachedStreamKeysSeeded { Task { await seedCachedStreamKeys() } }
-        guard !cachedStreamKeys.isEmpty else { return false }
-        let primaryKey = CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
-        if let name = cacheFileName(for: primaryKey), cachedStreamKeys.contains(name) {
-            return true
-        }
-        for suffix in candidateSuffixes(for: song) {
-            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
-            if let name = cacheFileName(for: key), cachedStreamKeys.contains(name) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private func streamKey(for song: SubsonicSong) -> String {
-        CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
-    }
-
-    private func cacheFileName(for key: String) -> String? {
-        guard let cache else { return nil }
-        return cache.fileURL(for: .streams, key: key).lastPathComponent
     }
 }

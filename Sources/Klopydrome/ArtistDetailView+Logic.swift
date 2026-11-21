@@ -132,7 +132,7 @@ extension ArtistDetailView {
         topSongs = Array(sortTopSongs(matchingSongs).prefix(27))
         appearsOn = guestAlbums
 
-        let cover = matchingAlbums.first?.coverArt ?? matchingSongs.first?.coverArt ?? artist.artistImageUrl
+        let cover = artist.coverArt ?? matchingAlbums.first?.coverArt ?? matchingSongs.first?.coverArt ?? artist.artistImageUrl
 
         detail = ArtistDetail(
             id: artistID,

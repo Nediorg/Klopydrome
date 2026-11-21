@@ -42,13 +42,19 @@ extension AppState {
             guard serverConfig.effectiveAutoReconnectEnabled,
                   !serverConfig.effectiveForceOfflineMode,
                   !isReconnecting else { return }
-            _ = await reconnect(silent: true)
+            let reconnected = await reconnect(silent: true)
+            if reconnected, !isProcessingDownloadQueue, activeDownloadTasks.contains(where: { $0.state == .waitingForNetwork }) {
+                processDownloadQueue()
+            }
         } else {
             if let client {
                 try? await client.ping()
                 CoverArtStore.shared.invalidateFailedKeys()
                 NotificationCenter.default.post(name: .foregroundRefreshRequested, object: nil)
                 await flushOfflineMutations(promptUser: false)
+                if !isProcessingDownloadQueue, activeDownloadTasks.contains(where: { $0.state == .waitingForNetwork }) {
+                    processDownloadQueue()
+                }
             }
         }
     }

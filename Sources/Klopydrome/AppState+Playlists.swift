@@ -390,6 +390,17 @@ extension AppState {
         }
     }
 
+    func canEditPlaylist(_ playlist: PlaylistSummary) -> Bool {
+        if playlist.isReadonly == true && !playlist.isSmart { return false }
+        if let owner = playlist.owner, !owner.isEmpty {
+            let current = serverConfig.username
+            if !current.isEmpty && owner.localizedCaseInsensitiveCompare(current) != .orderedSame {
+                return false
+            }
+        }
+        return true
+    }
+
     func deletePlaylist(_ playlist: PlaylistSummary) async {
         guard confirmOfflineAction() else { return }
         guard let client else { return }
@@ -398,6 +409,16 @@ extension AppState {
             nav.selected = .playlists
             nav.selectedPlaylist = nil
         }
+        nav.history.removeAll {
+            if case .playlist(let p) = $0 { return p.id == playlist.id }
+            return false
+        }
+        followedPlaylistIDs.remove(playlist.id)
+        var recent = recentPlaylistIDs
+        recent.removeAll { $0 == playlist.id }
+        recentPlaylistIDs = recent
+        try? await offlineRepository?.removePlaylist(id: playlist.id)
+        invalidatePlaylistDetail(for: playlist.id)
         await refreshPlaylists()
     }
 }

@@ -92,9 +92,13 @@ public final class SubsonicClient: @unchecked Sendable {
             items.append(URLQueryItem(name: "t", value: token))
             items.append(URLQueryItem(name: "s", value: salt))
         case .passwordMD5:
-            items.append(URLQueryItem(name: "p", value: "enc:\(Self.md5Hex(config.password))"))
+            items.append(URLQueryItem(name: "p", value: "enc:\(Self.hexEncodedUTF8(config.password))"))
         }
         return items
+    }
+
+    static func hexEncodedUTF8(_ string: String) -> String {
+        string.utf8.map { String(format: "%02x", $0) }.joined()
     }
 
     static func md5Hex(_ string: String) -> String {

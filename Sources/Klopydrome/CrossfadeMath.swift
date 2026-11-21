@@ -7,8 +7,9 @@ struct CrossfadeGains: Equatable {
 
 struct ActiveCrossfade: Equatable {
     let successorID: String
-    let startTime: CFAbsoluteTime
+    var startTime: CFAbsoluteTime
     let duration: Double
+    var pausedAt: CFAbsoluteTime?
 }
 
 enum CrossfadeMath {

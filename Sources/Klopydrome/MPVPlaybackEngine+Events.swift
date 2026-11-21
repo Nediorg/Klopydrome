@@ -109,8 +109,16 @@ extension MPVPlaybackEngine {
 
     @MainActor func handleTrackEnded() {
         let completedRecord = streamRecordIsContiguous ? streamRecordURL : nil
+        let reachedTime = currentTimeValue
+        let recordedDuration = duration
         clearStreamRecord(removeFile: completedRecord == nil)
-        if let completedRecord { onStreamRecordFinished?(completedRecord) }
+        if let completedRecord {
+            onStreamRecordFinished?(MPVPlaybackEngine.StreamRecordCompletion(
+                url: completedRecord,
+                reachedTime: reachedTime,
+                streamDuration: recordedDuration
+            ))
+        }
         currentTimeValue = 0
         duration = 0
         guard !isEnded else { return }

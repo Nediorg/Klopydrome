@@ -4,6 +4,7 @@ import NavidromeClient
 struct MoreByArtist: View {
     let artistId: String
     let artistName: String
+    var excludingAlbumID: String? = nil
     @Environment(AppState.self) private var app
 
     @State private var albums: [SubsonicAlbum] = []
@@ -46,16 +47,16 @@ struct MoreByArtist: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .task { await load() }
+            .task(id: "\(artistId)|\(excludingAlbumID ?? "")|\(app.isOfflineSession)") { await load() }
         }
     }
 
     private func load() async {
-        guard albums.isEmpty, !loaded else { return }
         if app.isOfflineSession {
             albums = app.library.albums.filter {
-                ($0.artistId != nil && $0.artistId == artistId) ||
-                ($0.artist != nil && $0.artist == artistName)
+                (($0.artistId != nil && $0.artistId == artistId) ||
+                 ($0.artist != nil && $0.artist == artistName)) &&
+                (excludingAlbumID == nil || $0.id != excludingAlbumID)
             }
             loaded = true
             return
@@ -66,6 +67,7 @@ struct MoreByArtist: View {
         }
         defer { loaded = true }
         let artist = try? await client.getArtist(id: artistId)
-        albums = artist?.album ?? []
+        let rawAlbums = artist?.album ?? []
+        albums = rawAlbums.filter { excludingAlbumID == nil || $0.id != excludingAlbumID }
     }
 }

@@ -51,7 +51,7 @@ struct ArtistDetailView: View {
         detail ?? ArtistDetail(
             id: artist.id,
             name: artist.name,
-            coverArt: artist.artistImageUrl,
+            coverArt: artist.coverArt ?? artist.artistImageUrl,
             albumCount: artist.albumCount,
             artistImageUrl: artist.artistImageUrl,
             starred: artist.starred

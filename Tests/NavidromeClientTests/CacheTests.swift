@@ -117,4 +117,51 @@ final class CacheTests: XCTestCase {
         let cached = await cache.cachedDiscography(for: "artist-1")
         XCTAssertNil(cached)
     }
+
+    func testOverwriteDoesNotInflateBytes() async throws {
+        let key = "sample.img"
+        try await cache.write(data: Data(repeating: 1, count: 100), to: .covers, key: key)
+        var count = await cache.bytesAsync(for: .covers)
+        XCTAssertEqual(count, 100)
+
+        try await cache.write(data: Data(repeating: 2, count: 150), to: .covers, key: key)
+        count = await cache.bytesAsync(for: .covers)
+        XCTAssertEqual(count, 150)
+
+        let source = tempDir.appendingPathComponent("move_source.bin")
+        try Data(repeating: 3, count: 180).write(to: source)
+        _ = try await cache.moveFile(from: source, to: .covers, key: key)
+        count = await cache.bytesAsync(for: .covers)
+        XCTAssertEqual(count, 180)
+    }
+
+    func testProtectedKeysImmuneFromEviction() async throws {
+        let small = CacheLimits(maxTotalBytes: 300, maxCoversBytes: 300,
+                                maxStreamsBytes: 300, maxMetadataBytes: 300)
+        await cache.setLimits(small)
+        await cache.setProtectedKeys(["offline.mp3"])
+
+        try await cache.write(data: Data(repeating: 1, count: 200), to: .streams, key: "offline.mp3")
+        try await cache.write(data: Data(repeating: 2, count: 200), to: .streams, key: "stream.mp3")
+
+        let hasOffline = await cache.hasFile(for: .streams, key: "offline.mp3")
+        XCTAssertTrue(hasOffline, "Protected offline file must survive eviction even if older")
+    }
+
+    func testSetLimitsTriggersImmediateEviction() async throws {
+        let large = CacheLimits(maxTotalBytes: 10_000, maxCoversBytes: 10_000,
+                                maxStreamsBytes: 10_000, maxMetadataBytes: 10_000)
+        await cache.setLimits(large)
+        try await cache.write(data: Data(repeating: 1, count: 500), to: .streams, key: "old.mp3")
+        try await cache.write(data: Data(repeating: 2, count: 500), to: .streams, key: "new.mp3")
+
+        let small = CacheLimits(maxTotalBytes: 600, maxCoversBytes: 600,
+                                maxStreamsBytes: 600, maxMetadataBytes: 600)
+        await cache.setLimits(small)
+
+        let hasNew = await cache.hasFile(for: .streams, key: "new.mp3")
+        let hasOld = await cache.hasFile(for: .streams, key: "old.mp3")
+        XCTAssertTrue(hasNew)
+        XCTAssertFalse(hasOld, "setLimits must immediately evict over-limit files")
+    }
 }

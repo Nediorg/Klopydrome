@@ -216,7 +216,7 @@ struct KaraokeLine: View {
                 )
             ) { _ in
                 wordText(
-                    at: (state == .now && fillLive && renderClock != nil)
+                    at: (state == .now && renderClock != nil)
                         ? renderClock!.currentTime
                         : currentTime
                 )

@@ -92,6 +92,7 @@ extension Player {
     }
 
     func beginScrub() {
+        cancelCrossfade()
         resetSeekState(keepPendingSeek: false, clearScrubbing: false)
         isScrubbing = true
     }
@@ -135,6 +136,7 @@ extension Player {
             mpvEngine.pause()
             if isCrossfading {
                 crossfadeEngine?.pause()
+                pauseCrossfade()
             }
         } else {
             avPlayer?.pause()
@@ -153,6 +155,7 @@ extension Player {
                 mpvEngine.play()
                 if isCrossfading {
                     crossfadeEngine?.play()
+                    resumeCrossfade()
                 }
             } else if !isLoading {
                 onTrackRequest?(song)
@@ -201,6 +204,7 @@ extension Player {
             cancelCrossfade()
         }
         resetPreloadedNext()
+        syncPreloadedNextWithQueue()
         updateNowPlayingInfo()
     }
 

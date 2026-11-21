@@ -152,7 +152,7 @@ public extension SubsonicClient {
             URLQueryItem(name: "submission", value: submission ? "true" : "false"),
         ]
         if let time {
-            params.append(URLQueryItem(name: "time", value: String(Int(time.timeIntervalSince1970))))
+            params.append(URLQueryItem(name: "time", value: String(Int64((time.timeIntervalSince1970 * 1000).rounded()))))
         }
         _ = try await requestEnvelope(endpoint: "scrobble", params: params)
     }

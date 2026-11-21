@@ -27,6 +27,7 @@ extension Player {
 
     private func turnShuffleOn() {
         guard hasQueue, !shuffle else { return }
+        cancelCrossfade()
         resetPreloadedNext()
         shuffleState.originalQueue = queue
         var rest = queue
@@ -44,6 +45,7 @@ extension Player {
 
     private func turnShuffleOff() {
         guard shuffle else { return }
+        cancelCrossfade()
         resetPreloadedNext()
         if let current = currentSong,
            let index = shuffleState.originalQueue.firstIndex(where: { $0.id == current.id }) {

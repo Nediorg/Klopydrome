@@ -5,14 +5,22 @@ import os
 
 extension AppState {
     func downloadTrack(_ song: SubsonicSong) {
-        guard let client else { return }
+        let localURL = cachedURL(for: song)
+        guard client != nil || localURL != nil else { return }
         let panel = TrackDownload.savePanel(for: song)
-        let transcodeSettings = TrackDownload.transcodeSettings(in: serverConfig)
+        let transcodeSettings = client != nil ? TrackDownload.transcodeSettings(in: serverConfig) : nil
         let accessory = TrackDownload.originalFormatAccessory(transcodeAvailable: transcodeSettings != nil)
         panel.accessoryView = accessory.container
 
         guard panel.runModal() == .OK, let chosenURL = panel.url else { return }
 
+        if let localURL, client == nil {
+            try? FileManager.default.removeItem(at: chosenURL)
+            try? FileManager.default.copyItem(at: localURL, to: chosenURL)
+            return
+        }
+
+        guard let client else { return }
         let wantsOriginal = accessory.checkbox.state == .on || transcodeSettings == nil
         let remoteURL: URL?
         var destinationURL = chosenURL
@@ -47,6 +55,7 @@ extension AppState {
         }
         downloadedSongs.removeAll { $0.id == song.id }
         await removeOfflineSong(song)
+        await syncProtectedCacheKeys()
     }
 
     func cancelDownload(_ song: SubsonicSong) {
@@ -54,7 +63,7 @@ extension AppState {
         downloadCancellationTokens[song.id]?.withLock { $0 = true }
     }
 
-    func downloadToCache(_ song: SubsonicSong) async throws {
+    func downloadToCache(_ song: SubsonicSong, isExplicitDownload: Bool = true) async throws {
         guard let cache, let url = downloadStreamURL(for: song) else {
             downloadProgress.removeValue(forKey: song.id)
             throw SubsonicError.invalidURL
@@ -65,7 +74,8 @@ extension AppState {
             downloadCancellationTokens.removeValue(forKey: song.id)
         }
         let key = CacheManager.streamKey(songId: song.id, suffix: downloadSuffix(for: song))
-        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let stagingDir = stagingDirectory ?? FileManager.default.temporaryDirectory
+        let temp = stagingDir.appendingPathComponent(UUID().uuidString).appendingPathExtension(downloadSuffix(for: song))
         do {
             downloadProgress[song.id] = 0.0
             try await TrackDownload.streamToFile(
@@ -76,35 +86,43 @@ extension AppState {
                     Task { @MainActor in self?.downloadProgress[song.id] = progress }
                 }
             )
+            guard AudioFileValidator.isValidAudioFile(at: temp) else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
             try await cache.moveFile(from: temp, to: .streams, key: key)
             downloadProgress.removeValue(forKey: song.id)
             cancelledDownloads.remove(song.id)
             cachedStreamKeys.insert(cache.fileURL(for: .streams, key: key).lastPathComponent)
-            await persistOfflineSong(song)
-            prependDownloaded(song)
-
-            if let client {
-                Task { [weak self] in
-                    guard let cache = self?.cache else { return }
-                    let lyricsKey = LyricsStore.cacheKey(for: song.id)
-                    if await !cache.hasFile(for: .metadata, key: lyricsKey),
-                       let lyricsResult = await LyricsStore.fetchLyricsFromServer(song: song, client: client) {
-                        let payload = LyricsStore.CachedLyrics(
-                            syncedLines: lyricsResult.syncedLines,
-                            wordsByLine: lyricsResult.wordsByLine,
-                            plainText: lyricsResult.plainText
-                        )
-                        if let data = try? JSONEncoder().encode(payload) {
-                            _ = try? await cache.write(data: data, to: .metadata, key: lyricsKey)
-                        }
-                    }
-                }
+            if isExplicitDownload {
+                await persistOfflineSong(song)
+                prependDownloaded(song)
+                await syncProtectedCacheKeys()
             }
+            fetchAndCacheLyricsIfMissing(for: song)
         } catch {
             downloadProgress.removeValue(forKey: song.id)
             cancelledDownloads.remove(song.id)
             try? FileManager.default.removeItem(at: temp)
             throw error
+        }
+    }
+
+    private func fetchAndCacheLyricsIfMissing(for song: SubsonicSong) {
+        guard let client else { return }
+        Task { [weak self] in
+            guard let cache = self?.cache else { return }
+            let lyricsKey = LyricsStore.cacheKey(for: song.id)
+            if await !cache.hasFile(for: .metadata, key: lyricsKey),
+               let lyricsResult = await LyricsStore.fetchLyricsFromServer(song: song, client: client) {
+                let payload = LyricsStore.CachedLyrics(
+                    syncedLines: lyricsResult.syncedLines,
+                    wordsByLine: lyricsResult.wordsByLine,
+                    plainText: lyricsResult.plainText
+                )
+                if let data = try? JSONEncoder().encode(payload) {
+                    _ = try? await cache.write(data: data, to: .metadata, key: lyricsKey)
+                }
+            }
         }
     }
 
@@ -293,6 +311,7 @@ enum TrackDownload {
                                 y: (container.frame.height - size.height) / 2,
                                 width: size.width,
                                 height: size.height)
+        container.addSubview(checkbox)
         container.autoresizingMask = [.width]
         return (container, checkbox)
     }

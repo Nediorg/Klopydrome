@@ -60,8 +60,15 @@ public actor CacheManager {
         set { _limits = newValue }
     }
 
-    public func setLimits(_ newLimits: CacheLimits) {
+    public func setLimits(_ newLimits: CacheLimits) async {
         _limits = newLimits
+        await evictIfNeeded()
+    }
+
+    private var protectedKeys: Set<String> = []
+
+    public func setProtectedKeys(_ keys: Set<String>) {
+        self.protectedKeys = Set(keys.map { sanitize($0) })
     }
 
     public nonisolated static func root(forServer host: String) -> URL {
@@ -139,8 +146,9 @@ public actor CacheManager {
     @discardableResult
     public func write(data: Data, to kind: CacheKind, key: String) async throws -> URL {
         let url = fileURL(for: kind, key: key)
+        let oldSize = fileManager.fileExists(atPath: url.path) ? fileSize(url) : 0
         try data.write(to: url, options: .atomic)
-        addBytes(data.count, to: kind)
+        addBytes(data.count - oldSize, to: kind)
         await evictIfNeeded()
         return url
     }
@@ -148,11 +156,12 @@ public actor CacheManager {
     @discardableResult
     public func moveFile(from source: URL, to kind: CacheKind, key: String) async throws -> URL {
         let url = fileURL(for: kind, key: key)
-        if fileManager.fileExists(atPath: url.path) {
+        let oldSize = fileManager.fileExists(atPath: url.path) ? fileSize(url) : 0
+        if oldSize > 0 {
             try fileManager.removeItem(at: url)
         }
         try fileManager.moveItem(at: source, to: url)
-        addBytes(fileSize(url), to: kind)
+        addBytes(fileSize(url) - oldSize, to: kind)
         await evictIfNeeded()
         return url
     }
@@ -318,6 +327,9 @@ public actor CacheManager {
         guard total > target else { return }
         for entry in entries {
             if total <= target { break }
+            if kind == .streams && protectedKeys.contains(entry.url.lastPathComponent) {
+                continue
+            }
             if (try? fileManager.removeItem(at: entry.url)) != nil {
                 total -= entry.size
             }
@@ -336,6 +348,9 @@ public actor CacheManager {
         var removedByKind: [CacheKind: Int] = [:]
         for entry in all {
             if total <= target { break }
+            if entry.kind == .streams && protectedKeys.contains(entry.url.lastPathComponent) {
+                continue
+            }
             if (try? fileManager.removeItem(at: entry.url)) != nil {
                 total -= entry.size
                 removedByKind[entry.kind, default: 0] += entry.size
@@ -347,6 +362,10 @@ public actor CacheManager {
     }
 
     private func fileSize(_ url: URL) -> Int {
-        (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        guard let attrs = try? fileManager.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? NSNumber else {
+            return 0
+        }
+        return size.intValue
     }
 }

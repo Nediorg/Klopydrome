@@ -164,4 +164,214 @@ final class DownloadAndOfflineCachingTests: XCTestCase {
         XCTAssertFalse(app.player.isCaching)
         XCTAssertFalse(app.activeCacheTasks.contains(song.id))
     }
+
+    func testEffectiveSuffixUsesMP3ForBitRateOnlyTranscode() {
+        let app = AppState()
+        app.serverConfig.format = nil
+        app.serverConfig.maxBitRate = 192
+        let song = SubsonicSong(id: "s_flac", title: "FLAC Track", suffix: "flac")
+
+        XCTAssertEqual(app.effectiveSuffix(for: song), "mp3")
+    }
+
+    func testBeginAutomaticPlaybackCacheSkipsTimeOffsetTranscodeRestart() throws {
+        let app = AppState()
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        app.cache = CacheManager(rootURL: tempRoot)
+        app.serverConfig.cacheEnabled = true
+        app.serverConfig.playbackEngine = .mpv
+        let song = SubsonicSong(id: "s_seek", title: "Seek Track", suffix: "opus", duration: 180)
+        let seekURL = try XCTUnwrap(URL(string: "http://host/rest/stream?id=s_seek&format=opus&timeOffset=45"))
+
+        XCTAssertNil(app.beginAutomaticPlaybackCache(for: song, streamURL: seekURL))
+        XCTAssertNil(app.automaticPlaybackRecording)
+    }
+
+    func testFinishAutomaticPlaybackCacheRejectsPrematureEOFAndMovesCompleteStream() async throws {
+        let app = AppState()
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        let cache = CacheManager(rootURL: tempRoot)
+        app.cache = cache
+        app.serverConfig.cacheEnabled = true
+        app.serverConfig.playbackEngine = .mpv
+
+        let song = SubsonicSong(id: "s_eof", title: "Opus Track", suffix: "opus", duration: 180)
+        let streamURL = try XCTUnwrap(URL(string: "http://host/rest/stream?id=s_eof"))
+
+        // Premature EOF after 25s despite enough bytes for legacy bitrate threshold -> rejected
+        let recURL1 = try XCTUnwrap(app.beginAutomaticPlaybackCache(for: song, streamURL: streamURL))
+        var payload = Data([0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        payload.append(Data(repeating: 1, count: 250_000))
+        try payload.write(to: recURL1)
+
+        await app.finishAutomaticPlaybackCache(MPVPlaybackEngine.StreamRecordCompletion(
+            url: recURL1,
+            reachedTime: 25,
+            streamDuration: 180
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recURL1.path))
+        XCTAssertNil(app.cachedURL(for: song))
+
+        // Completed transcoded stream (streamDuration == 0 -> uses song.duration == 180 from API) -> cached
+        let recURL2 = try XCTUnwrap(app.beginAutomaticPlaybackCache(for: song, streamURL: streamURL))
+        try payload.write(to: recURL2)
+
+        await app.finishAutomaticPlaybackCache(MPVPlaybackEngine.StreamRecordCompletion(
+            url: recURL2,
+            reachedTime: 178,
+            streamDuration: 0
+        ))
+        XCTAssertNotNil(app.cachedURL(for: song))
+    }
+
+    func testFinishAutomaticPlaybackCacheHonorsSilenceTrimMargin() async throws {
+        let app = AppState()
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        app.cache = CacheManager(rootURL: tempRoot)
+        app.serverConfig.cacheEnabled = true
+        app.serverConfig.playbackEngine = .mpv
+        app.player.silenceTrimMode = .strong
+
+        let song = SubsonicSong(id: "s_trim", title: "Trimmed Track", suffix: "opus", duration: 180)
+        let streamURL = try XCTUnwrap(URL(string: "http://host/rest/stream?id=s_trim"))
+        let recURL = try XCTUnwrap(app.beginAutomaticPlaybackCache(for: song, streamURL: streamURL))
+        var payload = Data([0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        payload.append(Data(repeating: 1, count: 250_000))
+        try payload.write(to: recURL)
+
+        await app.finishAutomaticPlaybackCache(MPVPlaybackEngine.StreamRecordCompletion(
+            url: recURL,
+            reachedTime: 162,
+            streamDuration: 180
+        ))
+        XCTAssertNotNil(app.cachedURL(for: song))
+
+        // Premature EOF where mpv reported rolling buffer duration == reachedTime (25s) on a 180s song -> rejected
+        let brokenSong = SubsonicSong(id: "s_rolling", title: "Rolling Track", suffix: "opus", duration: 180)
+        let brokenStreamURL = try XCTUnwrap(URL(string: "http://host/rest/stream?id=s_rolling"))
+        let brokenRecURL = try XCTUnwrap(app.beginAutomaticPlaybackCache(for: brokenSong, streamURL: brokenStreamURL))
+        try payload.write(to: brokenRecURL)
+
+        await app.finishAutomaticPlaybackCache(MPVPlaybackEngine.StreamRecordCompletion(
+            url: brokenRecURL,
+            reachedTime: 25,
+            streamDuration: 25
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: brokenRecURL.path))
+        XCTAssertNil(app.cachedURL(for: brokenSong))
+    }
+
+    func testPrematureLocalCacheEOFOnSeekTriggersRecoveryInsteadOfNextTrack() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song = SubsonicSong(id: "s_corrupt", title: "Corrupt Track", suffix: "opus", duration: 262)
+        player.queue = [song, SubsonicSong(id: "s_next", title: "Next", duration: 180)]
+        player.currentIndex = 0
+        player.currentSourceURL = URL(fileURLWithPath: "/tmp/s_corrupt.opus")
+        player.mpvEngine.setIsLoadedForTesting(true)
+
+        var endedCount = 0
+        var recoveredID: String?
+        player.onTrackEnded = { endedCount += 1 }
+        player.onLocalFilePlaybackFailed = { recoveredID = $0.id }
+
+        player.seek(to: 60.0)
+        player.mpvEngine.onTrackEnded?()
+
+        XCTAssertEqual(endedCount, 0)
+        XCTAssertEqual(recoveredID, "s_corrupt")
+        XCTAssertEqual(player.pendingSeekTime ?? 0, 60.0, accuracy: 0.001)
+        XCTAssertNil(player.currentSourceURL)
+    }
+
+    func testGrosslyTruncatedLocalCacheEOFWithoutSeekTriggersRecovery() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song = SubsonicSong(id: "s_trunc", title: "Truncated", suffix: "opus", duration: 262)
+        player.queue = [song]
+        player.currentIndex = 0
+        player.currentSourceURL = URL(fileURLWithPath: "/tmp/s_trunc.opus")
+        player.currentTime = 10.0
+
+        var endedCount = 0
+        var recoveredID: String?
+        player.onTrackEnded = { endedCount += 1 }
+        player.onLocalFilePlaybackFailed = { recoveredID = $0.id }
+
+        player.mpvEngine.onTrackEnded?()
+
+        XCTAssertEqual(endedCount, 0)
+        XCTAssertEqual(recoveredID, "s_trunc")
+    }
+
+    func testNormalLocalCacheEOFWithSilenceTrimAdvancesNormally() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        player.silenceTrimMode = .strong
+        let song = SubsonicSong(id: "s_ok", title: "Valid", suffix: "opus", duration: 200)
+        player.queue = [song]
+        player.currentIndex = 0
+        player.currentSourceURL = URL(fileURLWithPath: "/tmp/s_ok.opus")
+        player.currentTime = 185.0
+
+        var endedCount = 0
+        var failedCount = 0
+        player.onTrackEnded = { endedCount += 1 }
+        player.onLocalFilePlaybackFailed = { _ in failedCount += 1 }
+
+        player.mpvEngine.onTrackEnded?()
+
+        XCTAssertEqual(endedCount, 1)
+        XCTAssertEqual(failedCount, 0)
+    }
+
+    func testDownloadQueueSequentialStateTransition() {
+        let app = AppState()
+        let song1 = SubsonicSong(id: "q1", title: "Track 1")
+        let song2 = SubsonicSong(id: "q2", title: "Track 2")
+
+        app.startDownloadTask(kind: .track(song: song1), coverArt: nil, songs: [song1])
+        app.startDownloadTask(kind: .track(song: song2), coverArt: nil, songs: [song2])
+
+        XCTAssertEqual(app.activeDownloadTasks.count, 2)
+        XCTAssertEqual(app.activeDownloadTasks[0].state, .active)
+        XCTAssertEqual(app.activeDownloadTasks[1].state, .queued)
+    }
+
+    func testDownloadTaskCancellationAdvancesQueue() {
+        let app = AppState()
+        let song1 = SubsonicSong(id: "c1", title: "Track 1")
+        let song2 = SubsonicSong(id: "c2", title: "Track 2")
+
+        app.startDownloadTask(kind: .track(song: song1), coverArt: nil, songs: [song1])
+        app.startDownloadTask(kind: .track(song: song2), coverArt: nil, songs: [song2])
+
+        let first = app.activeDownloadTasks[0]
+        app.cancelDownloadTask(first)
+
+        XCTAssertEqual(app.activeDownloadTasks.count, 1)
+        XCTAssertEqual(app.activeDownloadTasks[0].songs.first?.id, "c2")
+        XCTAssertEqual(app.activeDownloadTasks[0].state, .active)
+    }
+
+    func testWaitingForNetworkStateShowsOfflineSubtitle() {
+        let song = SubsonicSong(id: "net1", title: "Network Test")
+        var task = DownloadTask(
+            id: UUID(),
+            kind: .track(song: song),
+            coverArt: nil,
+            songs: [song],
+            completedSongIDs: [],
+            currentSongID: "net1",
+            state: .waitingForNetwork
+        )
+
+        XCTAssertEqual(task.currentSongSubtitle, "Offline".localized)
+
+        task.state = .active
+        XCTAssertEqual(task.currentSongSubtitle, "Network Test")
+    }
 }

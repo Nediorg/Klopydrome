@@ -300,10 +300,13 @@ extension LyricsView {
             let time = lyricRenderClock.currentTime
             if !app.player.isBuffering && !app.player.isLoading {
                 let guardActive = seekGuardIndex != nil && Date.now < seekGuardUntil
-                let index: Int? = guardActive
-                    ? seekGuardIndex
-                    : { seekGuardIndex = nil; return app.lyrics.activeLineIndex(at: time) }()
+                let index: Int? = guardActive ? seekGuardIndex : app.lyrics.activeLineIndex(at: time)
                 Color.clear
+                    .onChange(of: guardActive) { _, active in
+                        if !active && seekGuardIndex != nil {
+                            seekGuardIndex = nil
+                        }
+                    }
                     .onChange(of: index, initial: true) { _, newIndex in
                         if newIndex != clockActiveIndex { clockActiveIndex = newIndex }
                     }

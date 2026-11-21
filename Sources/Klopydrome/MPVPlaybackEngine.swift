@@ -54,7 +54,13 @@ final class MPVPlaybackEngine {
     var onTimeUpdate: ((Double) -> Void)?
     var onDurationUpdate: ((Double) -> Void)?
     var onBufferingUpdate: ((Bool) -> Void)?
-    var onStreamRecordFinished: ((URL) -> Void)?
+    struct StreamRecordCompletion {
+        let url: URL
+        let reachedTime: Double
+        let streamDuration: Double
+    }
+
+    var onStreamRecordFinished: ((StreamRecordCompletion) -> Void)?
     var onFileLoaded: (() -> Void)?
     var onSeekableUpdate: ((Bool) -> Void)?
 
@@ -76,6 +82,27 @@ final class MPVPlaybackEngine {
         if hasRetainedWakeupPump {
             hasRetainedWakeupPump = false
             Unmanaged.passUnretained(pump).release()
+        }
+    }
+
+    func destroyAsync() {
+        guard let handle = mpv else { return }
+        mpv = nil
+        mpv_set_wakeup_callback(handle, nil, nil)
+        let localPump = pump
+        let retained = hasRetainedWakeupPump
+        hasRetainedWakeupPump = false
+        let recordURL = streamRecordURL
+        streamRecordURL = nil
+        Task.detached(priority: .utility) {
+            if let recordURL {
+                try? FileManager.default.removeItem(at: recordURL)
+            }
+            localPump.finish()
+            mpv_terminate_destroy(handle)
+            if retained {
+                Unmanaged.passUnretained(localPump).release()
+            }
         }
     }
 
@@ -192,9 +219,9 @@ final class MPVPlaybackEngine {
         let url = streamRecordURL
         streamRecordURL = nil
         streamRecordIsContiguous = false
+        if removeFile, let url { try? FileManager.default.removeItem(at: url) }
         guard let mpv else { return }
         mpv_set_property_string(mpv, "stream-record", "")
-        if removeFile, let url { try? FileManager.default.removeItem(at: url) }
     }
 
     // MARK: - mpv command/property helpers

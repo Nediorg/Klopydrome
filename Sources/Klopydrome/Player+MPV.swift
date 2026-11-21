@@ -41,6 +41,8 @@ extension Player {
             guard let self, self.engineKind == .mpv else { return }
             if self.isCrossfading {
                 self.completeCrossfade()
+            } else if self.recoverFromPrematureLocalEOFIfNeeded() {
+                return
             } else {
                 self.onTrackEnded?()
             }
@@ -52,8 +54,8 @@ extension Player {
             guard let self, self.engineKind == .mpv else { return }
             self.handleEngineFailure(message)
         }
-        mpvEngine.onStreamRecordFinished = { [weak self] url in
-            self?.onStreamRecordFinished?(url)
+        mpvEngine.onStreamRecordFinished = { [weak self] completion in
+            self?.onStreamRecordFinished?(completion)
         }
         mpvEngine.onTimeUpdate = { [weak self] seconds in
             self?.handleMPVTimeUpdate(seconds)
@@ -84,6 +86,7 @@ extension Player {
         }
         mpvEngine.onSeekableUpdate = { [weak self] seekable in
             guard let self, self.engineKind == .mpv else { return }
+            self.syncDurationFromMPVEngine()
             if seekable {
                 self.applyPendingSeekIfNeeded()
             }
@@ -97,10 +100,16 @@ extension Player {
         }
     }
 
-    private func syncDurationFromMPVEngine() {
-        guard mpvStreamOffset == 0, mpvEngine.duration > 0 else { return }
-        if duration != mpvEngine.duration {
-            duration = mpvEngine.duration
+    func syncDurationFromMPVEngine() {
+        if shouldTrustMPVEngineDuration {
+            if duration != mpvEngine.duration {
+                duration = mpvEngine.duration
+            }
+        } else {
+            let meta = Double(currentSong?.duration ?? 0)
+            if meta > 0, duration != meta {
+                duration = meta
+            }
         }
     }
 
@@ -140,5 +149,29 @@ extension Player {
             mpvRestartStepped = false
             applyPendingSeekIfNeeded()
         }
+    }
+
+    private func recoverFromPrematureLocalEOFIfNeeded() -> Bool {
+        guard let song = currentSong,
+              currentSourceURL?.isFileURL == true else {
+            return false
+        }
+        let expectedDuration = trackDuration
+        guard expectedDuration > 0 else { return false }
+        let reachedTime = max(currentTime, heldSeekTarget ?? 0)
+        let isSeekingMidTrack = (isSeekInFlight || heldSeekTarget != nil)
+            && (reachedTime + 8.0 < expectedDuration)
+        let isGrosslyTruncated = reachedTime < expectedDuration * 0.75
+            && (expectedDuration - reachedTime) > 15.0
+        guard isSeekingMidTrack || isGrosslyTruncated else { return false }
+
+        let resumeTime = min(max(0, reachedTime), max(0, expectedDuration - 1.0))
+        resetSeekState()
+        pendingSeekTime = resumeTime > 1.0 ? resumeTime : nil
+        currentTime = resumeTime
+        currentSourceURL = nil
+        mpvEngine.stop()
+        onLocalFilePlaybackFailed?(song)
+        return true
     }
 }

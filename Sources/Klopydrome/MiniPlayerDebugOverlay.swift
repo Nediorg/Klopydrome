@@ -12,9 +12,9 @@ struct MiniPlayerDebugOverlay: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 3) {
-            deckASection
+            playerSection
             divider
-            deckBSection
+            preloadAndCrossfadeSection
         }
         .font(.system(size: 8, design: .monospaced))
         .padding(8)
@@ -30,27 +30,23 @@ struct MiniPlayerDebugOverlay: View {
             .padding(.vertical, 2)
     }
 
-    private var deckASection: some View {
+    private var playerSection: some View {
         let player = app.player
         let engine = player.mpvEngine
         let held = player.heldSeekTarget.map { String(format: "%.1f", $0) } ?? "nil"
         let pending = player.pendingSeekTime.map { String(format: "%.1f", $0) } ?? "nil"
+        let indexDesc = player.queue.indices.contains(player.currentIndex)
+            ? "#\(player.currentIndex + 1)/\(player.queue.count)"
+            : "none"
 
         return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text("DECK A")
-                    .bold()
+            HStack(spacing: 6) {
+                Text("engine=\(player.engineKind == .mpv ? "mpv" : "avp")")
                     .foregroundStyle(.cyan)
-                Text("[\(player.engineKind == .mpv ? "MPV" : "AVP")]")
-                    .foregroundStyle(.white.opacity(0.6))
-                if player.queue.indices.contains(player.currentIndex) {
-                    Text("#\(player.currentIndex + 1)/\(player.queue.count)")
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                Spacer(minLength: 8)
-                Text(deckAStateText)
-                    .bold()
-                    .foregroundStyle(deckAStateColor)
+                Text("queue=\(indexDesc)")
+                    .foregroundStyle(.white.opacity(0.75))
+                Text("state=\(playerStateText)")
+                    .foregroundStyle(playerStateColor)
             }
 
             if let song = player.currentSong {
@@ -100,6 +96,9 @@ struct MiniPlayerDebugOverlay: View {
                 Text("outputGain=\(String(format: "%.2f", player.outputGain))")
                     .foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1)
+                Text("mpvVol=\(String(format: "%.2f", engine.volume))")
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
             }
 
             HStack(spacing: 6) {
@@ -131,28 +130,18 @@ struct MiniPlayerDebugOverlay: View {
         }
     }
 
-    private var deckBSection: some View {
+    private var preloadAndCrossfadeSection: some View {
         let player = app.player
         let hasAppended = player.mpvEngine.hasAppendedTrack
+        let xfLoaded = player.crossfadeEngine?.isLoaded ?? false
+        let xfVol = player.crossfadeEngine?.volume ?? 0
 
         return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text("DECK B")
-                    .bold()
-                    .foregroundStyle(.cyan)
-                Text("[GAPLESS PRELOAD]")
-                    .foregroundStyle(.white.opacity(0.6))
-                Spacer(minLength: 8)
-                Text(preloadStatusBadge)
-                    .bold()
-                    .foregroundStyle(preloadStatusColor)
-            }
-
             if let next = player.nextSongForPreloading {
                 let title = next.title ?? next.id
                 CopyableDebugRow(key: "nextSong", value: "id=\(next.id) \"\(title)\"", copyText: "\(next.id) - \(title)")
             } else {
-                Text("nextSong=nil (end of queue)")
+                Text("nextSong=nil")
                     .foregroundStyle(.white.opacity(0.5))
             }
 
@@ -162,40 +151,43 @@ struct MiniPlayerDebugOverlay: View {
             }
 
             HStack(spacing: 6) {
+                BoolToken(key: "preloadingEnabled", val: player.nextTrackPreloadingEnabled)
                 BoolToken(key: "appendedToMPV", val: hasAppended)
                 BoolToken(key: "hasLoadedPreload", val: player.hasLoadedPreloadForNextTrack)
-                BoolToken(key: "preloadingEnabled", val: player.nextTrackPreloadingEnabled)
+            }
+
+            HStack(spacing: 6) {
+                BoolToken(key: "crossfadeEnabled", val: player.crossfadeEnabled)
+                BoolToken(key: "isCrossfading", val: player.isCrossfading)
+                BoolToken(key: "crossfadeLoaded", val: xfLoaded)
+            }
+
+            HStack(spacing: 6) {
+                Text("xfNext=\(player.crossfadeNextSongID ?? "nil")")
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                Text("xfStep=\(String(format: "%.2f", player.crossfadeStepProgress))")
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                Text("xfVol=\(String(format: "%.2f", xfVol))")
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
             }
         }
     }
 
-    private var deckAStateText: String {
+    private var playerStateText: String {
         let player = app.player
-        if player.isLoading { return "LOADING" }
-        if player.isBuffering { return "BUFFERING" }
-        if player.isPlaying { return "ACTIVE" }
-        return "PAUSED"
+        if player.isLoading { return "loading" }
+        if player.isBuffering { return "buffering" }
+        if player.isPlaying { return "playing" }
+        return "paused"
     }
 
-    private var deckAStateColor: Color {
+    private var playerStateColor: Color {
         let player = app.player
         if player.isLoading || player.isBuffering { return .orange }
         if player.isPlaying { return .green }
-        return .yellow
-    }
-
-    private var preloadStatusBadge: String {
-        let player = app.player
-        if !player.nextTrackPreloadingEnabled { return "OFF" }
-        if player.nextSongForPreloading == nil { return "END OF QUEUE" }
-        if player.mpvEngine.hasAppendedTrack { return "GAPLESS QUEUED" }
-        return "IDLE"
-    }
-
-    private var preloadStatusColor: Color {
-        let player = app.player
-        if !player.nextTrackPreloadingEnabled || player.nextSongForPreloading == nil { return .gray }
-        if player.mpvEngine.hasAppendedTrack { return .green }
         return .yellow
     }
 
