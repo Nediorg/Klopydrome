@@ -9,40 +9,73 @@ final class AutomixPreloaderLifecycleTests: XCTestCase {
         SubsonicSong(id: id, title: id, duration: 180)
     }
 
-    func testPreloadedMPVEngineIsLazyAndCleanedUpOnReset() {
-        let player = Player()
-        XCTAssertNil(player.automix.preloadedMPVEngine)
-
-        let engine = player.preparePreloadedMPVEngine()
-        XCTAssertNotNil(player.automix.preloadedMPVEngine)
-        XCTAssertTrue(player.automix.preloadedMPVEngine === engine)
-
-        player.resetPreloadedNext()
-        XCTAssertNil(player.automix.preloadedMPVEngine)
-    }
-
-    func testPromotingPreloadedTrackReleasesPreloadedEngine() {
+    func testTrackDidFinishSeamlesslyPromotesPreloadedTrackWithoutStoppingEngine() {
         let player = Player()
         player.setEngineKindForTesting(.mpv)
-        let song = mockSong("next")
-        player.queue = [song]
-        player.automix.preloadedNextSong = song
-        player.automix.preloadedNextSongID = song.id
-        let engine = player.preparePreloadedMPVEngine()
-        engine.setIsLoadedForTesting(true)
+        let song1 = mockSong("song1")
+        let song2 = mockSong("song2")
+        player.queue = [song1, song2]
+        player.currentIndex = 0
+        player.isPlaying = true
 
-        let promoted = player.promotePreloadedMPVTrack(for: song, autoPlay: false)
-        XCTAssertTrue(promoted)
-        XCTAssertTrue(player.mpvEngine === engine)
-        XCTAssertNil(player.automix.preloadedMPVEngine)
+        player.preloadedNextSong = song2
+        player.preloadedNextSongID = song2.id
+        player.mpvEngine.setHasAppendedTrackForTesting(true, url: URL(string: "https://navidrome.example.com/2")!)
+
+        var promotedSongID: String?
+        player.onTrackPromoted = { song in
+            promotedSongID = song.id
+        }
+
+        XCTAssertTrue(player.hasLoadedPreloadForNextTrack)
+        player.trackDidFinish()
+
+        XCTAssertEqual(player.currentIndex, 1)
+        XCTAssertEqual(promotedSongID, "song2")
+        XCTAssertTrue(player.isPlaying)
     }
 
-    func testDisablingNextTrackPreloadReleasesPreloadedEngineImmediately() {
+    func testEagerPreloadGateTriggersEarlyInTrack() {
         let player = Player()
-        _ = player.preparePreloadedMPVEngine()
-        XCTAssertNotNil(player.automix.preloadedMPVEngine)
+        player.setEngineKindForTesting(.mpv)
+        let song1 = mockSong("song1")
+        let song2 = mockSong("song2")
+        player.queue = [song1, song2]
+        player.currentIndex = 0
+        player.isPlaying = true
 
-        player.configureNextTrackPreloading(enabled: false)
-        XCTAssertNil(player.automix.preloadedMPVEngine)
+        var requestedID: String?
+        let testURL = URL(string: "https://navidrome.example.com/rest/stream?id=song2")!
+        player.onNextTrackPreloadRequest = { song in
+            requestedID = song.id
+            return testURL
+        }
+
+        player.evaluateNextTrackPreload(at: 10.0)
+        XCTAssertEqual(requestedID, "song2")
+        XCTAssertEqual(player.preloadedNextSongID, "song2")
+        XCTAssertTrue(player.mpvEngine.hasAppendedTrack)
+        XCTAssertEqual(player.mpvEngine.appendedURL, testURL)
+        XCTAssertTrue(player.hasLoadedPreloadForNextTrack)
+    }
+
+    func testResetPreloadedNextClearsAppendedTrackFromMPV() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song1 = mockSong("song1")
+        let song2 = mockSong("song2")
+        player.queue = [song1, song2]
+        player.currentIndex = 0
+        player.isPlaying = true
+
+        player.preloadedNextSongID = song2.id
+        player.mpvEngine.setHasAppendedTrackForTesting(true, url: URL(string: "https://example.com/2")!)
+
+        XCTAssertTrue(player.hasLoadedPreloadForNextTrack)
+        player.resetPreloadedNext()
+
+        XCTAssertFalse(player.hasLoadedPreloadForNextTrack)
+        XCTAssertFalse(player.mpvEngine.hasAppendedTrack)
+        XCTAssertNil(player.preloadedNextSongID)
     }
 }

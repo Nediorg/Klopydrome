@@ -25,7 +25,7 @@ enum ReplayGainMode: String, Codable, CaseIterable, Identifiable {
 }
 
 enum AutomixLoudness {
-    static let crossfadeHeadroomDB: Float = -3
+    static let defaultPreampDB: Float = 0
 
     static let preampRange: ClosedRange<Float> = -12 ... 12
 

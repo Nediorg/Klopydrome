@@ -156,4 +156,70 @@ final class PlayerControlsTests: XCTestCase {
         let formatted = Player.formatAVPlayerError(nil)
         XCTAssertEqual(formatted, L10n.text("format.player.unavailable"))
     }
+
+    // MARK: - Seeking Safety & In-Flight EOF Guards
+
+    func testSeekClampsPastDurationToAvoidEOF() {
+        let player = makePlayer()
+        player.duration = 180.0
+        player.seek(to: 200.0)
+        XCTAssertEqual(player.currentTime, 179.5, accuracy: 0.001)
+        XCTAssertEqual(player.heldSeekTarget ?? 0, 179.5, accuracy: 0.001)
+        XCTAssertTrue(player.isSeekInFlight)
+    }
+
+    func testPromotePreloadedTrackOnManualNextUsesSkipToAppendedTrack() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song1 = SubsonicSong(id: "s1", title: "Song 1", duration: 180)
+        let song2 = SubsonicSong(id: "s2", title: "Song 2", duration: 200)
+        player.queue = [song1, song2]
+        player.currentIndex = 0
+        player.preloadedNextSongID = "s2"
+        player.mpvEngine.setHasAppendedTrackForTesting(true, url: URL(fileURLWithPath: "/tmp/s2.mp3"))
+
+        let promoted = player.promotePreloadedMPVTrack(for: song2, autoPlay: true)
+
+        XCTAssertTrue(promoted)
+        XCTAssertFalse(player.mpvEngine.hasAppendedTrack)
+        XCTAssertFalse(player.mpvEngine.didAdvanceToAppendedTrack)
+    }
+
+    func testSyncPreloadedNextWithQueueResetsWhenNextSongChanges() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song1 = SubsonicSong(id: "s1", title: "Song 1", duration: 180)
+        let song2 = SubsonicSong(id: "s2", title: "Song 2", duration: 200)
+        let song3 = SubsonicSong(id: "s3", title: "Song 3", duration: 220)
+        player.queue = [song1, song2, song3]
+        player.currentIndex = 0
+        player.preloadedNextSongID = "s2"
+
+        player.remove(at: 1)
+
+        XCTAssertNil(player.preloadedNextSongID)
+    }
+
+    func testTrackDurationFallsBackToMetadataWhenEngineDurationIsZero() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song = SubsonicSong(id: "s1", title: "Song 1", duration: 180)
+        player.queue = [song]
+        player.currentIndex = 0
+        player.currentSourceURL = URL(fileURLWithPath: "/tmp/fake.opus")
+
+        XCTAssertEqual(player.trackDuration, 180.0)
+    }
+
+    func testTrackDurationPrefersEngineDurationWhenAccurate() {
+        let player = Player()
+        player.setEngineKindForTesting(.mpv)
+        let song = SubsonicSong(id: "s1", title: "Song 1", duration: 180)
+        player.queue = [song]
+        player.currentIndex = 0
+
+        player.mpvEngine.setDuration(179.8)
+
+        XCTAssertEqual(player.trackDuration, 179.8, accuracy: 0.001)
+    }
 }

@@ -2,23 +2,16 @@ import SwiftUI
 
 struct CrossfadeToolbarIndicator: View {
     @Environment(AppState.self) private var app
-    @State private var breathing = false
 
     var body: some View {
-        if let status = app.player.crossfadeStatusText {
-            Image(systemName: "circle.circle.fill")
-                .font(.system(size: 12, weight: .semibold))
+        if app.player.isCrossfading {
+            Image(systemName: "circle.dotted.circle", variableValue: app.player.crossfadeStepProgress)
+                .font(.system(size: 13, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(AMColor.accent)
-                .scaleEffect(breathing ? 1 : 0.78)
-                .opacity(breathing ? 1 : 0.55)
-                .animation(
-                    .easeInOut(duration: 0.85).repeatForever(autoreverses: true),
-                    value: breathing
-                )
-                .onAppear { breathing = true }
-                .onDisappear { breathing = false }
-                .help(Text(verbatim: status))
-                .accessibilityLabel(status)
+                .transaction { $0.animation = nil }
+                .help("Crossfade".localized)
+                .accessibilityLabel("Crossfade".localized)
                 .frame(width: 24, height: 30)
                 .fixedSize()
                 .transition(.opacity)

@@ -2,200 +2,193 @@ import Foundation
 import NavidromeClient
 
 extension Player {
-    var crossfadeRemainingTime: Double? {
-        guard isCrossfading, let active = automix.activeCrossfade else { return nil }
-        return max(0, active.duration - (currentTime - active.startTime))
+    func configureCrossfade(enabled: Bool, fadeDuration: Double, applyToAlbums: Bool) {
+        crossfadeEnabled = enabled
+        crossfadeDuration = CrossfadeMath.clampDuration(fadeDuration)
+        crossfadeApplyToAlbums = applyToAlbums
+        if !enabled {
+            cancelCrossfade()
+        }
     }
 
-    var crossfadeStatusText: String? {
-        guard let remaining = crossfadeRemainingTime else { return nil }
-        return L10n.format("format.crossfade.remaining", Int(ceil(remaining)))
+    func shouldCrossfade(to next: SubsonicSong) -> Bool {
+        guard crossfadeEnabled, engineKind == .mpv, repeatMode != .one else { return false }
+        return crossfadeApplyToAlbums || !Self.isSameAlbum(currentSong, next)
     }
 
-    func evaluateAutomixCrossfade(at seconds: Double) {
-        guard engineKind == .mpv,
-              automix.enabled,
-              isPlaying,
-              !isScrubbing,
-              trackDuration > 0 else {
-            return
+    static func isSameAlbum(_ lhs: SubsonicSong?, _ rhs: SubsonicSong?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        if let lhsID = lhs.albumId, !lhsID.isEmpty,
+           let rhsID = rhs.albumId, !rhsID.isEmpty {
+            return lhsID == rhsID
         }
-        if !automix.applyToAlbums,
-           let current = currentSong,
-           let successor = nextSongForPreloading,
-           Player.isIntraAlbumTransition(outgoing: current, incoming: successor, isShuffled: shuffle) {
-            if automix.activeCrossfade != nil {
-                cancelAutomixCrossfade()
-            }
-            return
+        if let lhsParent = lhs.parent, !lhsParent.isEmpty,
+           let rhsParent = rhs.parent, !rhsParent.isEmpty {
+            return lhsParent == rhsParent
         }
-        if let active = automix.activeCrossfade {
-            advanceAutomixCrossfade(active, at: seconds)
-            return
+        if let lhsAlbum = lhs.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           let rhsAlbum = rhs.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           !lhsAlbum.isEmpty, lhsAlbum == rhsAlbum {
+            let lhsArtist = (lhs.artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let rhsArtist = (rhs.artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return lhsArtist == rhsArtist
         }
-        guard let successor = nextSongForPreloading,
-              automix.preloadedNextSongID == successor.id,
-              let preloaded = automix.preloadedMPVEngine,
-              preloaded.isLoaded else {
-            return
-        }
-        let plan = automix.transitionPlan ?? AutomixCrossfade.fallbackPlan(
-            currentDuration: trackDuration,
-            preferredFadeDuration: automix.fadeDuration
-        )
-        guard seconds >= plan.fadeOutStart else { return }
-
-        preloaded.volume = 0
-        preloaded.play()
-        let active = ActiveAutomixCrossfade(
-            successorID: successor.id,
-            startTime: plan.fadeOutStart,
-            duration: max(0.1, plan.fadeDuration)
-        )
-        automix.activeCrossfade = active
-        isCrossfading = true
-        updateNowPlayingInfo()
-        advanceAutomixCrossfade(active, at: seconds)
+        return false
     }
 
-    func cancelAutomixCrossfade() {
-        guard automix.activeCrossfade != nil else {
-            isCrossfading = false
+    func evaluateCrossfade(at currentTime: Double) {
+        guard !isCrossfading, engineKind == .mpv, isPlaying, !isScrubbing, !isSeekInFlight,
+              trackDuration > crossfadeDuration + 2,
+              let next = nextSongForPreloading,
+              shouldCrossfade(to: next) else {
             return
         }
-        automix.activeCrossfade = nil
-        isCrossfading = false
-        mpvEngine.volume = outputGain
-        automix.preloadedMPVEngine?.pause()
-        automix.preloadedMPVEngine?.volume = 0
-        updateNowPlayingInfo()
+        let remaining = trackDuration - currentTime
+        let prepareLead = max(crossfadeDuration + 8, 12)
+        if remaining <= prepareLead {
+            prepareCrossfadeEngine(for: next)
+        }
+        if remaining <= crossfadeDuration,
+           let engine = crossfadeEngine,
+           crossfadeNextSongID == next.id,
+           engine.isLoaded {
+            startCrossfade(to: next)
+        }
     }
 
-    private func advanceAutomixCrossfade(
-        _ active: ActiveAutomixCrossfade,
-        at seconds: Double
-    ) {
-        guard automix.preloadedNextSongID == active.successorID,
-              let preloaded = automix.preloadedMPVEngine,
-              preloaded.isLoaded else {
-            cancelAutomixCrossfade()
+    func applyMPVVolumes() {
+        guard isCrossfading, let active = activeCrossfade else {
+            mpvEngine.volume = outputGain
             return
         }
-        let progress = (seconds - active.startTime) / active.duration
-        let gains = AutomixCrossfade.gains(progress: progress)
+        let elapsed = CFAbsoluteTimeGetCurrent() - active.startTime
+        let gains = CrossfadeMath.gains(progress: elapsed / max(0.1, active.duration))
         mpvEngine.volume = outputGain * gains.outgoing
-        preloaded.volume = outputGain * gains.incoming
+        crossfadeEngine?.volume = outputGain * gains.incoming
     }
 
-    func handleMPVTrackEnded() {
-        if let active = automix.activeCrossfade {
-            completeAutomixCrossfade(active)
+    func resetCrossfadePreload() {
+        crossfadeEngine?.stop()
+        crossfadeEngine = nil
+        crossfadeNextSongID = nil
+        crossfadeSourceURL = nil
+    }
+
+    func cancelCrossfade() {
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+        resetCrossfadePreload()
+        isCrossfading = false
+        activeCrossfade = nil
+        crossfadeStepProgress = 0
+        mpvEngine.volume = outputGain
+    }
+
+    func completeCrossfade() {
+        guard isCrossfading, let incoming = crossfadeEngine, let active = activeCrossfade else {
+            cancelCrossfade()
             return
         }
-        let expected = trackDuration
-        if expected > 0, currentTime + 3 < expected {
-            if currentSourceIsRemoteTranscode {
-                performTranscodeRestart(at: currentTime)
-                return
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+
+        let endedSong = currentSong
+        let retiring = mpvEngine
+        clearCallbacks(on: retiring)
+        retiring.stop()
+
+        mpvEngine = incoming
+        crossfadeEngine = nil
+        mpvEngine.volume = outputGain
+        setUpMPVEngine()
+
+        if let nextIndex = queue.firstIndex(where: { $0.id == active.successorID }) {
+            currentIndex = nextIndex
+        }
+        currentSourceURL = crossfadeSourceURL
+        crossfadeSourceURL = nil
+        crossfadeNextSongID = nil
+        mpvLoadGeneration += 1
+        mpvStreamOffset = 0
+        resetSeekState()
+        isLoading = false
+        isBuffering = incoming.isBuffering
+        currentTime = incoming.currentTimeValue
+        duration = incoming.duration > 0 ? incoming.duration : Double(currentSong?.duration ?? 0)
+        isCrossfading = false
+        activeCrossfade = nil
+        crossfadeStepProgress = 0
+        if let song = currentSong {
+            history.append(song)
+            if history.count > 500 { history.removeFirst(history.count - 500) }
+        }
+        if let endedSong { onTrackCrossfaded?(endedSong) }
+        updateNowPlayingInfo()
+    }
+
+    private func prepareCrossfadeEngine(for song: SubsonicSong) {
+        guard crossfadeNextSongID != song.id,
+              let url = onNextTrackPreloadRequest?(song) else {
+            return
+        }
+        resetCrossfadePreload()
+        let engine = MPVPlaybackEngine()
+        engine.replayGainMode = replayGainMode
+        engine.replayGainPreampDB = replayGainPreampDB
+        engine.silenceTrimMode = silenceTrimMode
+        engine.volume = 0
+        crossfadeEngine = engine
+        crossfadeNextSongID = song.id
+        crossfadeSourceURL = url
+        Task { try? await engine.load(url: url, streamRecordURL: nil) }
+    }
+
+    private func startCrossfade(to next: SubsonicSong) {
+        guard let incoming = crossfadeEngine, incoming.isLoaded else { return }
+        resetPreloadedNext()
+        incoming.volume = 0
+        incoming.play()
+        activeCrossfade = ActiveCrossfade(
+            successorID: next.id,
+            startTime: CFAbsoluteTimeGetCurrent(),
+            duration: crossfadeDuration
+        )
+        isCrossfading = true
+        crossfadeStepProgress = CrossfadeMath.stepProgress(elapsed: 0, duration: crossfadeDuration)
+        updateNowPlayingInfo()
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.tickCrossfade()
             }
         }
-        onTrackEnded?()
     }
 
-    private func completeAutomixCrossfade(_ active: ActiveAutomixCrossfade) {
-        guard let outgoing = currentSong,
-              let nextIndex = nextQueueIndexForPreloading,
-              queue.indices.contains(nextIndex),
-              queue[nextIndex].id == active.successorID else {
-            cancelAutomixCrossfade()
-            return
+    private func tickCrossfade() {
+        guard isCrossfading, let active = activeCrossfade else { return }
+        let elapsed = CFAbsoluteTimeGetCurrent() - active.startTime
+        let progress = elapsed / max(0.1, active.duration)
+        let gains = CrossfadeMath.gains(progress: progress)
+        mpvEngine.volume = outputGain * gains.outgoing
+        crossfadeEngine?.volume = outputGain * gains.incoming
+        let step = CrossfadeMath.stepProgress(elapsed: elapsed, duration: active.duration)
+        if crossfadeStepProgress != step {
+            crossfadeStepProgress = step
         }
-        automix.activeCrossfade = nil
-        mpvEngine.stop()
-        currentIndex = nextIndex
-        isCrossfading = false
-        startCurrent()
-        onTrackCrossfaded?(outgoing)
+        if progress >= 1.0 {
+            completeCrossfade()
+        }
     }
 
-    static func isSameAlbum(_ first: SubsonicSong, _ second: SubsonicSong) -> Bool {
-        let firstID = (first.albumId?.isEmpty == false ? first.albumId : nil) ?? first.parent
-        let secondID = (second.albumId?.isEmpty == false ? second.albumId : nil) ?? second.parent
-        if let firstID, !firstID.isEmpty, let secondID, !secondID.isEmpty, firstID == secondID {
-            return true
-        }
-
-        let firstAlbum = first.album?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secondAlbum = second.album?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let firstAlbum, !firstAlbum.isEmpty,
-              let secondAlbum, !secondAlbum.isEmpty,
-              firstAlbum.caseInsensitiveCompare(secondAlbum) == .orderedSame else {
-            return false
-        }
-
-        return isCompatibleAlbumArtist(first, second)
-    }
-
-    private static func isCompatibleAlbumArtist(_ first: SubsonicSong, _ second: SubsonicSong) -> Bool {
-        let firstAlbumArtistId = first.albumArtistId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secondAlbumArtistId = second.albumArtistId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let firstAlbumArtistId, !firstAlbumArtistId.isEmpty,
-           let secondAlbumArtistId, !secondAlbumArtistId.isEmpty,
-           firstAlbumArtistId == secondAlbumArtistId {
-            return true
-        }
-
-        let firstArtistId = first.artistId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secondArtistId = second.artistId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let firstArtistId, !firstArtistId.isEmpty,
-           let secondArtistId, !secondArtistId.isEmpty,
-           firstArtistId == secondArtistId {
-            return true
-        }
-
-        if first.isVariousArtists || second.isVariousArtists {
-            return true
-        }
-
-        let firstAlbumArtist = first.albumArtist?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secondAlbumArtist = second.albumArtist?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let firstAlbumArtist, !firstAlbumArtist.isEmpty,
-           let secondAlbumArtist, !secondAlbumArtist.isEmpty,
-           firstAlbumArtist.caseInsensitiveCompare(secondAlbumArtist) == .orderedSame {
-            return true
-        }
-
-        let firstArtist = (firstAlbumArtist ?? first.artist)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secondArtist = (secondAlbumArtist ?? second.artist)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let firstArtist, !firstArtist.isEmpty,
-              let secondArtist, !secondArtist.isEmpty else {
-            return true
-        }
-
-        if firstArtist.caseInsensitiveCompare(secondArtist) == .orderedSame {
-            return true
-        }
-
-        let lowerFirst = firstArtist.lowercased()
-        let lowerSecond = secondArtist.lowercased()
-        return lowerFirst.contains(lowerSecond) || lowerSecond.contains(lowerFirst)
-    }
-
-    static func isConsecutiveAlbumTrack(outgoing: SubsonicSong, incoming: SubsonicSong) -> Bool {
-        guard let outTrack = outgoing.track, let inTrack = incoming.track,
-              outTrack > 0, inTrack > 0 else {
-            return false
-        }
-        let outDisc = outgoing.discNumber ?? 1
-        let inDisc = incoming.discNumber ?? 1
-        return inDisc == outDisc && inTrack == outTrack + 1
-    }
-
-    static func isIntraAlbumTransition(
-        outgoing: SubsonicSong,
-        incoming: SubsonicSong,
-        isShuffled: Bool = false
-    ) -> Bool {
-        isSameAlbum(outgoing, incoming)
+    private func clearCallbacks(on engine: MPVPlaybackEngine) {
+        engine.onTrackEnded = nil
+        engine.onFailure = nil
+        engine.onFailureCode = nil
+        engine.onTimeUpdate = nil
+        engine.onDurationUpdate = nil
+        engine.onBufferingUpdate = nil
+        engine.onFileLoaded = nil
+        engine.onSeekableUpdate = nil
+        engine.onStreamRecordFinished = nil
     }
 }

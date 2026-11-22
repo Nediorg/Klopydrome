@@ -39,7 +39,7 @@ struct PlaybackSettingsView: View {
                 let isOpusUnavailable = app.serverConfig.effectivePlaybackEngine == .avFoundation
                 Picker("Codec".localized, selection: $app.serverConfig.format) {
                     Text("Original".localized).tag(String?.none)
-                    Text(isOpusUnavailable ? "Opus (\("Unavailable".localized))" : "Opus")
+                    Text("Opus")
                         .tag(String?.some("opus"))
                         .disabled(isOpusUnavailable)
                     Text("MP3").tag(String?.some("mp3"))
@@ -168,7 +168,7 @@ struct PlaybackSettingsView: View {
         .formStyle(.grouped)
         .padding()
         .onChange(of: app.serverConfig) { _, config in
-            app.player.configureAutomix(
+            app.player.configureCrossfade(
                 enabled: config.effectiveAutomixEnabled,
                 fadeDuration: config.effectiveAutomixFadeDuration,
                 applyToAlbums: config.effectiveAutomixApplyToAlbums

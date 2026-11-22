@@ -9,7 +9,7 @@ extension Player {
 
     var displaySong: SubsonicSong? {
         guard isCrossfading,
-              let successorID = automix.activeCrossfade?.successorID,
+              let successorID = activeCrossfade?.successorID,
               let successor = queue.first(where: { $0.id == successorID }) else {
             return currentSong
         }
@@ -40,6 +40,7 @@ extension Player {
             if index < currentIndex {
                 currentIndex = max(0, currentIndex - 1)
             }
+            syncPreloadedNextWithQueue()
         }
     }
 
@@ -52,5 +53,6 @@ extension Player {
         if let currentID, let newIndex = queue.firstIndex(where: { $0.id == currentID }) {
             currentIndex = newIndex
         }
+        syncPreloadedNextWithQueue()
     }
 }

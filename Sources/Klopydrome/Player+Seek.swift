@@ -17,19 +17,22 @@ extension Player {
     /// otherwise the lyrics (and scrubber) would snap back to the old position
     /// for a few ticks.
     func seek(to time: Double) {
-        let clamped = max(0, time)
+        let maxDuration = trackDuration
+        let upperLimit = maxDuration > 1.0 ? max(0, maxDuration - 0.5) : max(0, time)
+        let clamped = min(max(0, time), upperLimit)
         defer { updateNowPlayingInfo() }
-        cancelAutomixCrossfade()
+        cancelCrossfade()
 
         if engineKind == .mpv {
             heldSeekTarget = clamped
             heldSeekTargetTimestamp = CFAbsoluteTimeGetCurrent()
+            isSeekInFlight = true
             guard mpvEngine.isLoaded else {
                 pendingSeekTime = clamped
                 currentTime = clamped
                 return
             }
-            if currentSourceIsRemoteTranscode {
+            if currentSourceIsRemoteTranscode && !(mpvEngine.isSeekable && mpvStreamOffset == 0) {
                 setTranscodeSeek(to: clamped)
                 return
             }
@@ -37,6 +40,7 @@ extension Player {
             let accepted = mpvEngine.seek(to: clamped)
             if !accepted {
                 pendingSeekTime = clamped
+                isSeekInFlight = false
             }
             return
         }
@@ -67,22 +71,29 @@ extension Player {
     }
 
     func applyPendingSeekIfNeeded() {
-        if let pendingSeekTime {
-            self.pendingSeekTime = nil
-            seek(to: pendingSeekTime)
-            return
+        guard let pendingSeekTime else { return }
+        self.pendingSeekTime = nil
+        seek(to: pendingSeekTime)
+    }
+
+    func resetSeekState(keepPendingSeek: Bool = false, clearScrubbing: Bool = true) {
+        isSeekInFlight = false
+        heldSeekTarget = nil
+        heldSeekTargetTimestamp = 0
+        seekRequestID += 1
+        mpvSeekRestartActive = false
+        mpvRestartStepped = false
+        if !keepPendingSeek {
+            pendingSeekTime = nil
         }
-        if engineKind == .mpv, mpvEngine.isLoaded, !mpvEngine.isBuffering {
-            let target = heldSeekTarget ?? currentTime
-            if target > 1.0, abs(target - mpvRealPosition) > 1.0 {
-                seek(to: target)
-            }
+        if clearScrubbing {
+            isScrubbing = false
         }
     }
 
     func beginScrub() {
+        resetSeekState(keepPendingSeek: false, clearScrubbing: false)
         isScrubbing = true
-        heldSeekTarget = nil
     }
 
     func scrub(to time: Double) {
@@ -122,7 +133,9 @@ extension Player {
     func pause() {
         if engineKind == .mpv {
             mpvEngine.pause()
-            if automix.activeCrossfade != nil { automix.preloadedMPVEngine?.pause() }
+            if isCrossfading {
+                crossfadeEngine?.pause()
+            }
         } else {
             avPlayer?.pause()
         }
@@ -138,10 +151,12 @@ extension Player {
         if engineKind == .mpv {
             if mpvEngine.isLoaded {
                 mpvEngine.play()
+                if isCrossfading {
+                    crossfadeEngine?.play()
+                }
             } else if !isLoading {
                 onTrackRequest?(song)
             }
-            if automix.activeCrossfade != nil { automix.preloadedMPVEngine?.play() }
             isPlaying = true
             updateNowPlayingInfo()
             return
@@ -160,6 +175,8 @@ extension Player {
     }
 
     func stop() {
+        mpvLoadGeneration += 1
+        cancelCrossfade()
         resetPreloadedNext()
         avPlayer?.pause()
         avPlayer?.replaceCurrentItem(with: nil)
@@ -171,12 +188,8 @@ extension Player {
         isCaching = false
         currentTime = 0
         duration = 0
-        pendingSeekTime = nil
-        heldSeekTarget = nil
-        transcodeRestartResidual = nil
         mpvStreamOffset = 0
-        mpvSeekRestartActive = false
-        mpvRestartStepped = false
+        resetSeekState()
         playbackContext = nil
         updateNowPlayingInfo()
     }
@@ -184,12 +197,24 @@ extension Player {
     func setRepeatMode(_ mode: RepeatMode) {
         guard repeatMode != mode else { return }
         repeatMode = mode
+        if mode == .one {
+            cancelCrossfade()
+        }
         resetPreloadedNext()
         updateNowPlayingInfo()
     }
 
     func adjustVolume(by delta: Float) {
         volume = min(max(volume + delta, 0), 1)
+    }
+
+    private func seekToStartOrReset() {
+        if hasLoadedItem {
+            seek(to: 0)
+        } else {
+            resetSeekState()
+            currentTime = 0
+        }
     }
 
     func next() {
@@ -201,7 +226,7 @@ extension Player {
             currentIndex = 0
             startCurrent()
         } else {
-            seek(to: 0)
+            seekToStartOrReset()
             pause()
         }
     }
@@ -219,18 +244,27 @@ extension Player {
             currentIndex = queue.count - 1
             startCurrent()
         } else {
-            seek(to: 0)
+            seekToStartOrReset()
         }
     }
 
     func trackDidFinish() {
-        if engineKind == .mpv { mpvEngine.stop() }
         if repeatMode == .one {
-            seek(to: 0)
-            resume()
-        } else {
-            next()
+            if engineKind == .mpv && (!mpvEngine.isLoaded || mpvEngine.isEnded) {
+                currentTime = 0
+                resetSeekState()
+                startCurrent(autoPlay: true, recordHistory: false)
+            } else {
+                seek(to: 0)
+                resume()
+            }
+            return
         }
+        let hasPreloaded = hasLoadedPreloadForNextTrack
+        if engineKind == .mpv && !hasPreloaded {
+            mpvEngine.stop()
+        }
+        next()
     }
 }
 

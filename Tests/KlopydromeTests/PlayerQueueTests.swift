@@ -176,6 +176,26 @@ final class PlayerQueueTests: XCTestCase {
         XCTAssertNil(player.queueContextSubtitle)
     }
 
+    func testShufflePreservesDuplicateTracks() {
+        let player = Player()
+        let songA = makeSong("songA")
+        let songB = makeSong("songB")
+        player.queue = [songA, songB, songA]
+        player.currentIndex = 0
+
+        player.toggleShuffle()
+
+        XCTAssertTrue(player.shuffle)
+        XCTAssertEqual(player.queue.count, 3)
+        XCTAssertEqual(player.queue.filter { $0.id == "songA" }.count, 2)
+        XCTAssertEqual(player.queue.filter { $0.id == "songB" }.count, 1)
+        XCTAssertEqual(player.queue.first?.id, "songA")
+
+        player.toggleShuffle()
+        XCTAssertFalse(player.shuffle)
+        XCTAssertEqual(player.queue.count, 3)
+    }
+
     private func assertContiguous(
         _ songs: [SubsonicSong],
         where predicate: (SubsonicSong) -> Bool,

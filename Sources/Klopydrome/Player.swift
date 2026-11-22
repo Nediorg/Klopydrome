@@ -40,6 +40,7 @@ final class Player {
     var currentIndex = 0
     var isPlaying = false
     var isCrossfading = false
+    var crossfadeStepProgress: Double = 0
     var nextTrackPreloadingEnabled = true
     var isLoading = false
     var isBuffering = false
@@ -49,7 +50,7 @@ final class Player {
     var volume: Float = 1.0 {
         didSet {
             avPlayer?.volume = outputGain
-            mpvEngine.volume = outputGain
+            applyMPVVolumes()
         }
     }
     var outputGain: Float { PlaybackVolume.outputGain(for: volume) }
@@ -96,17 +97,35 @@ final class Player {
     }
 
     var onTrackRequest: ((SubsonicSong) -> Void)?
+    var onTrackPromoted: ((SubsonicSong) -> Void)?
     @ObservationIgnored var onDiscordPresenceUpdate: (() -> Void)?
     var onTrackEnded: (() -> Void)?
     var onTrackCrossfaded: ((SubsonicSong) -> Void)?
+    var onNextTrackPreloadRequest: ((SubsonicSong) -> URL?)?
+    var onCachedTrackURLRequest: ((SubsonicSong) -> URL?)?
     var onStreamRecordFinished: ((URL) -> Void)?
+    var onLocalFilePlaybackFailed: ((SubsonicSong) -> Void)?
 
     @ObservationIgnored nonisolated(unsafe) var avPlayer: AVPlayer?
     enum EngineKind { case avPlayer, mpv }
     var engineKind: EngineKind = .mpv
+    var mpvFallbackError: String?
     var mpvEngine = MPVPlaybackEngine()
-    @ObservationIgnored var mpvFailureFallback = MPVFailureFallback()
-    let automix = AutomixPreparation()
+    var currentSourceURL: URL?
+    var preloadedSourceURL: URL?
+    var preloadedNextSong: SubsonicSong?
+    var preloadedNextSongID: String?
+    var crossfadeEnabled = false
+    var crossfadeDuration: Double = CrossfadeMath.defaultDuration
+    var crossfadeApplyToAlbums = false
+    var crossfadeEngine: MPVPlaybackEngine?
+    var crossfadeNextSongID: String?
+    var crossfadeSourceURL: URL?
+    var activeCrossfade: ActiveCrossfade?
+    @ObservationIgnored var crossfadeTimer: Timer?
+    var replayGainMode: ReplayGainMode = .off
+    var replayGainPreampDB: Float = AutomixLoudness.defaultPreampDB
+    var silenceTrimMode: SilenceTrimMode = .off
     let shuffleState = ShuffleState()
     @ObservationIgnored var timeObserverToken: Any?
     @ObservationIgnored var endObserver: NSObjectProtocol?
@@ -131,8 +150,6 @@ final class Player {
 
     @ObservationIgnored var heldSeekTarget: Double?
 
-    @ObservationIgnored var transcodeRestartResidual: Double?
-
     @ObservationIgnored var mpvRestartStepped = false
 
     @ObservationIgnored var mpvSeekRestartActive = false
@@ -145,7 +162,10 @@ final class Player {
 
     var trackDuration: Double {
         let meta = Double(currentSong?.duration ?? 0)
-        if duration > 0 { return max(duration, meta) }
+        if engineKind == .mpv, mpvStreamOffset == 0, mpvEngine.duration > 0 {
+            return mpvEngine.duration
+        }
+        if duration > 0 { return duration }
         return meta
     }
 
@@ -233,9 +253,9 @@ final class Player {
     }
 
     func startCurrent(autoPlay: Bool = true, recordHistory: Bool = true) {
-        automix.currentSourceURL = nil
+        cancelCrossfade()
+        currentSourceURL = nil
         guard let song = currentSong else { return }
-        mpvFailureFallback.clear()
         mpvLoadGeneration += 1
         if promotePreloadedMPVTrack(for: song, autoPlay: autoPlay, recordHistory: recordHistory) { return }
         resetPreloadedNext()
@@ -249,13 +269,8 @@ final class Player {
         isBuffering = false
         currentTime = 0
         duration = 0
-        pendingSeekTime = nil
-        heldSeekTarget = nil
-        transcodeRestartResidual = nil
         mpvStreamOffset = 0
-        mpvSeekRestartActive = false
-        mpvRestartStepped = false
-        pendingSeekTime = nil
+        resetSeekState()
         if recordHistory {
             history.append(song)
             if history.count > 500 { history.removeFirst(history.count - 500) }
@@ -273,8 +288,8 @@ final class Player {
     }
 
     func playMPV(_ url: URL, streamRecordURL: URL? = nil) {
-        mpvFailureFallback.arm(for: url)
-        automix.currentSourceURL = url
+        mpvFallbackError = nil
+        currentSourceURL = url
         engineKind = .mpv
         avPlayer?.pause()
         avPlayer?.replaceCurrentItem(with: nil)
@@ -283,14 +298,12 @@ final class Player {
         isBuffering = true
         duration = 0
         let targetSeek = pendingSeekTime ?? (currentTime > 0 ? currentTime : nil)
+        resetSeekState()
         currentTime = targetSeek ?? 0
         pendingSeekTime = targetSeek
         heldSeekTarget = targetSeek
         if targetSeek != nil { heldSeekTargetTimestamp = CFAbsoluteTimeGetCurrent() }
-        transcodeRestartResidual = nil
         mpvStreamOffset = 0
-        mpvSeekRestartActive = false
-        mpvRestartStepped = false
         loadMPVStream(url: url, streamRecordURL: streamRecordURL)
     }
 }

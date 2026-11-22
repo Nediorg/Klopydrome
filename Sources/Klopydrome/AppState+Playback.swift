@@ -3,11 +3,11 @@ import NavidromeClient
 
 extension AppState {
     func setUpNextTrackPreloading() {
-        player.automix.onNextTrackPreloadRequest = { [weak self] song in
+        player.onNextTrackPreloadRequest = { [weak self] song in
             guard let self, self.usesMPVEngine else { return nil }
             return self.cachedURL(for: song) ?? self.streamURL(for: song)
         }
-        player.automix.onCachedTrackURLRequest = { [weak self] song in
+        player.onCachedTrackURLRequest = { [weak self] song in
             self?.cachedURL(for: song)
         }
     }
@@ -26,7 +26,12 @@ extension AppState {
         guard let client else { return nil }
         let estimate = !usesMPVEngine
         if let format = serverConfig.format, !format.isEmpty {
-            let requestedFormat: String? = (!usesMPVEngine && format.lowercased() == "opus") ? "mp3" : format
+            let matchesSource = usesMPVEngine
+                && serverConfig.maxBitRate == 0
+                && song.suffix?.lowercased() == format.lowercased()
+            let requestedFormat: String? = (!usesMPVEngine && format.lowercased() == "opus")
+                ? "mp3"
+                : (matchesSource ? nil : format)
             return client.streamURL(
                 songId: song.id,
                 maxBitRate: serverConfig.maxBitRate,
@@ -73,8 +78,13 @@ extension AppState {
         }
 
         guard let url = streamURL(for: song) else { return false }
-        let streamRecordURL = beginAutomaticPlaybackCache(for: song)
-        play(url: url, streamRecordURL: streamRecordURL)
+        if usesMPVEngine {
+            let streamRecordURL = beginAutomaticPlaybackCache(for: song)
+            play(url: url, streamRecordURL: streamRecordURL)
+        } else {
+            play(url: url)
+            scheduleBackgroundCacheIfNeeded(for: song)
+        }
         return true
     }
 
@@ -99,8 +109,14 @@ extension AppState {
         player.onTrackRequest = { [weak self] song in
             self?.startCurrent(song)
         }
+        player.onTrackPromoted = { [weak self] song in
+            self?.handleTrackPromoted(song)
+        }
         player.onStreamRecordFinished = { [weak self] url in
             Task { await self?.finishAutomaticPlaybackCache(at: url) }
+        }
+        player.onLocalFilePlaybackFailed = { [weak self] song in
+            self?.handleLocalCacheFailure(for: song)
         }
         player.onTrackEnded = { [weak self] in
             guard let self else { return }
@@ -137,6 +153,7 @@ extension AppState {
         let insertAt = min(player.currentIndex + 1, queue.count)
         queue.insert(contentsOf: playable, at: insertAt)
         player.queue = queue
+        player.syncPreloadedNextWithQueue()
     }
 
     func playLater(_ song: SubsonicSong) {
@@ -152,6 +169,20 @@ extension AppState {
             return
         }
         player.queue.append(contentsOf: playable)
+        player.syncPreloadedNextWithQueue()
+    }
+
+    func clearQueue() {
+        player.stop()
+        player.setQueue([])
+    }
+
+    func removeFromQueue(at index: Int) {
+        player.remove(at: index)
+    }
+
+    func clearHistory() {
+        player.clearHistory()
     }
 
     func play(
@@ -248,7 +279,7 @@ extension AppState {
         Task {
             var similar = (try? await client.getSimilarSongs2(id: song.id, count: 50)) ?? []
             if similar.isEmpty, let artistId = song.artistId, !artistId.isEmpty {
-                similar = (try? await client.getTopSongs(artistId: artistId, count: 50)) ?? []
+                similar = (try? await client.getTopSongs(artist: song.artist, artistId: artistId, count: 50)) ?? []
             }
             if similar.isEmpty, let albumId = song.albumId {
                 similar = (try? await client.getAlbum(id: albumId))?.song ?? []
@@ -286,22 +317,32 @@ extension AppState {
             targetIndex = 0
         }
         await MainActor.run {
-            let wasLoaded = player.hasLoadedItem
-            let previousID = player.currentSong?.id
-            player.queue = restored
-            player.currentIndex = targetIndex
-            if !wasLoaded || previousID != player.currentSong?.id {
-                player.startCurrent(autoPlay: false)
-                if let posMs = queue.position, posMs > 0 {
-                    player.seek(to: Double(posMs) / 1000.0)
-                }
-                player.pause()
-            }
-            saveQueueToServer()
+            applyRestoredPlayQueue(entries: restored, targetIndex: targetIndex, positionMs: queue.position)
         }
     }
 
-    func startCurrent(_ song: SubsonicSong) {
+    @MainActor
+    func applyRestoredPlayQueue(entries: [SubsonicSong], targetIndex: Int, positionMs: Int?) {
+        guard entries.indices.contains(targetIndex) else { return }
+        let isActivePlayback = player.hasLoadedItem || player.isLoading || player.isPlaying
+        if isActivePlayback, let previousID = player.currentSong?.id {
+            if previousID == entries[targetIndex].id {
+                player.queue = entries
+                player.currentIndex = targetIndex
+            }
+            return
+        }
+        player.queue = entries
+        player.currentIndex = targetIndex
+        player.startCurrent(autoPlay: false)
+        if let positionMs, positionMs > 0 {
+            player.seek(to: Double(positionMs) / 1000.0)
+        }
+        player.pause()
+        saveQueueToServer()
+    }
+
+    private func prepareActiveTrackSession(for song: SubsonicSong) {
         if discordSnoozeSongID != song.id {
             discordSnoozeSongID = nil
         }
@@ -317,7 +358,20 @@ extension AppState {
                 scrobbleTask = Task { try? await client.scrobble(id: song.id, submission: false) }
             }
         }
+        setUpNextTrackPreloading()
+        refreshDiscordRichPresence()
+    }
 
+    func scheduleBackgroundCacheIfNeeded(for song: SubsonicSong) {
+        guard serverConfig.cacheEnabled, !isCached(song), cachedURL(for: song) == nil else { return }
+        currentCacheTask?.cancel()
+        activeCacheTasks.insert(song.id)
+        updateCachingFlag()
+        currentCacheTask = Task { await cacheCurrentInBackground(song) }
+    }
+
+    func startCurrent(_ song: SubsonicSong) {
+        prepareActiveTrackSession(for: song)
         if startLocalOrBuffered(song) { return }
         guard let url = streamURL(for: song) else {
             player.lastError = "This track is not downloaded for offline listening.".localized
@@ -325,11 +379,12 @@ extension AppState {
             return
         }
         play(url: url)
-        if serverConfig.cacheEnabled {
-            activeCacheTasks.insert(song.id)
-            updateCachingFlag()
-            currentCacheTask = Task { await cacheCurrentInBackground(song) }
-        }
+        scheduleBackgroundCacheIfNeeded(for: song)
+    }
+
+    func handleTrackPromoted(_ song: SubsonicSong) {
+        prepareActiveTrackSession(for: song)
+        scheduleBackgroundCacheIfNeeded(for: song)
     }
 
     private func cacheCurrentInBackground(_ song: SubsonicSong) async {
@@ -359,20 +414,46 @@ extension AppState {
         return suffixes
     }
 
+    static func minimumExpectedCacheBytes(for song: SubsonicSong) -> Int {
+        if let duration = song.duration, duration > 0 {
+            return max(4096, Int(Double(duration) * 1500 * 0.75))
+        }
+        return 4096
+    }
+
     func cachedURL(for song: SubsonicSong) -> URL? {
         guard let cache else { return nil }
+        let minBytes = Self.minimumExpectedCacheBytes(for: song)
         for suffix in candidateSuffixes(for: song) {
             let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
             let url = cache.fileURL(for: .streams, key: key)
-            if cachedStreamKeysSeeded {
-                if cachedStreamKeys.contains(url.lastPathComponent) {
-                    return url
-                }
-            } else if FileManager.default.fileExists(atPath: url.path) {
+            let exists = cachedStreamKeysSeeded
+                ? cachedStreamKeys.contains(url.lastPathComponent)
+                : FileManager.default.fileExists(atPath: url.path)
+            guard exists else { continue }
+
+            if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size >= minBytes {
                 return url
+            } else {
+                try? FileManager.default.removeItem(at: url)
+                cachedStreamKeys.remove(url.lastPathComponent)
             }
         }
         return nil
+    }
+
+    func handleLocalCacheFailure(for song: SubsonicSong) {
+        guard let cache else { return }
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            let url = cache.fileURL(for: .streams, key: key)
+            try? FileManager.default.removeItem(at: url)
+            cachedStreamKeys.remove(url.lastPathComponent)
+        }
+        if let stream = streamURL(for: song) {
+            let recordURL = beginAutomaticPlaybackCache(for: song)
+            play(url: stream, streamRecordURL: recordURL)
+        }
     }
 
     func isCached(_ song: SubsonicSong) -> Bool {

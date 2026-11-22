@@ -20,7 +20,7 @@ extension Player {
     private var transcodedSeekCushion: Double { 1.0 }
 
     var currentSourceIsRemoteTranscode: Bool {
-        Self.isRemoteTranscodeStreamURL(automix.currentSourceURL)
+        Self.isRemoteTranscodeStreamURL(currentSourceURL)
     }
 
     var mpvRealPosition: Double {
@@ -34,18 +34,9 @@ extension Player {
         return pipePos + mpvStreamOffset
     }
 
-    var avSeekableTimeRangesEmpty: Bool {
-        avPlayer?.currentItem?.seekableTimeRanges.isEmpty ?? true
-    }
-
     func seekNeedsTranscodeRestart(to target: Double) -> Bool {
         currentSourceIsRemoteTranscode &&
             abs(target - mpvRealPosition) >= transcodedSeekCushion
-    }
-
-    func avSeekNeedsTranscodeRestart(to target: Double) -> Bool {
-        currentSourceIsRemoteTranscode &&
-            abs(target - avRealPosition) >= transcodedSeekCushion
     }
 
     func setAVPTranscodeSeek(to target: Double) {
@@ -66,17 +57,16 @@ extension Player {
     }
 
     private func performAVPTranscodeRestart(at target: Double) {
-        guard let url = automix.currentSourceURL,
+        guard let url = currentSourceURL,
               let offsetURL = Self.transcodedSeekURL(from: url, at: target) else { return }
         let player = ensureAVPlayer()
         let offset = Double(max(0, Int(target)))
         mpvStreamOffset = offset
         mpvSeekRestartActive = true
         mpvRestartStepped = false
-        transcodeRestartResidual = nil
-        duration = 0
         currentTime = target
         heldSeekTarget = target
+        heldSeekTargetTimestamp = CFAbsoluteTimeGetCurrent()
         isBuffering = true
         player.pause()
         player.replaceCurrentItem(with: nil)
@@ -90,21 +80,28 @@ extension Player {
     }
 
     func setTranscodeSeek(to target: Double) {
+        let restartTarget = trackDuration > 2.0
+            ? min(target, max(0, trackDuration - 2.0))
+            : target
         guard mpvEngine.isLoaded else {
-            pendingSeekTime = target
-            currentTime = target
+            pendingSeekTime = restartTarget
+            currentTime = restartTarget
             return
         }
-        let crossesBuffer = abs(target - mpvRealPosition) >= transcodedSeekCushion
+        let crossesBuffer = abs(restartTarget - mpvRealPosition) >= transcodedSeekCushion
         guard !crossesBuffer else {
             if mpvEngine.isBuffering {
-                pendingSeekTime = target
-                currentTime = target
+                pendingSeekTime = restartTarget
+                currentTime = restartTarget
+                isSeekInFlight = false
+                heldSeekTarget = nil
                 return
             }
-            performTranscodeRestart(at: target)
+            performTranscodeRestart(at: restartTarget)
             return
         }
+        isSeekInFlight = false
+        heldSeekTarget = nil
     }
 
     /// Reloads the current stream via the Subsonic `timeOffset` parameter, so
@@ -115,16 +112,15 @@ extension Player {
     /// `mpvStreamOffset` is recorded before the load so clock math stays
     /// consistent.
     func performTranscodeRestart(at target: Double) {
-        guard let url = automix.currentSourceURL,
+        guard let url = currentSourceURL,
               let offsetURL = Self.transcodedSeekURL(from: url, at: target) else { return }
         let offset = Double(max(0, Int(target)))
         mpvStreamOffset = offset
         mpvSeekRestartActive = true
         mpvRestartStepped = false
-        transcodeRestartResidual = nil
-        duration = 0
         currentTime = target
         heldSeekTarget = target
+        heldSeekTargetTimestamp = CFAbsoluteTimeGetCurrent()
         isBuffering = true
         mpvEngine.pause()
         loadMPVStream(url: offsetURL, streamRecordURL: nil)
@@ -143,8 +139,13 @@ extension Player {
     nonisolated static func isRemoteTranscodeStreamURL(_ url: URL?) -> Bool {
         guard let url, !url.isFileURL,
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return false }
-        return components.queryItems?.contains {
-            $0.name == "format" && !($0.value ?? "").isEmpty
-        } ?? false
+        let items = components.queryItems ?? []
+        let hasFormat = items.contains {
+            $0.name == "format" && !($0.value ?? "").isEmpty && $0.value != "raw"
+        }
+        let hasMaxBitRate = items.contains {
+            $0.name == "maxBitRate" && (Int($0.value ?? "") ?? 0) > 0
+        }
+        return hasFormat || hasMaxBitRate
     }
 }

@@ -58,14 +58,10 @@ extension Player {
     }
 
     func playURL(_ url: URL) {
-        mpvFailureFallback.clear()
-        automix.currentSourceURL = url
+        currentSourceURL = url
         engineKind = .avPlayer
         mpvStreamOffset = 0
-        mpvSeekRestartActive = false
-        mpvRestartStepped = false
-        heldSeekTarget = nil
-        transcodeRestartResidual = nil
+        resetSeekState(keepPendingSeek: true)
         isLoading = true
         isBuffering = true
         isCaching = false
@@ -165,9 +161,7 @@ extension Player {
         }
         if let item = avPlayer.currentItem, item.duration.isNumeric {
             let rawDuration = item.duration.seconds
-            duration = rawDuration.isFinite && rawDuration > 0
-                ? rawDuration + mpvStreamOffset
-                : 0
+            duration = rawDuration.isFinite && rawDuration > 0 ? rawDuration : 0
         }
         isBuffering = avPlayer.timeControlStatus == .waitingToPlayAtSpecifiedRate
         if avPlayer.timeControlStatus == .playing { isLoading = false }

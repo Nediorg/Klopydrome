@@ -244,12 +244,17 @@ struct NowPlayingEllipsisMenu: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(Color.secondary)
+                .frame(
+                    width: TopTrailingControlsView.actionButtonSide,
+                    height: TopTrailingControlsView.actionButtonSide
+                )
+                .hoverFill(fill: Color.primary.opacity(0.08), cornerRadius: 2)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(
-            width: TopTrailingControlsView.actionButtonSide - 4,
-            height: TopTrailingControlsView.actionButtonSide - 4
+            width: TopTrailingControlsView.actionButtonSide,
+            height: TopTrailingControlsView.actionButtonSide
         )
         .padding(.trailing, 3)
         .contentShape(Rectangle())

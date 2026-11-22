@@ -12,8 +12,8 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
     private let lock = NSLock()
 
     private init() {
-        cache.countLimit = 16
-        cache.totalCostLimit = 32 * 1024 * 1024
+        cache.countLimit = 4
+        cache.totalCostLimit = 8 * 1024 * 1024
     }
 
     func clear() {

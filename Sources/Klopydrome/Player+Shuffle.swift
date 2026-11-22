@@ -30,11 +30,14 @@ extension Player {
         resetPreloadedNext()
         shuffleState.originalQueue = queue
         var rest = queue
-        if let current = currentSong {
-            rest.removeAll { $0.id == current.id }
+        let current: SubsonicSong?
+        if queue.indices.contains(currentIndex) {
+            current = rest.remove(at: currentIndex)
+        } else {
+            current = currentSong
         }
         let shuffled = shuffled(rest, by: shuffleState.mode)
-        queue = [currentSong].compactMap { $0 } + shuffled
+        queue = [current].compactMap { $0 } + shuffled
         currentIndex = 0
         shuffle = true
     }
