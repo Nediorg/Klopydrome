@@ -63,7 +63,7 @@ struct FavoritesView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { await loadIfNeeded() }
+        .task(id: app.sessionGeneration) { await loadIfNeeded() }
         .refreshable { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
             if loadError != nil {

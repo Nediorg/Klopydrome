@@ -100,7 +100,7 @@ struct SongsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
+        .task(id: app.sessionGeneration) {
             if !app.library.songsLoaded {
                 await app.restoreCachedSongsIfNeeded()
             }

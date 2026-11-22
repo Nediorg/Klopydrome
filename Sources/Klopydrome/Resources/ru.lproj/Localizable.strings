@@ -893,3 +893,4 @@
 "Allow self-signed certificates" = "Разрешить самоподписанные сертификаты";
 "Connect" = "Подключить";
 "Connect a media server" = "Подключите медиасервер";
+"No Network" = "Нет сети";

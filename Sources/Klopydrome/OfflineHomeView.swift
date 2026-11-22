@@ -71,7 +71,8 @@ struct OfflineHomeView: View {
             reloadArtists()
         }
         .refreshable {
-            _ = await app.reconnect()
+            guard !app.isManualOffline, !app.isAuthError else { return }
+            _ = await app.triggerImmediateProbe(silent: false)
         }
     }
 
@@ -189,17 +190,47 @@ struct OfflineHomeView: View {
 
     private var emptyOfflineState: some View {
         ContentUnavailableView {
-            Label("No Saved Music".localized, systemImage: "arrow.down.circle")
+            Label(emptyStateTitle, systemImage: emptyStateIcon)
         } description: {
-            Text("Songs and albums will appear here after you download them while online.".localized)
+            Text(emptyStateDescription)
         } actions: {
-            if !app.serverConfig.effectiveForceOfflineMode {
-                Button("Connect to Server".localized) {
-                    Task { _ = await app.reconnect() }
+            if app.isAuthError {
+                Button("Sign In".localized) {
+                    app.isAddingServer = true
+                }
+                .buttonStyle(.borderedProminent)
+            } else if !app.isManualOffline && !app.serverConfig.effectiveForceOfflineMode {
+                Button("Retry".localized) {
+                    Task { _ = await app.triggerImmediateProbe(silent: false) }
                 }
                 .buttonStyle(.borderedProminent)
             }
         }
         .emptyStatePinnedToTop()
+    }
+
+    private var emptyStateTitle: String {
+        switch app.offlineReason {
+        case .authRequired: return "Authentication".localized
+        case .noNetwork: return "No Network".localized
+        case .serverUnreachable: return "Server Offline".localized
+        case .manual, .none: return "No Saved Music".localized
+        }
+    }
+
+    private var emptyStateIcon: String {
+        switch app.offlineReason {
+        case .authRequired: return "exclamationmark.triangle"
+        case .noNetwork: return "wifi.slash"
+        case .serverUnreachable: return "exclamationmark.icloud"
+        case .manual, .none: return "arrow.down.circle"
+        }
+    }
+
+    private var emptyStateDescription: String {
+        if app.isAuthError {
+            return "Authentication failed. Check your username and password.".localized
+        }
+        return "Songs and albums will appear here after you download them while online.".localized
     }
 }

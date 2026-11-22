@@ -120,26 +120,37 @@ struct GeneralSettingsView: View {
     }
 
     private var connectionStatusLabel: String {
-        if isWorkOffline {
-            return "Offline".localized
-        } else if app.isReconnecting {
-            return "Connecting…".localized
-        } else if app.isOfflineSession {
-            return "Offline".localized
-        } else {
+        switch app.connectionState {
+        case .online:
             return "Connected to Server".localized
+        case .connecting, .reconnecting:
+            return "Connecting…".localized
+        case .manualOffline:
+            return "Offline Mode".localized
+        case .degraded(let reason, _, _):
+            switch reason {
+            case .manual: return "Offline Mode".localized
+            case .noNetwork: return "No Network".localized
+            case .serverUnreachable: return "Server Offline".localized
+            case .authRequired: return "Authentication".localized
+            }
+        case .unconfigured:
+            return "Offline".localized
         }
     }
 
     private var connectionStatusColor: Color {
-        if isWorkOffline {
-            return .secondary
-        } else if app.isReconnecting {
-            return .secondary
-        } else if app.isOfflineSession {
-            return .orange
-        } else {
+        switch app.connectionState {
+        case .online:
             return .green
+        case .connecting, .reconnecting, .manualOffline, .unconfigured:
+            return .secondary
+        case .degraded(let reason, _, _):
+            switch reason {
+            case .manual: return .secondary
+            case .noNetwork, .serverUnreachable: return .orange
+            case .authRequired: return .red
+            }
         }
     }
 }

@@ -17,7 +17,7 @@ struct SidebarStatusCard: View {
         case connecting
         case applyingChanges
         case scanningLibrary
-        case offline(canReconnect: Bool)
+        case offline(reason: OfflineReason, canReconnect: Bool)
         case profile(name: String)
     }
 
@@ -29,9 +29,9 @@ struct SidebarStatusCard: View {
         } else if app.isServerScanning {
             return .scanningLibrary
         } else if app.isOfflineSession {
-            return .offline(
-                canReconnect: !app.serverConfig.effectiveForceOfflineMode
-            )
+            let reason = app.offlineReason ?? (app.serverConfig.effectiveForceOfflineMode ? .manual : .serverUnreachable(nil))
+            let canReconnect = !app.serverConfig.effectiveForceOfflineMode && reason != .manual && !reason.isAuthFailure
+            return .offline(reason: reason, canReconnect: canReconnect)
         } else if app.serverProfiles.count > 1, let profile = app.activeProfile {
             return .profile(name: profile.name)
         }
@@ -82,18 +82,27 @@ struct SidebarStatusCard: View {
 
             Spacer(minLength: 4)
 
-            if case .offline(let canReconnect) = state, canReconnect {
-                Button {
-                    Task { _ = await app.reconnect() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11, weight: .medium))
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
+            if case .offline(let reason, let canReconnect) = state {
+                if reason.isAuthFailure {
+                    Button("Sign In".localized) {
+                        app.isAddingServer = true
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AMColor.accent)
+                } else if canReconnect {
+                    Button {
+                        Task { _ = await app.triggerImmediateProbe(silent: false) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Retry".localized)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Connect to Server".localized)
             }
         }
     }
@@ -104,12 +113,32 @@ struct SidebarStatusCard: View {
         case .connecting, .applyingChanges, .scanningLibrary:
             ProgressView()
                 .controlSize(.mini)
-        case .offline:
+        case .offline(let reason, _):
+            offlineIcon(for: reason)
+        case .profile:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func offlineIcon(for reason: OfflineReason) -> some View {
+        switch reason {
+        case .manual:
+            Image(systemName: "icloud.slash")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+        case .noNetwork:
             Image(systemName: "wifi.slash")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.orange)
-        case .profile:
-            EmptyView()
+        case .serverUnreachable:
+            Image(systemName: "exclamationmark.icloud")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.orange)
+        case .authRequired:
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.red)
         }
     }
 
@@ -121,8 +150,13 @@ struct SidebarStatusCard: View {
             return "Applying Changes".localized
         case .scanningLibrary:
             return "Scanning media library…".localized
-        case .offline:
-            return "Offline Mode".localized
+        case .offline(let reason, _):
+            switch reason {
+            case .manual: return "Offline Mode".localized
+            case .noNetwork: return "No Network".localized
+            case .serverUnreachable: return "Server Offline".localized
+            case .authRequired: return "Authentication".localized
+            }
         case .profile(let name):
             return name
         }

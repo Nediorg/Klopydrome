@@ -104,16 +104,29 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
         let app = AppState()
         XCTAssertNil(SidebarStatusCard.resolveStatus(for: app))
 
-        app.isOfflineSession = true
+        app.updateConnectionState(.degraded(reason: .serverUnreachable(nil), nextRetryAt: nil, consecutiveFailures: 1))
         XCTAssertEqual(
             SidebarStatusCard.resolveStatus(for: app),
-            .offline(canReconnect: true)
+            .offline(reason: .serverUnreachable(nil), canReconnect: true)
+        )
+
+        app.updateConnectionState(.degraded(reason: .noNetwork, nextRetryAt: nil, consecutiveFailures: 1))
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .offline(reason: .noNetwork, canReconnect: true)
+        )
+
+        app.updateConnectionState(.degraded(reason: .authRequired("Invalid"), nextRetryAt: nil, consecutiveFailures: 1))
+        XCTAssertEqual(
+            SidebarStatusCard.resolveStatus(for: app),
+            .offline(reason: .authRequired("Invalid"), canReconnect: false)
         )
 
         app.serverConfig.forceOfflineMode = true
+        app.updateConnectionState(.manualOffline)
         XCTAssertEqual(
             SidebarStatusCard.resolveStatus(for: app),
-            .offline(canReconnect: false)
+            .offline(reason: .manual, canReconnect: false)
         )
         app.serverConfig.forceOfflineMode = false
 

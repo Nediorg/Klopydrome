@@ -155,7 +155,7 @@ struct AlbumGridView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .refreshable { await refresh() }
-        .task { await loadIfNeeded() }
+        .task(id: app.sessionGeneration) { await loadIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
             if loadError != nil {
                 Task { await refresh() }

@@ -54,7 +54,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        if app.isOfflineSession {
+        if app.isManualOffline || (app.isOfflineSession && app.library.homeShelves.isEmpty) {
             OfflineHomeView()
         } else {
             ScrollView(.vertical, showsIndicators: true) {
@@ -77,7 +77,16 @@ struct HomeView: View {
             .scrollClipDisabled()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .refreshable { await load() }
-            .task(id: app.client != nil) { await loadIfNeeded() }
+            .task(id: app.isOnline) {
+                if app.isOnline {
+                    await loadIfNeeded()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in
+                if app.isOnline {
+                    Task { await load() }
+                }
+            }
         }
     }
 
