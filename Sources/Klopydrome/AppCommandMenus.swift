@@ -176,9 +176,62 @@ struct AppCommandMenus: Commands {
     @CommandsBuilder
     private var viewMenu: some Commands {
         CommandGroup(after: .toolbar) {
+            Button("Quick Switcher…".localized) {
+                app.isCommandPalettePresented = true
+            }
+            .keyboardShortcut("k", modifiers: .command)
+
+            Divider()
+
+            Button("Back".localized) {
+                app.navigateBack()
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .disabled(!app.canNavigateBack)
+
+            Button("Forward".localized) {
+                app.navigateForward()
+            }
+            .keyboardShortcut("]", modifiers: .command)
+            .disabled(!app.canNavigateForward)
+
+            Divider()
+
+            Button("Mini Player".localized) {
+                app.toggleMiniPlayer()
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+
+            Divider()
+
             panelMenuItem("Queue", tab: .queue, shortcut: "u")
             panelMenuItem("Lyrics", tab: .lyrics, shortcut: "l")
+
+            Divider()
+
+            sidebarSectionItem("Home", section: .home, shortcut: "1")
+            sidebarSectionItem("Recently Added", section: .recentlyAdded, shortcut: "2")
+            sidebarSectionItem("Artists", section: .artists, shortcut: "3")
+            sidebarSectionItem("Albums", section: .albums, shortcut: "4")
+            sidebarSectionItem("Songs", section: .songs, shortcut: "5")
+            sidebarSectionItem("Favorites", section: .favorites, shortcut: "6")
+            sidebarSectionItem("Playlists", section: .playlists, shortcut: "7")
         }
+    }
+
+    @ViewBuilder
+    private func sidebarSectionItem(
+        _ title: String,
+        section: NavigationState.Section,
+        shortcut: KeyEquivalent
+    ) -> some View {
+        Button(title.localized) {
+            app.nav.selected = section
+            app.nav.history.removeAll()
+            app.nav.forwardHistory.removeAll()
+            app.nav.navVersion += 1
+        }
+        .keyboardShortcut(shortcut, modifiers: .command)
     }
 
     @ViewBuilder
@@ -220,7 +273,11 @@ struct AppCommandMenus: Commands {
             Text(title.localized)
         }
     }
+}
 
+// MARK: - About & Developer Tools
+
+extension AppCommandMenus {
     private func showAboutPanel() {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
@@ -260,7 +317,7 @@ struct AppCommandMenus: Commands {
     }
 
     @ViewBuilder
-    private var developerMenuSection: some View {
+    var developerMenuSection: some View {
         Menu("Developer Tools") {
             Button("Simulate Error on Current Playlist") {
                 let current = app.nav.history.last ?? app.nav.selectedPlaylist.map { .playlist($0) }

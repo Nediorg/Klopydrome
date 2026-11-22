@@ -54,6 +54,14 @@ final class MiniPlayerPanelController: NSObject {
         panel?.close()
     }
 
+    func toggle(app: AppState) {
+        if isVisible {
+            closeForLibraryNavigation()
+        } else {
+            show(app: app)
+        }
+    }
+
     private func makePanel(app: AppState) -> NSPanel {
         let compactSize = NSSize(
             width: userCompactSide,

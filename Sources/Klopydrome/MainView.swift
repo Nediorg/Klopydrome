@@ -72,6 +72,11 @@ struct MainView: View {
                 }
             )
         }
+        .inWindowModal(isPresented: $app.isCommandPalettePresented, alignment: .top, topPadding: 64) {
+            CommandPaletteView(onDismiss: {
+                app.isCommandPalettePresented = false
+            })
+        }
         .background {
             Button("") {
                 if let current = app.player.currentSong {
@@ -79,6 +84,13 @@ struct MainView: View {
                 }
             }
             .keyboardShortcut("i", modifiers: .command)
+            .opacity(0)
+            .allowsHitTesting(false)
+
+            Button("") {
+                app.isCommandPalettePresented.toggle()
+            }
+            .keyboardShortcut("k", modifiers: .command)
             .opacity(0)
             .allowsHitTesting(false)
         }

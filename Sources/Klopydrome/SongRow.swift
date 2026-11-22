@@ -86,6 +86,9 @@ struct SongRow: View {
         }
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
         .draggable(dragPayload)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(song.displayTitle), \(song.artist ?? "")")
+        .accessibilityValue(isCurrentPlaying ? "Playing".localized : "")
         .opacity(isPlayableLocally ? 1.0 : 0.45)
         .onHover { inside in
             isInside = inside
@@ -281,5 +284,26 @@ struct SongRowSelection {
 
     func selectedSongs(from allSongs: [SubsonicSong]) -> [SubsonicSong] {
         allSongs.filter { ids.contains($0.id) }
+    }
+
+    mutating func selectAll(_ allSongs: [SubsonicSong]) {
+        ids = Set(allSongs.map(\.id))
+    }
+
+    mutating func clear() {
+        ids.removeAll()
+        anchor = nil
+    }
+
+    @discardableResult
+    mutating func moveSelection(by delta: Int, in allSongs: [SubsonicSong]) -> SubsonicSong? {
+        guard !allSongs.isEmpty else { return nil }
+        let currentID = anchor ?? ids.first
+        let currentIndex = currentID.flatMap { targetID in allSongs.firstIndex(where: { $0.id == targetID }) } ?? (delta > 0 ? -1 : allSongs.count)
+        let nextIndex = min(max(0, currentIndex + delta), allSongs.count - 1)
+        let targetSong = allSongs[nextIndex]
+        ids = [targetSong.id]
+        anchor = targetSong.id
+        return targetSong
     }
 }

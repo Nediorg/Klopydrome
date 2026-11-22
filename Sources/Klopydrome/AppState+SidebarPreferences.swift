@@ -19,6 +19,7 @@ extension AppState {
     func openGenre(_ genreName: String) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.history.append(.genre(genreName))
+        nav.forwardHistory.removeAll()
         nav.navVersion += 1
     }
 

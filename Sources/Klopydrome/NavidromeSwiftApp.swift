@@ -227,8 +227,16 @@ struct ContentView: View {
         spaceBarMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             guard event.keyCode == 49, modifiers.isEmpty else { return event }
-            guard let firstResponder = NSApp.keyWindow?.firstResponder else { return event }
-            if firstResponder is NSTextView || firstResponder is NSControl { return event }
+            if app.isCommandPalettePresented { return event }
+            guard let keyWindow = NSApp.keyWindow else { return event }
+            let windowClassName = String(describing: type(of: keyWindow))
+            if windowClassName.contains("QLPreview") || (windowClassName.contains("Panel") && !windowClassName.contains("MiniPlayer")) {
+                return event
+            }
+            guard let firstResponder = keyWindow.firstResponder else { return event }
+            if firstResponder is NSTextView || firstResponder is NSControl || firstResponder is NSText {
+                return event
+            }
             Task { @MainActor in
                 app.player.togglePlayPause()
             }

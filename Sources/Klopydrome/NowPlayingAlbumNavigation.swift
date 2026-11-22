@@ -39,36 +39,29 @@ extension AppState {
     }
 
     func openAlbumInLibrary(_ album: SubsonicAlbum) {
-        MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.history.append(.album(album))
-        nav.navVersion += 1
+        pushDestination(.album(album))
     }
 
     func openSongDetails(_ song: SubsonicSong) {
-        MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.history.append(.song(song))
-        nav.navVersion += 1
+        pushDestination(.song(song))
     }
 
     func openArtistInLibrary(_ artist: Artist) {
-        MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.history.append(.artist(artist))
-        nav.navVersion += 1
+        pushDestination(.artist(artist))
     }
 
     func openAlbumArtistInLibrary(_ song: SubsonicSong) {
-        MiniPlayerPanelController.shared.closeForLibraryNavigation()
         if let albumArtistId = song.albumArtistId {
-            nav.history.append(.artist(Artist(id: albumArtistId, name: song.effectiveAlbumArtist)))
-            nav.navVersion += 1
+            pushDestination(.artist(Artist(id: albumArtistId, name: song.effectiveAlbumArtist)))
         } else if let artistId = song.artistId, song.albumArtist == nil || song.albumArtist == song.artist {
-            nav.history.append(.artist(Artist(id: artistId, name: song.effectiveAlbumArtist)))
-            nav.navVersion += 1
+            pushDestination(.artist(Artist(id: artistId, name: song.effectiveAlbumArtist)))
         } else {
+            MiniPlayerPanelController.shared.closeForLibraryNavigation()
             nav.selectedPlaylist = nil
             nav.searchQuery = song.effectiveAlbumArtist
             nav.selected = .search
             nav.history.removeAll()
+            nav.forwardHistory.removeAll()
             nav.navVersion += 1
         }
     }
@@ -77,14 +70,20 @@ extension AppState {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
         nav.selectedPlaylist = nil
         nav.history.removeAll()
+        nav.forwardHistory.removeAll()
         nav.selected = .playlists
         nav.navVersion += 1
     }
 
     func openPlaylist(_ playlist: PlaylistSummary) {
         recordRecentPlaylist(playlist.id)
+        pushDestination(.playlist(playlist))
+    }
+
+    private func pushDestination(_ destination: NavigationState.Destination) {
         MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.history.append(.playlist(playlist))
+        nav.history.append(destination)
+        nav.forwardHistory.removeAll()
         nav.navVersion += 1
     }
 
@@ -97,13 +96,27 @@ extension AppState {
         openPlaylist(fallback)
     }
 
+    var canNavigateBack: Bool {
+        !nav.history.isEmpty || nav.selectedPlaylist != nil
+    }
+
+    var canNavigateForward: Bool {
+        !nav.forwardHistory.isEmpty
+    }
+
     func navigateBack() {
-        if !nav.history.isEmpty {
-            nav.history.removeLast()
+        if let last = nav.history.popLast() {
+            nav.forwardHistory.append(last)
         } else if nav.selectedPlaylist != nil {
             nav.selected = .playlists
             nav.selectedPlaylist = nil
         }
+        nav.navVersion += 1
+    }
+
+    func navigateForward() {
+        guard let next = nav.forwardHistory.popLast() else { return }
+        nav.history.append(next)
         nav.navVersion += 1
     }
 

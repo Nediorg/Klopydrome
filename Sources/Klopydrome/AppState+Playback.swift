@@ -198,7 +198,7 @@ extension AppState {
 
     func moveInQueue(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         player.move(fromOffsets: offsets, toOffset: destination)
-        Task { await saveQueueToServer() }
+        saveQueueToServer()
     }
 
     func clearHistory() {

@@ -84,7 +84,7 @@ struct CoverArtView: View {
             }
         }
         .coverShadow(enabled: shadow, radius: shadowRadius, yOffset: shadowY)
-        .accessibilityLabel(coverArt ?? "Cover".localized)
+        .accessibilityLabel("Cover".localized)
         .accessibilityAddTraits(.isImage)
         .animation(.easeInOut(duration: 0.28), value: renderedCoverArt)
         .onReceive(NotificationCenter.default.publisher(for: .foregroundRefreshRequested)) { _ in

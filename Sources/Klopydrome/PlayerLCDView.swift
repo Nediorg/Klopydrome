@@ -168,7 +168,7 @@ struct PlayerLCDView: View {
         .contentShape(Rectangle())
         .onHover { hoverText = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(app.player.displaySong?.displayTitle ?? "")
+        .accessibilityLabel(app.player.displaySong.map { "\($0.displayTitle), \($0.displayArtist ?? "")" } ?? "Not Playing".localized)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             if let song = app.player.displaySong {

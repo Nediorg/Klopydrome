@@ -171,6 +171,7 @@ struct NavigationState {
     var selected: Section = .home
     var navVersion = 0
     var history: [Destination] = []
+    var forwardHistory: [Destination] = []
     var selectedPlaylist: PlaylistSummary?
     var searchQuery: String = ""
 

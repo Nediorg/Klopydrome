@@ -50,6 +50,8 @@ struct InWindowModalAttemptDismissKey: PreferenceKey {
 
 struct InWindowModalOverlay<Content: View>: View {
     @Binding var isPresented: Bool
+    var alignment: Alignment = .center
+    var topPadding: CGFloat = 0
     var onAttemptDismiss: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
@@ -57,16 +59,20 @@ struct InWindowModalOverlay<Content: View>: View {
 
     init(
         isPresented: Binding<Bool>,
+        alignment: Alignment = .center,
+        topPadding: CGFloat = 0,
         onAttemptDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._isPresented = isPresented
+        self.alignment = alignment
+        self.topPadding = topPadding
         self.onAttemptDismiss = onAttemptDismiss
         self.content = content
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: alignment) {
             if isPresented {
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
@@ -78,6 +84,7 @@ struct InWindowModalOverlay<Content: View>: View {
 
                 content()
                     .inWindowModalCardStyle()
+                    .padding(.top, topPadding)
                     .onPreferenceChange(InWindowModalAttemptDismissKey.self) { action in
                         interceptDismiss = action
                     }
@@ -214,11 +221,19 @@ extension View {
 
     func inWindowModal<Content: View>(
         isPresented: Binding<Bool>,
+        alignment: Alignment = .center,
+        topPadding: CGFloat = 0,
         onAttemptDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         overlay {
-            InWindowModalOverlay(isPresented: isPresented, onAttemptDismiss: onAttemptDismiss, content: content)
+            InWindowModalOverlay(
+                isPresented: isPresented,
+                alignment: alignment,
+                topPadding: topPadding,
+                onAttemptDismiss: onAttemptDismiss,
+                content: content
+            )
         }
     }
 

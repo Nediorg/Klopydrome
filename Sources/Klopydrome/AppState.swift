@@ -118,8 +118,13 @@ final class AppState {
         editingSmartPlaylist = SmartPlaylistEditorTarget(playlist: playlist, server: server)
     }
 
+    func toggleMiniPlayer() {
+        MiniPlayerPanelController.shared.toggle(app: self)
+    }
+
     var shareTarget: ShareTarget?
     var inspectingSong: SubsonicSong?
+    var isCommandPalettePresented: Bool = false
 
     var showLyrics = true
     var queuePanelVisible = false
