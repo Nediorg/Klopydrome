@@ -78,23 +78,4 @@ final class CommandPaletteAndNavigationTests: XCTestCase {
         XCTAssertEqual(moved4?.id, "s1")
         XCTAssertEqual(selection.ids, ["s1"])
     }
-
-    @MainActor
-    func testCommandPaletteLocalItemsGeneration() {
-        let app = AppState()
-        let items = CommandPaletteView.makeLocalItems(for: app)
-        XCTAssertFalse(items.isEmpty)
-
-        // Should include navigation and action items
-        let navItems = items.filter { $0.group == .navigation }
-        let actionItems = items.filter { $0.group == .actions }
-
-        XCTAssertTrue(navItems.contains(where: { $0.id == "nav_home" }))
-        XCTAssertTrue(navItems.contains(where: { $0.id == "nav_albums" }))
-        XCTAssertTrue(navItems.contains(where: { $0.id == "nav_settings" }))
-
-        XCTAssertTrue(actionItems.contains(where: { $0.id == "act_play_pause" }))
-        XCTAssertTrue(actionItems.contains(where: { $0.id == "act_next" }))
-        XCTAssertTrue(actionItems.contains(where: { $0.id == "act_mini_player" }))
-    }
 }

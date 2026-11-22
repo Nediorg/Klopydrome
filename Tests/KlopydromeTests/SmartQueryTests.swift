@@ -5,9 +5,9 @@ import NavidromeClient
 final class SmartQueryTests: XCTestCase {
 
     private func song(id: String = "s1",
-                      artist: String? = "Уматурман",
+                      artist: String? = "Artist One",
                       album: String? = nil,
-                      title: String? = "Ночной дозор",
+                      title: String? = "Track One",
                       genre: String? = "rock",
                       duration: Int? = 200,
                       year: Int? = 2005,
@@ -22,12 +22,12 @@ final class SmartQueryTests: XCTestCase {
     // MARK: Rules
 
     func testContainsRuleMatchesCaseInsensitive() {
-        let rule = QueryExpr(rule: .contains, field: "artist", value: .string("уматурман"))
+        let rule = QueryExpr(rule: .contains, field: "artist", value: .string("artist one"))
         XCTAssertTrue(rule.matches(song()))
     }
 
     func testContainsRuleNoMatch() {
-        let rule = QueryExpr(rule: .contains, field: "artist", value: .string("rammstein"))
+        let rule = QueryExpr(rule: .contains, field: "artist", value: .string("other artist"))
         XCTAssertFalse(rule.matches(song()))
     }
 
@@ -97,7 +97,7 @@ final class SmartQueryTests: XCTestCase {
 
     func testDSLDecodesFromServerForm() throws {
         let json = """
-        {"all":[{"gt":{"duration":180}},{"any":[{"contains":{"artist":"уматурман"}},{"is":{"genre":"rock"}}]} ]}
+        {"all":[{"gt":{"duration":180}},{"any":[{"contains":{"artist":"artist one"}},{"is":{"genre":"rock"}}]} ]}
         """
         let query = try JSONDecoder().decode(SmartQuery.self, from: Data(json.utf8))
         XCTAssertTrue(query.root.isGroup)

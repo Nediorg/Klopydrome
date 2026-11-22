@@ -287,7 +287,7 @@ final class LyricsSyncTests: XCTestCase {
         XCTAssertNil(LyricsStore.plainText(from: empty))
     }
 
-    // MARK: Active line before the first line (Apple Music semantics)
+    // MARK: Active line before the first line
 
     /// No line is highlighted until the first line's timestamp arrives; the
     /// stored lines themselves stay dim/future instead of pretending line 0 is

@@ -132,29 +132,24 @@ final class PlayerControlsTests: XCTestCase {
 
     // MARK: - AVPlayer Error Formatting
 
-    func testFormatAVPlayerErrorIncludesErrorCodes() {
+    func testFormatAVPlayerError() {
         let error = NSError(domain: AVFoundationErrorDomain, code: -11850)
         let formatted = Player.formatAVPlayerError(error)
         XCTAssertTrue(formatted.contains("AVErrorServerIncorrectlyConfigured"))
         XCTAssertTrue(formatted.contains("-11850"))
-    }
 
-    func testFormatAVPlayerErrorWithUnderlyingError() {
         let underlying = NSError(domain: "CoreMediaErrorDomain", code: -12884)
-        let error = NSError(
+        let errorWithUnderlying = NSError(
             domain: AVFoundationErrorDomain,
             code: -11850,
             userInfo: [NSUnderlyingErrorKey: underlying]
         )
-        let formatted = Player.formatAVPlayerError(error)
-        XCTAssertTrue(formatted.contains("-11850"))
-        XCTAssertTrue(formatted.contains("CoreMediaErrorDomain"))
-        XCTAssertTrue(formatted.contains("-12884"))
-    }
+        let formattedWithUnderlying = Player.formatAVPlayerError(errorWithUnderlying)
+        XCTAssertTrue(formattedWithUnderlying.contains("-11850"))
+        XCTAssertTrue(formattedWithUnderlying.contains("CoreMediaErrorDomain"))
+        XCTAssertTrue(formattedWithUnderlying.contains("-12884"))
 
-    func testFormatAVPlayerErrorNilFallback() {
-        let formatted = Player.formatAVPlayerError(nil)
-        XCTAssertEqual(formatted, L10n.text("format.player.unavailable"))
+        XCTAssertEqual(Player.formatAVPlayerError(nil), L10n.text("format.player.unavailable"))
     }
 
     // MARK: - Seeking Safety & In-Flight EOF Guards

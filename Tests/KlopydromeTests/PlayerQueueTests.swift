@@ -126,13 +126,13 @@ final class PlayerQueueTests: XCTestCase {
     func testQueueContextSubtitleOnlyForAlbumOrPlaylist() {
         let player = Player()
         let song = makeSong("track1")
-        let album = SubsonicAlbum(id: "alb1", title: "Abbey Road")
+        let album = SubsonicAlbum(id: "alb1", title: "Test Album")
         let playlist = PlaylistSummary(id: "pl1", name: "Favorites 2026")
         let smart = SmartPlaylist(name: "Recently Played")
 
         player.setQueue([song], autoPlay: false, context: .album(album))
         XCTAssertNotNil(player.queueContextSubtitle)
-        XCTAssertTrue(player.queueContextSubtitle?.contains("Abbey Road") == true)
+        XCTAssertTrue(player.queueContextSubtitle?.contains("Test Album") == true)
 
         player.setQueue([song], autoPlay: false, context: .playlist(playlist))
         XCTAssertNotNil(player.queueContextSubtitle)
@@ -152,7 +152,7 @@ final class PlayerQueueTests: XCTestCase {
     func testQueueClearingResetsPlaybackContext() {
         let player = Player()
         let song = makeSong("track1")
-        let album = SubsonicAlbum(id: "alb1", title: "Abbey Road")
+        let album = SubsonicAlbum(id: "alb1", title: "Test Album")
 
         player.setQueue([song], autoPlay: false, context: .album(album))
         XCTAssertEqual(player.playbackContext, .album(album))
@@ -166,7 +166,7 @@ final class PlayerQueueTests: XCTestCase {
         let player = Player()
         let song1 = makeSong("track1")
         let song2 = makeSong("track2")
-        let album = SubsonicAlbum(id: "alb1", title: "Abbey Road")
+        let album = SubsonicAlbum(id: "alb1", title: "Test Album")
 
         player.setQueue([song1], autoPlay: false, context: .album(album))
         XCTAssertEqual(player.playbackContext, .album(album))

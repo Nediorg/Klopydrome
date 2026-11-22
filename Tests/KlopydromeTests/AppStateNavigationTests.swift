@@ -115,7 +115,7 @@ final class AppStateNavigationTests: XCTestCase {
         let app = AppState()
         let playlist = PlaylistSummary(id: "pl-1", name: "PL", songCount: 3)
         app.nav.selectedPlaylist = playlist
-        let artist = Artist(id: "art-1", name: "Daft Punk")
+        let artist = Artist(id: "art-1", name: "Artist One")
 
         app.openArtistInLibrary(artist)
 
@@ -131,7 +131,7 @@ final class AppStateNavigationTests: XCTestCase {
         let app = AppState()
         let playlist = PlaylistSummary(id: "pl-1", name: "PL", songCount: 3)
         app.nav.selectedPlaylist = playlist
-        let album = SubsonicAlbum(id: "alb-1", title: "Discovery")
+        let album = SubsonicAlbum(id: "alb-1", title: "Album One")
 
         app.openAlbumInLibrary(album)
 

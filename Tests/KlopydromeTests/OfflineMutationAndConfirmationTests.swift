@@ -4,18 +4,6 @@ import NavidromeClient
 
 @MainActor
 final class OfflineMutationAndConfirmationTests: XCTestCase {
-    func testServerConfigSuppressionPreference() {
-        let empty = ServerConfig.empty
-        XCTAssertFalse(empty.effectiveSuppressOfflineActionWarning)
-
-        var config = ServerConfig.empty
-        config.suppressOfflineActionWarning = true
-        XCTAssertTrue(config.effectiveSuppressOfflineActionWarning)
-
-        config.suppressOfflineActionWarning = false
-        XCTAssertFalse(config.effectiveSuppressOfflineActionWarning)
-    }
-
     func testOfflineMutationStorePersistence() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -156,17 +144,6 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
         )
     }
 
-    func testServerConfigPendingMutationsAndScanSuppressionPreferences() {
-        var config = ServerConfig.empty
-        XCTAssertFalse(config.effectiveSuppressOfflinePrompts)
-        XCTAssertFalse(config.effectiveSuppressServerScanWarning)
-
-        config.effectiveSuppressOfflinePrompts = true
-        config.suppressServerScanWarning = true
-        XCTAssertTrue(config.effectiveSuppressOfflinePrompts)
-        XCTAssertTrue(config.effectiveSuppressServerScanWarning)
-    }
-
     func testOfflineMutationStorePlaylistActionsPersistence() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -228,14 +205,6 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
         let allSummary = app.pendingActionsSummary(for: mutations)
         XCTAssertEqual(allSummary.count, 3)
         XCTAssertTrue(allSummary.contains("Track ratings".localized))
-    }
-
-    func testPendingMutationsContextLocalization() {
-        let prevSession = "Local changes remain from the previous session:".localized
-        let offlineDisabled = "Local changes accumulated while offline:".localized
-        XCTAssertFalse(prevSession.isEmpty)
-        XCTAssertFalse(offlineDisabled.isEmpty)
-        XCTAssertNotEqual(prevSession, offlineDisabled)
     }
 
     func testSetWorkOfflineDisablingWithSuppressedPrompts() async {

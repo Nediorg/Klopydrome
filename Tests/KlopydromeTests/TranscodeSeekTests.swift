@@ -11,34 +11,35 @@ final class TranscodeSeekTests: XCTestCase {
             } ?? [:]
     }
 
-    func testTranscodeURLGetsTimeOffsetPreservingOtherParams() throws {
+    func testTranscodeURLTimeOffsetBuilding() throws {
         let base = try XCTUnwrap(URL(
             string: "http://host/rest/stream?id=abc&maxBitRate=128&format=opus"
         ))
         let url = try XCTUnwrap(Player.transcodedSeekURL(from: base, at: 123.4))
-        let params = params(of: url)
-        XCTAssertEqual(params["format"], "opus")
-        XCTAssertEqual(params["maxBitRate"], "128")
-        XCTAssertEqual(params["id"], "abc")
-        XCTAssertEqual(params["timeOffset"], "123")
-    }
+        let queryParams = params(of: url)
+        XCTAssertEqual(queryParams["format"], "opus")
+        XCTAssertEqual(queryParams["maxBitRate"], "128")
+        XCTAssertEqual(queryParams["id"], "abc")
+        XCTAssertEqual(queryParams["timeOffset"], "123")
 
-    func testTranscodeURLReplacesExistingTimeOffset() throws {
-        let base = try XCTUnwrap(URL(string: "http://host/rest/stream?id=abc&format=opus&timeOffset=5"))
-        let url = try XCTUnwrap(Player.transcodedSeekURL(from: base, at: 30))
-        let params = params(of: url)
-        XCTAssertEqual(params["timeOffset"], "30")
-    }
+        let replacedBase = try XCTUnwrap(URL(string: "http://host/rest/stream?id=abc&format=opus&timeOffset=5"))
+        let replaced = try XCTUnwrap(Player.transcodedSeekURL(from: replacedBase, at: 30))
+        XCTAssertEqual(params(of: replaced)["timeOffset"], "30")
 
-    func testTranscodeURLClampsNegativeTargetToZero() throws {
-        let base = try XCTUnwrap(URL(string: "http://host/rest/stream?id=abc&format=opus"))
-        let url = try XCTUnwrap(Player.transcodedSeekURL(from: base, at: -5))
-        XCTAssertEqual(params(of: url)["timeOffset"], "0")
+        let clampedBase = try XCTUnwrap(URL(string: "http://host/rest/stream?id=abc&format=opus"))
+        let clamped = try XCTUnwrap(Player.transcodedSeekURL(from: clampedBase, at: -5))
+        XCTAssertEqual(params(of: clamped)["timeOffset"], "0")
     }
 
     func testDetectsRemoteTranscodeStream() throws {
         XCTAssertTrue(Player.isRemoteTranscodeStreamURL(URL(
             string: "http://host/rest/stream?id=abc&format=opus"
+        )))
+        XCTAssertFalse(Player.isRemoteTranscodeStreamURL(URL(
+            string: "http://host/rest/stream?id=abc&format=raw"
+        )))
+        XCTAssertTrue(Player.isRemoteTranscodeStreamURL(URL(
+            string: "http://host/rest/stream?id=abc&maxBitRate=192"
         )))
         XCTAssertFalse(Player.isRemoteTranscodeStreamURL(URL(string: "http://host/rest/stream?id=abc")))
         XCTAssertFalse(Player.isRemoteTranscodeStreamURL(nil))
@@ -148,12 +149,6 @@ final class TranscodeSeekTests: XCTestCase {
         XCTAssertFalse(ended)
         XCTAssertTrue(player.hasReportedFailure)
         XCTAssertEqual(player.lastError, "MPV error -16")
-    }
-
-    func testIsRemoteTranscodeStreamURLHonorsRawAndMaxBitRate() {
-        XCTAssertFalse(Player.isRemoteTranscodeStreamURL(URL(string: "http://host/rest/stream?id=abc&format=raw")))
-        XCTAssertTrue(Player.isRemoteTranscodeStreamURL(URL(string: "http://host/rest/stream?id=abc&maxBitRate=192")))
-        XCTAssertTrue(Player.isRemoteTranscodeStreamURL(URL(string: "http://host/rest/stream?id=abc&format=opus")))
     }
 
     @MainActor

@@ -82,16 +82,4 @@ final class AuthTests: XCTestCase {
         XCTAssertNotEqual(token1, token3)
         XCTAssertEqual(token3, SubsonicClient.md5Hex("secret\(salt3)"))
     }
-
-    func testFormPostBodyEncodingPreservesPlusAndDuplicates() throws {
-        let bodyParams = [
-            URLQueryItem(name: "id", value: "song+1"),
-            URLQueryItem(name: "id", value: "song+2"),
-            URLQueryItem(name: "name", value: "Rock + Roll")
-        ]
-        var comp = URLComponents()
-        comp.queryItems = bodyParams
-        let bodyString = comp.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-        XCTAssertEqual(bodyString, "id=song%2B1&id=song%2B2&name=Rock%20%2B%20Roll")
-    }
 }

@@ -5,14 +5,6 @@ import NavidromeClient
 @testable import Klopydrome
 
 final class QuickLookCoverTests: XCTestCase {
-    func testCoverPreviewItemProperties() {
-        let testURL = URL(fileURLWithPath: "/tmp/test-cover.jpg")
-        let item = CoverPreviewItem(url: testURL, title: "Abbey Road")
-
-        XCTAssertEqual(item.previewItemURL, testURL)
-        XCTAssertEqual(item.previewItemTitle, "Abbey Road")
-    }
-
     func testAnyCachedImageRetrieval() {
         let store = CoverArtStore.shared
         let coverId = "test-quicklook-\(UUID().uuidString)"

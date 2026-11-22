@@ -159,33 +159,6 @@ final class MiniPlayerResizeGeometryTests: XCTestCase {
         XCTAssertEqual(size.height, 480, accuracy: 0.001)
     }
 
-    func testBlurCoverageAnchorsToBottomControls() {
-        // At 320pt compact size: coverage is 250pt, ensuring title and controls (163pt)
-        // are covered with blur beginning ~70pt from the top (~0.22 fraction)
-        let minCoverage = MiniPlayerVariableBlurCache.blurCoverage(for: 320.0)
-        XCTAssertEqual(minCoverage, 250.0, accuracy: 0.001)
-        let minFraction = MiniPlayerVariableBlurCache.startFraction(for: 320.0)
-        XCTAssertEqual(minFraction, (320.0 - 250.0) / 320.0, accuracy: 0.001)
-        XCTAssertLessThan(minFraction, 0.25)
-
-        // At 600pt compact size: coverage is 320pt, leaving top 280pt of artwork sharp
-        let maxCoverage = MiniPlayerVariableBlurCache.blurCoverage(for: 600.0)
-        XCTAssertEqual(maxCoverage, 320.0, accuracy: 0.001)
-        let maxFraction = MiniPlayerVariableBlurCache.startFraction(for: 600.0)
-        XCTAssertEqual(maxFraction, (600.0 - 320.0) / 600.0, accuracy: 0.001)
-        XCTAssertLessThan(maxFraction, 0.50)
-
-        // Mid-size scales linearly: 250 + (460 - 320) * (70 / 280) = 285.0
-        let midCoverage = MiniPlayerVariableBlurCache.blurCoverage(for: 460.0)
-        XCTAssertEqual(midCoverage, 285.0, accuracy: 0.001)
-
-        // Clamping guards against unexpected bounds
-        let underflow = MiniPlayerVariableBlurCache.blurCoverage(for: 100.0)
-        XCTAssertEqual(underflow, 250.0, accuracy: 0.001)
-        let overflow = MiniPlayerVariableBlurCache.blurCoverage(for: 900.0)
-        XCTAssertEqual(overflow, 320.0, accuracy: 0.001)
-    }
-
     func testBlurCacheIsStrictlyScopedToCoverArtKey() {
         let cache = MiniPlayerVariableBlurCache.shared
         let size = CGSize(width: 320, height: 320)

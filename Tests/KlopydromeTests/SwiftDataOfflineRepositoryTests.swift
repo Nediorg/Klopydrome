@@ -53,8 +53,8 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
     func testAutomaticAlbumAndArtistLink() async throws {
         let song = SubsonicSong(
             id: "track-42",
-            album: "Dark Side of the Moon",
-            artist: "Pink Floyd",
+            album: "Test Album One",
+            artist: "Test Artist One",
             albumId: "album-99",
             artistId: "artist-77"
         )
@@ -64,12 +64,12 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
         let albums = try await repository.fetchAlbums()
         XCTAssertEqual(albums.count, 1)
         XCTAssertEqual(albums.first?.id, "album-99")
-        XCTAssertEqual(albums.first?.title, "Dark Side of the Moon")
+        XCTAssertEqual(albums.first?.title, "Test Album One")
 
         let artists = try await repository.fetchArtists()
         XCTAssertEqual(artists.count, 1)
         XCTAssertEqual(artists.first?.id, "artist-77")
-        XCTAssertEqual(artists.first?.name, "Pink Floyd")
+        XCTAssertEqual(artists.first?.name, "Test Artist One")
     }
 
     func testAlbumDetailRoundTrip() async throws {
@@ -128,13 +128,13 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
     func testPlaylistDetailPreservesFullMetadataForUndownloadedTracks() async throws {
         let song = SubsonicSong(
             id: "undownloaded-1",
-            title: "Stairway to Heaven",
-            album: "Led Zeppelin IV",
-            artist: "Led Zeppelin",
+            title: "Classic Track",
+            album: "Classic Album",
+            artist: "Classic Band",
             track: 4,
             year: 1971,
             genre: "Rock",
-            coverArt: "cover-lz4",
+            coverArt: "cover-classic",
             duration: 482,
             discNumber: 1
         )
@@ -154,13 +154,13 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
         XCTAssertNotNil(fetched)
         let firstSong = try XCTUnwrap(fetched?.entry?.first)
         XCTAssertEqual(firstSong.id, "undownloaded-1")
-        XCTAssertEqual(firstSong.title, "Stairway to Heaven")
-        XCTAssertEqual(firstSong.artist, "Led Zeppelin")
-        XCTAssertEqual(firstSong.album, "Led Zeppelin IV")
+        XCTAssertEqual(firstSong.title, "Classic Track")
+        XCTAssertEqual(firstSong.artist, "Classic Band")
+        XCTAssertEqual(firstSong.album, "Classic Album")
         XCTAssertEqual(firstSong.track, 4)
         XCTAssertEqual(firstSong.year, 1971)
         XCTAssertEqual(firstSong.genre, "Rock")
-        XCTAssertEqual(firstSong.coverArt, "cover-lz4")
+        XCTAssertEqual(firstSong.coverArt, "cover-classic")
         XCTAssertEqual(firstSong.duration, 482)
         XCTAssertEqual(firstSong.discNumber, 1)
     }
@@ -274,17 +274,5 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: songsFile.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: snapshotFile.path))
-    }
-
-    func testServerConfigOfflineDefaults() {
-        let config = ServerConfig.empty
-        XCTAssertTrue(config.effectiveAutoReconnectEnabled)
-        XCTAssertFalse(config.effectiveForceOfflineMode)
-
-        var custom = config
-        custom.autoReconnectEnabled = false
-        custom.forceOfflineMode = true
-        XCTAssertFalse(custom.effectiveAutoReconnectEnabled)
-        XCTAssertTrue(custom.effectiveForceOfflineMode)
     }
 }

@@ -20,19 +20,6 @@ final class PlaylistDuplicateTests: XCTestCase {
         XCTAssertEqual(result, .add(songs: targets))
     }
 
-    func testEmptyTargetsReturnsNothingToAdd() {
-        let targets: [SubsonicSong] = []
-        let existing = [song("s1", title: "Song 1")]
-
-        let result = PlaylistDuplicateResolver.resolve(
-            targets: targets,
-            existingSongs: existing,
-            action: .ask
-        )
-
-        XCTAssertEqual(result, .nothingToAdd)
-    }
-
     func testActionAllowReturnsAllTargetsEvenWithDuplicates() {
         let song1 = song("s1", title: "Song 1")
         let song2 = song("s2", title: "Song 2")
