@@ -12,6 +12,8 @@ final class RowHoverManager {
     private var states: [SubsonicSong.ID: RowHoverState] = [:]
     private var currentHoveredID: SubsonicSong.ID?
 
+    var stateCount: Int { states.count }
+
     func state(for id: SubsonicSong.ID) -> RowHoverState {
         if let existing = states[id] {
             return existing
@@ -19,6 +21,15 @@ final class RowHoverManager {
         let state = RowHoverState()
         states[id] = state
         return state
+    }
+
+    func prune(keeping visibleIDs: Set<SubsonicSong.ID>) {
+        guard !states.isEmpty else { return }
+        var keep = visibleIDs
+        if let currentHoveredID {
+            keep.insert(currentHoveredID)
+        }
+        states = states.filter { keep.contains($0.key) }
     }
 
     func setHovered(id: SubsonicSong.ID?) {
@@ -261,6 +272,7 @@ struct TableTweaks: NSViewRepresentable {
 
         private func handleScrollDidEnd() {
             guard !isTableScrolling, !ScrollGate.shared.isScrolling else { return }
+            pruneOffscreenHoverStates()
             guard let tableView, let window = tableView.window else { return }
             let mouseLoc = window.mouseLocationOutsideOfEventStream
             let point = tableView.convert(mouseLoc, from: nil)
@@ -269,6 +281,28 @@ struct TableTweaks: NSViewRepresentable {
                 return
             }
             updateHover(at: point)
+        }
+
+        private func pruneOffscreenHoverStates() {
+            guard let tableView, let clipView, let songIDAtRow else { return }
+            let prepared = tableView.preparedContentRect
+            let rect = prepared.isEmpty ? clipView.bounds : clipView.bounds.union(prepared)
+            let range = tableView.rows(in: rect)
+            guard range.location != NSNotFound, range.length > 0 else {
+                hoverManager.prune(keeping: [])
+                return
+            }
+            let lower = max(0, range.location)
+            let upper = min(songCount, range.location + range.length)
+            guard lower < upper else { return }
+            var visibleIDs = Set<SubsonicSong.ID>()
+            visibleIDs.reserveCapacity(upper - lower)
+            for row in lower..<upper {
+                if let id = songIDAtRow(row) {
+                    visibleIDs.insert(id)
+                }
+            }
+            hoverManager.prune(keeping: visibleIDs)
         }
     }
 }

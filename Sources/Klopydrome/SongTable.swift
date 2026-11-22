@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import NavidromeClient
 
 enum SongColumn: String, CaseIterable, Hashable, Identifiable {
@@ -64,14 +63,6 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    var contentAlignment: Alignment {
-        switch self {
-        case .duration, .plays, .year, .bitrate: return .trailing
-        case .cloud, .favorite: return .center
-        default: return .leading
-        }
-    }
-
     var comparator: KeyPathComparator<SubsonicSong> {
         switch self {
         case .title: return KeyPathComparator(\.title)
@@ -129,6 +120,7 @@ struct SongTable: View {
     private var displayedSongs: [SubsonicSong] { songs }
 
     @State private var selection = Set<SubsonicSong.ID>()
+    @State private var selectionRef = SongSelectionRef()
     @State private var hoverManager = RowHoverManager()
 
     var body: some View {
@@ -137,12 +129,18 @@ struct SongTable: View {
         Table(displayedSongs, selection: $selection, sortOrder: $sortOrder,
               columnCustomization: $columnCustomization) {
             firstColumns(currentSongID: currentSongID)
-            secondColumns(currentSongID: currentSongID)
+            secondColumns()
+        }
+        .onChange(of: selection) { _, newValue in
+            selectionRef.ids = newValue
         }
         .onChange(of: songs) {
             hoverManager.reset()
         }
         .onChange(of: sortOrder) {
+            hoverManager.reset()
+        }
+        .onDisappear {
             hoverManager.reset()
         }
         .tint(AMColor.sidebarSelection)
@@ -176,41 +174,104 @@ struct SongTable: View {
 
     @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
     private func firstColumns(currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
-        makeColumn(.title, currentSongID: currentSongID, selection: selection)
-        makeColumn(.cloud, currentSongID: currentSongID, selection: selection)
-        makeColumn(.duration, currentSongID: currentSongID, selection: selection)
-        makeColumn(.artist, currentSongID: currentSongID, selection: selection)
-        makeColumn(.album, currentSongID: currentSongID, selection: selection)
-        makeColumn(.albumArtist, currentSongID: currentSongID, selection: selection)
-        makeColumn(.genre, currentSongID: currentSongID, selection: selection)
+        titleColumn(currentSongID: currentSongID)
+        cloudColumn()
+        numericColumn(.duration) { $0.duration.map { Player.format(seconds: Double($0)) } ?? "" }
+        textColumn(.artist) { $0.artist ?? "" }
+        textColumn(.album) { $0.album ?? "" }
+        textColumn(.albumArtist) { $0.resolvedAlbumArtist }
+        textColumn(.genre) { $0.genre ?? "" }
     }
 
     @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
-    private func secondColumns(currentSongID: SubsonicSong.ID?) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
-        makeColumn(.favorite, currentSongID: currentSongID, selection: selection)
-        makeColumn(.plays, currentSongID: currentSongID, selection: selection)
-        makeColumn(.year, currentSongID: currentSongID, selection: selection)
-        makeColumn(.composer, currentSongID: currentSongID, selection: selection)
-        makeColumn(.bitrate, currentSongID: currentSongID, selection: selection)
-        makeColumn(.rating, currentSongID: currentSongID, selection: selection)
-        makeColumn(.added, currentSongID: currentSongID, selection: selection)
+    private func secondColumns() -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        favoriteColumn()
+        numericColumn(.plays) { $0.playCount.map(String.init) ?? "" }
+        numericColumn(.year) { $0.year.map(String.init) ?? "" }
+        textColumn(.composer) { $0.resolvedComposer ?? "" }
+        numericColumn(.bitrate) { $0.bitRate.map { "\($0) kbps" } ?? "" }
+        ratingColumn()
+        textColumn(.added) { SongTable.addedDateText($0.created) }
     }
 
     @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
-    private func makeColumn(
-        _ column: SongColumn,
-        currentSongID: SubsonicSong.ID?,
-        selection: Set<SubsonicSong.ID>
+    private func titleColumn(
+        currentSongID: SubsonicSong.ID?
     ) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        let column = SongColumn.title
         TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
-            SongColumnCell(
-                column: column,
+            TitleColumnCell(
                 song: song,
                 app: app,
                 hoverState: hoverManager.state(for: song.id),
                 isCurrent: song.id == currentSongID,
-                selection: selection
+                selectionRef: selectionRef
             )
+        }
+        .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+        .alignment(column.alignment)
+        .customizationID(column.id)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func cloudColumn() -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        let column = SongColumn.cloud
+        TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+            CloudCell(song: song, app: app)
+        }
+        .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+        .alignment(column.alignment)
+        .customizationID(column.id)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func favoriteColumn() -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        let column = SongColumn.favorite
+        TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+            FavoriteCell(song: song, app: app, hoverState: hoverManager.state(for: song.id))
+        }
+        .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+        .alignment(column.alignment)
+        .customizationID(column.id)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func ratingColumn() -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        let column = SongColumn.rating
+        TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+            if app.effectiveRating(for: song) > 0 {
+                RatingStars(song: song, app: app, size: 10, spacing: 2)
+            }
+        }
+        .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+        .alignment(column.alignment)
+        .customizationID(column.id)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func textColumn(
+        _ column: SongColumn,
+        value: @escaping (SubsonicSong) -> String
+    ) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+            Text(value(song))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
+        .alignment(column.alignment)
+        .customizationID(column.id)
+    }
+
+    @TableColumnBuilder<SubsonicSong, KeyPathComparator<SubsonicSong>>
+    private func numericColumn(
+        _ column: SongColumn,
+        value: @escaping (SubsonicSong) -> String
+    ) -> some TableColumnContent<SubsonicSong, KeyPathComparator<SubsonicSong>> {
+        TableColumn(column.headerText, sortUsing: column.comparator) { (song: SubsonicSong) in
+            Text(value(song))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
         }
         .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
         .alignment(column.alignment)
@@ -219,6 +280,17 @@ struct SongTable: View {
 
     fileprivate static func addedDateText(_ iso: String?) -> String {
         SubsonicDate.longDate(iso) ?? "—"
+    }
+}
+
+private final class SongSelectionRef {
+    var ids = Set<SubsonicSong.ID>()
+
+    func dragPayload(for songID: SubsonicSong.ID) -> TrackDragPayload {
+        if ids.contains(songID) && ids.count > 1 {
+            return .songs(Array(ids))
+        }
+        return .song(songID)
     }
 }
 
@@ -243,97 +315,32 @@ private struct SongContextMenu: View {
     }
 }
 
-private struct SongColumnCell: View {
-    let column: SongColumn
+private struct TitleColumnCell: View {
     let song: SubsonicSong
     let app: AppState
     let hoverState: RowHoverState
     let isCurrent: Bool
-    let selection: Set<SubsonicSong.ID>
-
-    private var dragPayload: TrackDragPayload {
-        if selection.contains(song.id) && selection.count > 1 {
-            return .songs(Array(selection))
-        }
-        return .song(song.id)
-    }
+    let selectionRef: SongSelectionRef
 
     var body: some View {
-        cellContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: column.contentAlignment)
-            .draggable(dragPayload)
-    }
-
-    @ViewBuilder
-    private var cellContent: some View {
-        switch column {
-        case .title:
-            HStack(spacing: 6) {
-                if isCurrent {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(AMColor.accent)
-                }
-                Text(song.displayTitle)
-                    .foregroundStyle(isCurrent ? AMColor.accent : .primary)
-                    .lineLimit(1)
-                if song.isExplicit {
-                    ExplicitBadge()
-                }
-                Spacer(minLength: 4)
-                TitleEllipsisButton(song: song, app: app, hoverState: hoverState)
+        HStack(spacing: 6) {
+            if isCurrent {
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AMColor.accent)
             }
-            .padding(.leading, 8)
-        case .cloud:
-            CloudCell(song: song, app: app)
-        case .duration:
-            if let duration = song.duration {
-                Text(Player.format(seconds: Double(duration)))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+            Text(song.displayTitle)
+                .foregroundStyle(isCurrent ? AMColor.accent : .primary)
+                .lineLimit(1)
+            if song.isExplicit {
+                ExplicitBadge()
             }
-        case .artist:
-            Text(song.artist ?? "")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .album:
-            Text(song.album ?? "")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .albumArtist:
-            Text(song.resolvedAlbumArtist)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .genre:
-            Text(song.genre ?? "")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .favorite:
-            FavoriteCell(song: song, app: app, hoverState: hoverState)
-        case .plays:
-            Text(song.playCount.map(String.init) ?? "")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        case .year:
-            Text(song.year.map(String.init) ?? "")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        case .composer:
-            Text(song.resolvedComposer ?? "")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .bitrate:
-            Text(song.bitRate.map { "\($0) kbps" } ?? "")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        case .rating:
-            if app.effectiveRating(for: song) > 0 {
-                RatingStars(song: song, app: app, size: 10, spacing: 2)
-            }
-        case .added:
-            Text(SongTable.addedDateText(song.created))
-                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            TitleEllipsisButton(song: song, app: app, hoverState: hoverState)
         }
+        .padding(.leading, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .draggable(selectionRef.dragPayload(for: song.id))
     }
 }
 

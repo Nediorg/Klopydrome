@@ -216,21 +216,29 @@ struct SongsView: View {
     private func load(isRefresh: Bool = false) async {
         guard let client = app.client else { return }
         loadError = nil
-        if isRefresh {
+        let refreshInPlace = isRefresh && !songs.isEmpty
+        if isRefresh && !refreshInPlace {
             app.library.songs = []
             app.library.songsLoaded = false
-            loading = true
-        } else {
-            loading = songs.isEmpty
         }
+        loading = songs.isEmpty
         isLoadingMore = true
         defer {
             loading = false
             isLoadingMore = false
         }
-        var seen = Set(songs.map(\.id))
-        var offset = songs.count
-        var lastReprocessTime = Date()
+        if refreshInPlace {
+            await loadRefreshInPlace(client: client)
+        } else {
+            await loadIncremental(client: client)
+        }
+    }
+
+    private func loadRefreshInPlace(client: SubsonicClient) async {
+        var seen = Set<String>()
+        var collected: [SubsonicSong] = []
+        collected.reserveCapacity(songs.count)
+        var offset = 0
         while !Task.isCancelled {
             let batch: [SubsonicSong]
             do {
@@ -239,18 +247,47 @@ struct SongsView: View {
                 loadError = error.localizedDescription
                 break
             }
-            if appendBatch(batch, seen: &seen) {
+            for song in batch where seen.insert(song.id).inserted {
+                collected.append(song)
+            }
+            if batch.isEmpty || batch.count < chunkSize {
+                app.library.songs = collected
+                app.library.songsLoaded = true
+                reprocess()
+                await app.persistSongsToDisk()
+                break
+            }
+            offset += batch.count
+            await Task.yield()
+        }
+    }
+
+    private func loadIncremental(client: SubsonicClient) async {
+        var seen = Set(songs.map(\.id))
+        var offset = songs.count
+        var lastReprocessTime = Date.distantPast
+        while !Task.isCancelled {
+            let batch: [SubsonicSong]
+            do {
+                batch = try await client.search3(query: "", songCount: chunkSize, songOffset: offset).songs
+            } catch {
+                loadError = error.localizedDescription
+                break
+            }
+            let added = appendBatch(batch, seen: &seen)
+            let isFinal = batch.isEmpty || batch.count < chunkSize
+            if isFinal {
+                app.library.songsLoaded = true
+                reprocess()
+                await app.persistSongsToDisk()
+                break
+            }
+            if added {
                 let now = Date()
-                if now.timeIntervalSince(lastReprocessTime) >= 1.0 || batch.count < chunkSize {
+                if now.timeIntervalSince(lastReprocessTime) >= 2.5 {
                     lastReprocessTime = now
                     reprocess()
                 }
-            }
-            if batch.isEmpty || batch.count < chunkSize {
-                app.library.songsLoaded = true
-                await app.persistSongsToDisk()
-                reprocess()
-                break
             }
             offset += batch.count
             await Task.yield()

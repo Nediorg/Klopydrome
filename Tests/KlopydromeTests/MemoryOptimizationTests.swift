@@ -191,4 +191,21 @@ final class MemoryOptimizationTests: XCTestCase {
         XCTAssertTrue(player.shuffleState.originalQueue.isEmpty)
         XCTAssertEqual(player.queue.map(\.id), songs.map(\.id))
     }
+
+    func testRowHoverManagerPrunesOffscreenStates() {
+        let manager = RowHoverManager()
+        let keptState = manager.state(for: "s-2")
+        let hoveredState = manager.state(for: "s-3")
+        _ = manager.state(for: "s-1")
+        _ = manager.state(for: "s-4")
+        manager.setHovered(id: "s-3")
+        XCTAssertEqual(manager.stateCount, 4)
+
+        manager.prune(keeping: ["s-2"])
+
+        XCTAssertEqual(manager.stateCount, 2)
+        XCTAssertTrue(manager.state(for: "s-2") === keptState)
+        XCTAssertTrue(manager.state(for: "s-3") === hoveredState)
+        XCTAssertTrue(hoveredState.isHovered)
+    }
 }
