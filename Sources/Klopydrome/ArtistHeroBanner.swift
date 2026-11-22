@@ -132,16 +132,20 @@ struct ArtistHeroBanner: View {
                 playButton
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(artistName)
-                        .font(.title2.bold())
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    SelectableHeaderText(
+                        text: artistName,
+                        font: SelectableHeaderText.font(for: .title2, weight: .bold),
+                        color: .labelColor,
+                        lineLimit: 1
+                    )
 
                     if let detailsText {
-                        Text(detailsText)
-                            .font(.subheadline)
-                            .foregroundStyle(AMColor.secondaryText)
-                            .lineLimit(1)
+                        SelectableHeaderText(
+                            text: detailsText,
+                            font: SelectableHeaderText.font(for: .subheadline),
+                            color: AMColor.secondaryNSColor,
+                            lineLimit: 1
+                        )
                     }
                 }
             }

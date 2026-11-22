@@ -109,8 +109,11 @@ struct AlbumDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(detail.displayName)
-                        .font(.largeTitle.weight(.semibold))
+                    SelectableHeaderText(
+                        text: detail.displayName,
+                        font: SelectableHeaderText.font(for: .largeTitle, weight: .semibold),
+                        color: .labelColor
+                    )
                     artistLink(detail)
                     metaRow(detail)
                 }
@@ -128,19 +131,22 @@ struct AlbumDetailView: View {
         let artist = detail.artist ?? album.artist ?? ""
         let artistId = detail.artistId ?? album.artistId ?? ""
         if !artistId.isEmpty {
-            Button {
-                app.openArtistInLibrary(Artist(id: artistId, name: artist))
-            } label: {
-                Text(artist)
-                    .font(.title2.weight(.regular))
-                    .foregroundStyle(AMColor.accent)
-                    .brightness(artistHovered ? 0.15 : 0)
-            }
-            .buttonStyle(.plain)
+            SelectableHeaderText(
+                text: artist,
+                font: SelectableHeaderText.font(for: .title2),
+                color: .controlAccentColor,
+                onClick: {
+                    app.openArtistInLibrary(Artist(id: artistId, name: artist))
+                }
+            )
+            .brightness(artistHovered ? 0.15 : 0)
             .onHover { artistHovered = $0 }
         } else if !artist.isEmpty {
-            Text(artist)
-                .font(.title2.weight(.regular))
+            SelectableHeaderText(
+                text: artist,
+                font: SelectableHeaderText.font(for: .title2),
+                color: .labelColor
+            )
         }
     }
 
@@ -161,9 +167,11 @@ struct AlbumDetailView: View {
         if isLossless {
             parts.append("Lossless")
         }
-        return Text(parts.joined(separator: " · "))
-            .font(.callout.bold())
-            .foregroundStyle(AMColor.secondaryText)
+        return SelectableHeaderText(
+            text: parts.joined(separator: " · "),
+            font: SelectableHeaderText.font(for: .callout, weight: .bold),
+            color: AMColor.secondaryNSColor
+        )
     }
 
     private var orderedSongs: [SubsonicSong] {

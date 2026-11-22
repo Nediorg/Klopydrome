@@ -322,8 +322,11 @@ extension PlaylistDetailView {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(detail.displayName)
-                            .font(.largeTitle.weight(.semibold))
+                        SelectableHeaderText(
+                            text: detail.displayName,
+                            font: SelectableHeaderText.font(for: .largeTitle, weight: .semibold),
+                            color: .labelColor
+                        )
                         kindLine(detail)
                         if detail.isSmart {
                             editRulesButton(detail)

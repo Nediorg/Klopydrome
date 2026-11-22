@@ -1,5 +1,6 @@
-import SwiftUI
 import AppKit
+import NavidromeClient
+import SwiftUI
 
 enum AMColor {
     static let background = adaptive(light: 0xF5F5F7, dark: 0x1C1C1E)
@@ -9,7 +10,8 @@ enum AMColor {
     static let trackFill = adaptive(light: 0xD1D1D6, dark: 0x4A4A4C)
     static let divider = adaptive(light: 0xE2E2E6, dark: 0x38383A, alpha: 0.4)
     static let accent = Color.accentColor
-    static let secondaryText = adaptive(light: 0x6C6C70, dark: 0x98989D)
+    static let secondaryNSColor = adaptiveNSColor(light: 0x6C6C70, dark: 0x98989D)
+    static let secondaryText = Color(nsColor: secondaryNSColor)
     static let tertiaryText = adaptive(light: 0x8E8E93, dark: 0x6E6E73)
     static let primaryText = adaptive(light: 0x1C1C1E, dark: 0xF5F5F7)
     static let surfaceTertiaryHover = adaptive(light: 0xD1D1D6, dark: 0x48484A)
@@ -19,11 +21,15 @@ enum AMColor {
     static let playerBar = adaptive(light: 0xEFEFF1, dark: 0x161618)
     static let inspector = AMColor.playerBar
 
-    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
+    private static func adaptiveNSColor(light: UInt32, dark: UInt32) -> NSColor {
+        NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             return isDark ? NSColor(rgb: dark) : NSColor(rgb: light)
-        })
+        }
+    }
+
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        Color(nsColor: adaptiveNSColor(light: light, dark: dark))
     }
     private static func adaptive(light: UInt32, dark: UInt32, alpha: CGFloat) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

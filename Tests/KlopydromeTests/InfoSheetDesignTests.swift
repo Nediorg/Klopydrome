@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import XCTest
 @testable import Klopydrome
 import NavidromeClient
@@ -77,5 +79,36 @@ final class InfoSheetDesignTests: XCTestCase {
             lastFmUrl: artistInfo.lastFmUrl
         )
         XCTAssertEqual(cleanedBio, "Artist biography text.[Read more on Last.fm](https://example.com/music/artist-one)")
+    }
+
+    @MainActor
+    func testSelectableHeaderTextFitsTightBoundsAndSafeZones() {
+        let font = SelectableHeaderText.font(for: .title2)
+        for proposedWidth in [nil, CGFloat.infinity, 0, 400] as [CGFloat?] {
+            let size = SelectableHeaderText.measuredContentSize(
+                text: "Sample Artist",
+                font: font,
+                lineLimit: nil,
+                proposedWidth: proposedWidth
+            )
+            XCTAssertGreaterThan(size.width, 30)
+            XCTAssertLessThan(size.width, 300)
+            XCTAssertGreaterThan(size.height, 10)
+            XCTAssertLessThan(size.height, 60)
+        }
+
+        let host = NSHostingView(
+            rootView: SelectableHeaderText(
+                text: "Sample Artist",
+                font: font,
+                color: .controlAccentColor,
+                onClick: {}
+            )
+        )
+        let fitting = host.fittingSize
+        XCTAssertGreaterThan(fitting.width, 30)
+        XCTAssertLessThan(fitting.width, 300)
+        XCTAssertGreaterThan(fitting.height, 10)
+        XCTAssertLessThan(fitting.height, 60)
     }
 }

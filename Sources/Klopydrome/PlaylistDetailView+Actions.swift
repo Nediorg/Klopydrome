@@ -49,9 +49,11 @@ extension PlaylistDetailView {
         if let duration = detail.duration {
             parts.append(Player.format(seconds: Double(duration)))
         }
-        return Text(parts.joined(separator: " · "))
-            .font(.callout.bold())
-            .foregroundStyle(AMColor.secondaryText)
+        return SelectableHeaderText(
+            text: parts.joined(separator: " · "),
+            font: SelectableHeaderText.font(for: .callout, weight: .bold),
+            color: AMColor.secondaryNSColor
+        )
     }
 
     func actionRow(_ detail: PlaylistDetail) -> some View {

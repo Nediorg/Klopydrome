@@ -1,4 +1,3 @@
-import AppKit
 import NavidromeClient
 import SwiftUI
 
@@ -109,6 +108,7 @@ struct ArtistInfoSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(artistName)
                     .font(.title2.bold())
+                    .textSelection(.enabled)
                 Text(roleLabel ?? "Artist".localized)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -155,6 +155,7 @@ struct ArtistInfoSheet: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.callout.weight(.medium))
+                .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -169,6 +170,7 @@ struct ArtistInfoSheet: View {
                 ForEach(allGenres, id: \.self) { genre in
                     Text(genre)
                         .font(.caption.weight(.medium))
+                        .textSelection(.enabled)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(AMColor.surfaceLight))
