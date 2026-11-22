@@ -75,23 +75,49 @@ final class AppState {
 
     var smartPlaylistEngine: SmartPlaylistEngine?
 
-    var isConnecting = false
+    var connectionState: ConnectionState = .unconfigured
+    @ObservationIgnored var healthTracker = ServerHealthTracker()
+    @ObservationIgnored let circuitGate = AtomicCircuitGate()
+    @ObservationIgnored var reconnectLoopTask: Task<Void, Never>?
+
     var connectionError: String?
-    var isOfflineSession = false
-    var isPreparingOfflineSession = false
-    var isReconnecting = false
     var isServerScanning = false
     var isFlushingOfflineMutations = false
     @ObservationIgnored var scanStatusPollingTask: Task<Void, Never>?
     var sharesManagerPresented = false
-    var isBackgroundReconnecting = false
-    var lastForegroundRefresh = Date()
+    var lastForegroundRefresh: Date = .distantPast
+    var lastForegroundProbe: Date = .distantPast
 
     var cachedKeychainPassword: String?
     var didReadKeychainPassword = false
     var automaticPlaybackRecording: (song: SubsonicSong, temporaryURL: URL)?
 
     var isLaunching = true
+
+    var isOnline: Bool { connectionState.isOnline }
+    var allowsNetworkRequests: Bool { connectionState.isOnline && client != nil }
+    var isManualOffline: Bool { connectionState.isManualOffline }
+    var isAuthError: Bool { connectionState.isAuthError }
+    var offlineReason: OfflineReason? { connectionState.offlineReason }
+    var isConnecting: Bool { connectionState.isConnecting }
+    var isReconnecting: Bool { connectionState.isReconnecting }
+
+    var isOfflineSession: Bool {
+        get { connectionState.isOfflineSession }
+        set {
+            if newValue {
+                if !connectionState.isOfflineSession {
+                    updateConnectionState(.degraded(
+                        reason: .serverUnreachable(nil),
+                        nextRetryAt: nil,
+                        consecutiveFailures: 1
+                    ))
+                }
+            } else if connectionState.isOfflineSession {
+                updateConnectionState(client != nil ? .online : .unconfigured)
+            }
+        }
+    }
 
     var isCreatingPlaylist = false
     var creatingPlaylistSongs: [SubsonicSong] = []
@@ -207,7 +233,7 @@ final class AppState {
     @ObservationIgnored
     var ratingOverrides: [String: Int] = [:]
 
-    var isConnected: Bool { client != nil }
+    var isConnected: Bool { client != nil && !connectionState.isOfflineSession }
 
     var appearance: ColorScheme? {
         switch serverConfig.theme {
@@ -239,6 +265,16 @@ final class AppState {
         NetworkMonitor.shared.onConnectivityRestored = { [weak self] in
             Task { @MainActor [weak self] in
                 await self?.handleNetworkRestored()
+            }
+        }
+        NetworkMonitor.shared.onConnectivityLost = { [weak self] in
+            Task { @MainActor [weak self] in
+                await self?.handleConnectivityLost()
+            }
+        }
+        NetworkMonitor.shared.onPathChanged = { [weak self] in
+            Task { @MainActor [weak self] in
+                await self?.handleNetworkPathChanged()
             }
         }
         setupMemoryPressureMonitoring()

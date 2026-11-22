@@ -147,36 +147,25 @@ final class AppStateNavigationTests: XCTestCase {
 
     func testShouldShowLoginViewGatesTransitions() {
         let app = AppState()
-        // Launch gate suppresses login
         XCTAssertTrue(app.isLaunching)
         XCTAssertFalse(app.shouldShowLoginView)
 
-        // Post-launch idle disconnected state shows login
         app.isLaunching = false
         XCTAssertTrue(app.shouldShowLoginView)
 
-        // Preparing offline session suppresses login
-        app.isPreparingOfflineSession = true
+        app.updateConnectionState(.connecting(attempt: 1))
         XCTAssertFalse(app.shouldShowLoginView)
-        app.isPreparingOfflineSession = false
-        XCTAssertTrue(app.shouldShowLoginView)
 
-        // Active offline session suppresses login
-        app.isOfflineSession = true
+        app.updateConnectionState(.degraded(reason: .serverUnreachable(nil), nextRetryAt: nil, consecutiveFailures: 1))
         XCTAssertFalse(app.shouldShowLoginView)
-        app.isOfflineSession = false
-        XCTAssertTrue(app.shouldShowLoginView)
 
-        // Foreground reconnect suppresses login
-        app.isReconnecting = true
+        app.updateConnectionState(.reconnecting(previousReason: .serverUnreachable(nil)))
         XCTAssertFalse(app.shouldShowLoginView)
-        app.isReconnecting = false
-        XCTAssertTrue(app.shouldShowLoginView)
 
-        // Background reconnect suppresses login
-        app.isBackgroundReconnecting = true
+        app.updateConnectionState(.manualOffline)
         XCTAssertFalse(app.shouldShowLoginView)
-        app.isBackgroundReconnecting = false
+
+        app.updateConnectionState(.unconfigured)
         XCTAssertTrue(app.shouldShowLoginView)
     }
 }

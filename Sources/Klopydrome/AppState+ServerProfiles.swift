@@ -108,7 +108,7 @@ extension AppState {
             serverConfig.serverName = profile.name
             serverConfig.allowInsecureHTTP = profile.allowInsecureHTTP
             persist()
-            connectionError = "Password required.".localized
+            await enterDegradedMode(reason: .authRequired("Password required.".localized))
             return
         }
 
@@ -120,11 +120,19 @@ extension AppState {
                 authMode: profile.authMode,
                 allowInsecureHTTP: profile.allowInsecureHTTP,
                 profileName: profile.name,
-                profileID: profile.id
+                profileID: profile.id,
+                mutationFlushPolicy: .prompt(.previousSession)
             )
-            await self.flushOfflineMutations(promptUser: true, context: .previousSession)
         } catch {
-            connectionError = error.localizedDescription
+            serverConfig.url = profile.url
+            serverConfig.username = profile.username
+            serverConfig.authMode = profile.authMode
+            serverConfig.serverName = profile.name
+            serverConfig.allowInsecureHTTP = profile.allowInsecureHTTP
+            persist()
+            let kind = TransportErrorClassifier.classify(error)
+            let reason = healthTracker.recordProbeFailure(kind: kind, message: error.localizedDescription)
+            await enterDegradedMode(reason: reason)
         }
     }
 
@@ -135,6 +143,7 @@ extension AppState {
     }
 
     private func cancelActiveSessionTasks() {
+        stopReconnectLoop()
         warmupTask?.cancel()
         warmupTask = nil
         cancelAutomaticPlaybackCache()
@@ -202,7 +211,8 @@ extension AppState {
         navidrome = nil
         cache = nil
         smartPlaylistEngine = nil
-        isOfflineSession = false
+        healthTracker.reset()
+        updateConnectionState(.unconfigured)
         cachedKeychainPassword = nil
         didReadKeychainPassword = false
 

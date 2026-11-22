@@ -1,4 +1,5 @@
 import Foundation
+import NavidromeClient
 
 extension Notification.Name {
     static let foregroundRefreshRequested = Notification.Name("ForegroundRefreshRequested")
@@ -6,16 +7,21 @@ extension Notification.Name {
 
 extension AppState {
     func handleForegroundActivation() async {
+        guard !isLaunching else { return }
         let now = Date()
-        guard !isLaunching, now.timeIntervalSince(lastForegroundRefresh) > 30 else { return }
+
+        if connectionState.isOfflineSession {
+            guard canAutoReconnect else { return }
+            guard now.timeIntervalSince(lastForegroundProbe) > 3 else { return }
+            lastForegroundProbe = now
+            _ = await triggerImmediateProbe(silent: true)
+            return
+        }
+
+        guard connectionState.isOnline else { return }
+        guard now.timeIntervalSince(lastForegroundRefresh) > 30 else { return }
         lastForegroundRefresh = now
         CoverArtStore.shared.invalidateFailedKeys()
         NotificationCenter.default.post(name: .foregroundRefreshRequested, object: nil)
-        guard !serverConfig.effectiveForceOfflineMode else { return }
-        guard !isConnected, !isConnecting, !isBackgroundReconnecting,
-              !serverConfig.url.isEmpty, passwordForLoginPrefill() != nil else { return }
-        isBackgroundReconnecting = true
-        defer { isBackgroundReconnecting = false }
-        await reconnectIfPossible()
     }
 }

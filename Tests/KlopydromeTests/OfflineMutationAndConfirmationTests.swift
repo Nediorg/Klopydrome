@@ -117,19 +117,18 @@ final class OfflineMutationAndConfirmationTests: XCTestCase {
         )
         app.serverConfig.forceOfflineMode = false
 
-        app.isReconnecting = true
+        app.updateConnectionState(.reconnecting(previousReason: .serverUnreachable(nil)))
         XCTAssertEqual(
             SidebarStatusCard.resolveStatus(for: app),
             .connecting
         )
 
-        app.isReconnecting = false
-        app.isConnecting = true
+        app.updateConnectionState(.connecting(attempt: 1))
         XCTAssertEqual(
             SidebarStatusCard.resolveStatus(for: app),
             .connecting
         )
-        app.isConnecting = false
+        app.updateConnectionState(.online)
 
         app.isServerScanning = true
         XCTAssertEqual(

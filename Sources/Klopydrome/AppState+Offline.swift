@@ -176,7 +176,7 @@ extension AppState {
         library.recentAlbums = albums
         library.recentAlbumsLoaded = true
         library.recentAllLoaded = true
-        library.favoritesSongs = songs
+        library.favoritesSongs = songs.filter { $0.starred != nil || starOverrides[$0.id] == true }
         library.favoritesLoaded = true
         library.playlists = playlists
         library.playlistsLoaded = true
@@ -252,13 +252,52 @@ extension AppState {
         return detail
     }
 
-    func beginOfflineSession() async -> Bool {
-        isPreparingOfflineSession = true
-        defer { isPreparingOfflineSession = false }
-
-        guard !serverConfig.url.isEmpty else {
-            return false
+    func hydrateOfflineStoreIfNeeded(preserveExistingLibrary: Bool) async {
+        guard !serverConfig.url.isEmpty else { return }
+        let storageKey = effectiveStorageKey
+        let offlineCache = cache ?? CacheManager(rootURL: CacheManager.root(forServer: storageKey))
+        if cache == nil {
+            cache = offlineCache
+            resetCacheState()
         }
+        if !cachedStreamKeysSeeded {
+            await seedCachedStreamKeys()
+        }
+        await setupOfflineRepository(host: storageKey)
+        if preserveExistingLibrary {
+            await restoreOfflineCatalog()
+            await restorePendingOfflineMutations()
+        } else {
+            await restoreLibraryFromDiskCache()
+            let hasCachedHome = !library.homeShelves.isEmpty || !library.albums.isEmpty
+            if hasCachedHome {
+                await restoreOfflineCatalog()
+                await restorePendingOfflineMutations()
+            } else {
+                await restoreOfflineLibrary()
+            }
+        }
+        await applyCacheLimits()
+    }
+
+    func enterManualOfflineMode() async {
+        guard !serverConfig.url.isEmpty else {
+            updateConnectionState(.unconfigured)
+            return
+        }
+        stopReconnectLoop()
+        warmupTask?.cancel()
+        warmupTask = nil
+        stopScanStatusPolling()
+        cancelPlaylistLoads()
+        lyricsTask?.cancel()
+        lyricsTask = nil
+        pauseDownloadWorkerForOffline()
+
+        client = nil
+        navidrome = nil
+        connectionError = nil
+        updateConnectionState(.manualOffline)
 
         let storageKey = effectiveStorageKey
         let offlineCache = CacheManager(rootURL: CacheManager.root(forServer: storageKey))
@@ -266,58 +305,14 @@ extension AppState {
         resetCacheState()
         await seedCachedStreamKeys()
         await setupOfflineRepository(host: storageKey)
-
-        let downloadedTracks = (try? await offlineRepository?.fetchDownloadedTracks())?
-            .filter { isCached($0) } ?? []
-        let hasDownloadedTracks = !downloadedTracks.isEmpty
-        if !hasDownloadedTracks && !serverConfig.effectiveForceOfflineMode {
-            cache = nil
-            resetCacheState()
-            return false
-        }
         await restoreOfflineLibrary()
         await applyCacheLimits()
-
-        if !isOfflineSession {
-            pruneOfflineNavigation()
-        }
-        isOfflineSession = true
         CoverArtStore.shared.configure(
             client: nil,
             cache: offlineCache,
-            coverResolution: serverConfig.coverResolution ?? .high
+            coverResolution: serverConfig.coverResolution ?? .high,
+            adaptiveCellularDataEnabled: serverConfig.effectiveAdaptiveCellularDataEnabled
         )
-        return true
-    }
-
-    private func pruneOfflineNavigation() {
-        if nav.selected == .search || nav.selected == .genres {
-            nav.selected = .songs
-        }
-        if let selected = nav.selectedPlaylist, !library.playlists.contains(where: { $0.id == selected.id }) {
-            nav.selectedPlaylist = nil
-        }
-        nav.history.removeAll { [weak self] destination in
-            guard let self else { return true }
-            return !self.isDestinationAvailableOffline(destination)
-        }
-    }
-
-    private func isDestinationAvailableOffline(_ destination: NavigationState.Destination) -> Bool {
-        switch destination {
-        case .album(let album):
-            return library.albums.contains(where: { $0.id == album.id })
-        case .playlist(let playlist):
-            return library.playlists.contains(where: { $0.id == playlist.id })
-        case .genre:
-            return false
-        case .artist(let artist):
-            return library.artistIndexes.contains { index in
-                index.artist?.contains(where: { $0.id == artist.id }) ?? false
-            }
-        case .song(let song):
-            return isCached(song)
-        }
     }
 
     func offlineArtists(from songs: [SubsonicSong]) -> [Artist] {
@@ -422,11 +417,7 @@ extension AppState {
     var shouldShowLoginView: Bool {
         isAddingServer || (
             !isLaunching &&
-            !isConnected &&
-            !isOfflineSession &&
-            !isPreparingOfflineSession &&
-            !isReconnecting &&
-            !isBackgroundReconnecting &&
+            connectionState == .unconfigured &&
             !isSwitchingServer
         )
     }
