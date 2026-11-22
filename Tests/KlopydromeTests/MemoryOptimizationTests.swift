@@ -116,35 +116,27 @@ final class MemoryOptimizationTests: XCTestCase {
         XCTAssertTrue(player.avPlayer === avp)
     }
 
-    func testCoverArtStoreDownscalesLargeFallbackForSmallRequest() async {
+    func testCoverArtStoreReusesLargerCachedImageWithoutDuplicateCopy() async {
         let store = CoverArtStore.shared
         store.clearMemoryCache()
 
-        let coverID = "test-thumb-downscale-\(UUID().uuidString)"
+        let coverID = "test-thumb-reuse-\(UUID().uuidString)"
         let largeKey = "\(coverID)-720"
 
-        // Inject 720x720 dummy image into memory cache
         let largeImage = NSImage(size: NSSize(width: 720, height: 720))
         store.memory.setObject(largeImage, forKey: largeKey as NSString)
         store.lock.withLock {
             _ = store.cachedSizes[coverID, default: []].insert(720)
         }
 
-        // Synchronous cachedImage returns the fallback directly to avoid MainActor CoreGraphics lag
         let syncThumb = store.cachedImage(coverArt: coverID, size: 40)
-        XCTAssertNotNil(syncThumb)
-        XCTAssertEqual(syncThumb?.size.width, 720)
+        XCTAssertTrue(syncThumb === largeImage)
 
-        // Async image(...) performs downscaling off the main actor
         let asyncBox = await store.image(coverArt: coverID, size: 40)
-        XCTAssertNotNil(asyncBox.image)
-        XCTAssertLessThanOrEqual(asyncBox.image!.size.width, 240)
-        XCTAssertLessThanOrEqual(asyncBox.image!.size.height, 240)
+        XCTAssertTrue(asyncBox.image === largeImage)
 
-        // Verify the 240px thumbnail is now cached in memory
         let thumbKey = "\(coverID)-240"
-        let cachedThumb = store.memory.object(forKey: thumbKey as NSString)
-        XCTAssertNotNil(cachedThumb)
+        XCTAssertNil(store.memory.object(forKey: thumbKey as NSString))
 
         store.clearMemoryCache()
     }

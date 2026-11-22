@@ -1,4 +1,5 @@
 import Foundation
+import NavidromeClient
 
 enum CoverResolution: String, Codable, CaseIterable, Identifiable {
     case high, medium, low
@@ -27,7 +28,7 @@ enum CoverResolution: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    static let buckets = [240, 720, 1000]
+    static let buckets = [240, 480, 720, 1000]
 
     private static func bucketed(_ pixels: Int, cap: Int) -> Int {
         let target = min(max(1, pixels), cap)
@@ -40,7 +41,7 @@ enum CoverResolution: String, Codable, CaseIterable, Identifiable {
     func requestedSize(forDisplayPixels displayPixels: Int) -> Int? {
         switch self {
         case .high: return Self.bucketed(displayPixels, cap: 1000)
-        case .medium: return Self.bucketed(displayPixels, cap: 500)
+        case .medium: return Self.bucketed(displayPixels, cap: 480)
         case .low: return Self.bucketed(displayPixels, cap: 240)
         }
     }

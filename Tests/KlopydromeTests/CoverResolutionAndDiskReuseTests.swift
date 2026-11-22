@@ -14,23 +14,27 @@ final class CoverResolutionAndDiskReuseTests: XCTestCase {
         XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 240), 240)
 
         // Cards and headers (shelves 165pt @2x = 330px, headers 220pt @2x = 440px)
-        XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 330), 720)
-        XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 440), 720)
+        XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 330), 480)
+        XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 440), 480)
+        XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 480), 480)
+        XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 500), 720)
         XCTAssertEqual(resolution.requestedSize(forDisplayPixels: 720), 720)
 
         // Candidate larger sizes for downsampling
         let largerFor240 = CoverResolution.candidateLargerSizes(than: 240)
-        XCTAssertEqual(largerFor240, [720, 1000, 0])
+        XCTAssertEqual(largerFor240, [480, 720, 1000, 0])
+
+        let largerFor480 = CoverResolution.candidateLargerSizes(than: 480)
+        XCTAssertEqual(largerFor480, [720, 1000, 0])
 
         let largerFor720 = CoverResolution.candidateLargerSizes(than: 720)
         XCTAssertEqual(largerFor720, [1000, 0])
 
-        // Medium resolution (cap 500)
         let medium = CoverResolution.medium
         XCTAssertEqual(medium.requestedSize(forDisplayPixels: 72), 240)
         XCTAssertEqual(medium.requestedSize(forDisplayPixels: 240), 240)
-        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 330), 500)
-        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 720), 500)
+        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 330), 480)
+        XCTAssertEqual(medium.requestedSize(forDisplayPixels: 720), 480)
 
         // Low resolution / Data Saver (cap 240)
         let low = CoverResolution.low

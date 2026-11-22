@@ -28,7 +28,7 @@ extension CoverArtStore {
         }
         coverLogger.debug("fetch coverArt=\(coverArt, privacy: .private) url=\(url.absoluteString, privacy: .private)")
         let outcome = await fetch(url: url, cacheKey: cacheKey, requestedSize: size)
-        if case .image = outcome, let cache, size == nil || (size ?? 0) >= 720 {
+        if case .image = outcome, let cache, size == nil || (size ?? 0) >= 480 {
             let thumbKey = CacheManager.coverKey(coverArt: coverArt, size: 240)
             if thumbKey != cacheKey {
                 await cache.removeFile(for: .covers, key: thumbKey)
@@ -41,7 +41,7 @@ extension CoverArtStore {
         return outcome
     }
 
-    private static let candidateFallbackSizes = [0, 2048, 1200, 1000, 750, 720, 500, 360, 240, 200, 160, 80]
+    private static let candidateFallbackSizes = [0, 2048, 1200, 1000, 750, 720, 500, 480, 360, 240, 200, 160, 80]
 
     func findAnyCachedCoverOnDisk(coverArt: String, requestedSize: Int?) async -> NSImage? {
         guard let cache else { return nil }
