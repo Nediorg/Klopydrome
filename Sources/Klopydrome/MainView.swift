@@ -14,6 +14,11 @@ struct MainView: View {
         @Bindable var app = app
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
+                .navigationSplitViewColumnWidth(
+                    min: LayoutMetrics.sidebarIdealWidth,
+                    ideal: LayoutMetrics.sidebarIdealWidth,
+                    max: LayoutMetrics.sidebarMaxWidth
+                )
         } detail: {
             DetailColumn(
                 showDownloads: $showDownloads,

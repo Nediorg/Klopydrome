@@ -31,73 +31,34 @@ struct SidebarView: View {
     private var playlists: [PlaylistSummary] { app.library.playlists }
 
     var body: some View {
-        List(selection: selectionBinding) {
-            Section {
-                sidebarRow("Home".localized, .home)
-            }
-
-            SidebarLibrarySection(selection: currentSelection, select: select)
-
-            Section {
-                Button {
-                    select(.section(.playlists))
-                } label: {
-                    playlistRow("All Playlists".localized,
-                                icon: icon(for: .playlists),
-                                isSelected: currentSelection == .section(.playlists))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+        VStack(spacing: 0) {
+            List(selection: selectionBinding) {
+                Section {
+                    sidebarRow("Home".localized, .home)
                 }
-                .buttonStyle(.plain)
-                .tag(Selection.section(.playlists))
-                .contextMenu { playlistContextMenu }
 
-                ForEach(personalPlaylists) { playlist in
+                SidebarLibrarySection(selection: currentSelection, select: select)
+
+                Section {
                     Button {
-                        select(.playlistID(playlist.id))
+                        select(.section(.playlists))
                     } label: {
-                        playlistRow(playlist.displayName,
-                                    icon: playlist.isSmart ? "gearshape" : "music.note.list",
-                                    isSelected: currentSelection == .playlistID(playlist.id))
-                            .lineLimit(1)
+                        playlistRow("All Playlists".localized,
+                                    icon: icon(for: .playlists),
+                                    isSelected: currentSelection == .section(.playlists))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .tag(Selection.playlistID(playlist.id))
-                    .modifier(PlaylistDropTargetModifier(
-                        isEnabled: !playlist.isSmart && app.canEditPlaylist(playlist),
-                        onDrop: { payload in
-                            Task {
-                                let songs = await app.resolveSongs(for: payload)
-                                guard !songs.isEmpty else { return }
-                                await app.addSongsCheckingDuplicates(songs, to: playlist)
-                            }
-                        }
-                    ))
-                    .contextMenu {
-                        PlaylistContextMenuItems(playlist: playlist) {
-                            beginRename(playlist)
-                        } onEditRules: {
-                            editRules(playlist)
-                        } onDelete: {
-                            confirmingDeleteID = playlist.id
-                        }
-                    }
-                }
-            } header: {
-                Text("Playlists".localized)
+                    .tag(Selection.section(.playlists))
                     .contextMenu { playlistContextMenu }
-            }
 
-            if !sharedPlaylists.isEmpty {
-                Section {
-                    ForEach(sharedPlaylists) { playlist in
+                    ForEach(personalPlaylists) { playlist in
                         Button {
                             select(.playlistID(playlist.id))
                         } label: {
                             playlistRow(playlist.displayName,
-                                        icon: "arrow.turn.down.right",
+                                        icon: playlist.isSmart ? "gearshape" : "music.note.list",
                                         isSelected: currentSelection == .playlistID(playlist.id))
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,25 +87,58 @@ struct SidebarView: View {
                         }
                     }
                 } header: {
-                    Text("Shared Playlists".localized)
+                    Text("Playlists".localized)
                         .contextMenu { playlistContextMenu }
                 }
+
+                if !sharedPlaylists.isEmpty {
+                    Section {
+                        ForEach(sharedPlaylists) { playlist in
+                            Button {
+                                select(.playlistID(playlist.id))
+                            } label: {
+                                playlistRow(playlist.displayName,
+                                            icon: "arrow.turn.down.right",
+                                            isSelected: currentSelection == .playlistID(playlist.id))
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .tag(Selection.playlistID(playlist.id))
+                            .modifier(PlaylistDropTargetModifier(
+                                isEnabled: !playlist.isSmart && app.canEditPlaylist(playlist),
+                                onDrop: { payload in
+                                    Task {
+                                        let songs = await app.resolveSongs(for: payload)
+                                        guard !songs.isEmpty else { return }
+                                        await app.addSongsCheckingDuplicates(songs, to: playlist)
+                                    }
+                                }
+                            ))
+                            .contextMenu {
+                                PlaylistContextMenuItems(playlist: playlist) {
+                                    beginRename(playlist)
+                                } onEditRules: {
+                                    editRules(playlist)
+                                } onDelete: {
+                                    confirmingDeleteID = playlist.id
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Shared Playlists".localized)
+                            .contextMenu { playlistContextMenu }
+                    }
+                }
             }
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .scrollIndicators(.hidden)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
+
             SidebarStatusCard()
         }
         .background(.thinMaterial, ignoresSafeAreaEdges: .all)
-        .navigationSplitViewColumnWidth(
-            min: LayoutMetrics.sidebarIdealWidth,
-            ideal: LayoutMetrics.sidebarIdealWidth,
-            max: LayoutMetrics.sidebarMaxWidth
-        )
-        .frame(minWidth: LayoutMetrics.sidebarIdealWidth, alignment: .leading)
-        .clipped()
         .confirmationDialog(
             "Delete Playlist?".localized,
             isPresented: Binding(

@@ -18,11 +18,9 @@ struct KlopydromeApp: App {
         WindowGroup {
             ContentView()
                 .environment(app)
-                .frame(minWidth: LayoutMetrics.windowMinWidth, minHeight: 600)
                 .task { await app.reconnectIfPossible() }
         }
         .defaultSize(width: 1180, height: 700)
-        .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             AppCommandMenus(app: app)
