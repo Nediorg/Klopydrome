@@ -1,4 +1,5 @@
 import Foundation
+import NavidromeClient
 
 extension Player {
     /// Starts the async libmpv load shared by `playMPV` (a fresh track) and by
@@ -143,6 +144,7 @@ extension Player {
             return
         }
         let display = seconds + mpvStreamOffset
+        lastMPVTimePosTimestamp = CFAbsoluteTimeGetCurrent()
         syncCurrentTimeAfterMPVUpdate(display: display)
         syncDurationFromMPVEngine()
         reportNowPlayingSecond(display)

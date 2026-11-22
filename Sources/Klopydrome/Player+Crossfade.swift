@@ -42,7 +42,7 @@ extension Player {
     }
 
     func evaluateCrossfade(at currentTime: Double) {
-        guard !isCrossfading, engineKind == .mpv, isPlaying, !isScrubbing, !isSeekInFlight,
+        guard !isCrossfading, engineKind == .mpv, isPlaying, !isScrubbing,
               trackDuration > crossfadeDuration + 2,
               let next = nextSongForPreloading,
               shouldCrossfade(to: next) else {
@@ -53,11 +53,12 @@ extension Player {
         if remaining <= prepareLead {
             prepareCrossfadeEngine(for: next)
         }
+        guard !isSeekInFlight else { return }
         if remaining <= crossfadeDuration,
            let engine = crossfadeEngine,
            crossfadeNextSongID == next.id,
            engine.isLoaded {
-            startCrossfade(to: next)
+            startCrossfade(to: next, remaining: remaining)
         }
     }
 
@@ -83,10 +84,29 @@ extension Player {
         crossfadeSourceURL = nil
     }
 
+    func crossfadeTrackProgress(at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Double {
+        guard isCrossfading, let active = activeCrossfade else { return 0 }
+        let total = trackDuration
+        guard total > 0 else {
+            let ref = active.pausedAt ?? now
+            return CrossfadeMath.progress(elapsed: ref - active.startTime, duration: active.duration)
+        }
+        let extrapolated: Double
+        if active.pausedAt != nil || !isPlaying || isBuffering || lastMPVTimePosTimestamp <= 0 {
+            extrapolated = currentTime
+        } else {
+            let dt = min(0.35, max(0, now - lastMPVTimePosTimestamp))
+            extrapolated = currentTime + dt
+        }
+        let remaining = max(0, total - extrapolated)
+        return CrossfadeMath.trackProgress(remaining: remaining, crossfadeDuration: crossfadeDuration)
+    }
+
     func cancelCrossfade() {
         crossfadeTimer?.invalidate()
         crossfadeTimer = nil
         resetCrossfadePreload()
+        lastCrossfadeCompletedNaturally = false
         isCrossfading = false
         activeCrossfade = nil
         crossfadeStepProgress = 0
@@ -130,6 +150,7 @@ extension Player {
         currentTime = incoming.currentTimeValue
         duration = 0
         syncDurationFromMPVEngine()
+        lastCrossfadeCompletedNaturally = true
         isCrossfading = false
         activeCrossfade = nil
         crossfadeStepProgress = 0
@@ -167,6 +188,10 @@ extension Player {
         engine.replayGainPreampDB = replayGainPreampDB
         engine.silenceTrimMode = silenceTrimMode
         engine.volume = 0
+        engine.onFileLoaded = { [weak self] in
+            guard let self else { return }
+            self.evaluateCrossfade(at: self.currentTime)
+        }
         engine.onFailure = { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -183,18 +208,22 @@ extension Player {
         Task { try? await engine.load(url: url, streamRecordURL: nil, replayGain: song.replayGain) }
     }
 
-    private func startCrossfade(to next: SubsonicSong) {
+    private func startCrossfade(to next: SubsonicSong, remaining: Double) {
         guard let incoming = crossfadeEngine, incoming.isLoaded else { return }
         resetPreloadedNext()
         incoming.volume = 0
         incoming.play()
+        let effectiveDuration = CrossfadeMath.effectiveDuration(
+            configured: crossfadeDuration,
+            remaining: remaining
+        )
         activeCrossfade = ActiveCrossfade(
             successorID: next.id,
             startTime: CFAbsoluteTimeGetCurrent(),
-            duration: crossfadeDuration
+            duration: effectiveDuration
         )
         isCrossfading = true
-        crossfadeStepProgress = CrossfadeMath.stepProgress(elapsed: 0, duration: crossfadeDuration)
+        crossfadeStepProgress = CrossfadeMath.stepProgress(elapsed: 0, duration: effectiveDuration)
         updateNowPlayingInfo()
         scheduleCrossfadeTimer()
     }

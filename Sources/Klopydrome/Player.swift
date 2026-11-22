@@ -41,6 +41,8 @@ final class Player {
     var isPlaying = false
     var isCrossfading = false
     var crossfadeStepProgress: Double = 0
+    @ObservationIgnored var lastMPVTimePosTimestamp: CFAbsoluteTime = 0
+    @ObservationIgnored var lastCrossfadeCompletedNaturally = false
     var nextTrackPreloadingEnabled = true
     var isLoading = false
     var isBuffering = false

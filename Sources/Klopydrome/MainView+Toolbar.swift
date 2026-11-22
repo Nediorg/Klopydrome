@@ -1,4 +1,3 @@
-import AppKit
 import NavidromeClient
 import SwiftUI
 
@@ -108,13 +107,12 @@ struct PlayerHeaderBar: View {
                 }
                 .frame(width: width + 2 * (24 + 8))
                 .transition(.opacity)
-            } else if app.player.isCrossfading {
+            } else {
                 HStack {
                     Spacer()
                     CrossfadeToolbarIndicator()
                 }
                 .frame(width: width + 2 * (24 + 8))
-                .transition(.opacity)
             }
         }
         .transaction { $0.animation = nil }

@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 import NavidromeClient
 @testable import Klopydrome
@@ -40,10 +41,67 @@ final class CrossfadeTests: XCTestCase {
         XCTAssertEqual(CrossfadeMath.stepProgress(elapsed: 6.0, duration: 5.0), 1.0, accuracy: 0.0001)
     }
 
+    func testProgressClampingAndZeroDuration() {
+        XCTAssertEqual(CrossfadeMath.progress(elapsed: -1.0, duration: 5.0), 0.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.progress(elapsed: 0.0, duration: 5.0), 0.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.progress(elapsed: 2.5, duration: 5.0), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.progress(elapsed: 6.0, duration: 5.0), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.progress(elapsed: 0.0, duration: 0.0), 1.0, accuracy: 0.0001)
+    }
+
+    func testCrossfadeSymbolSupportsVariableValue() {
+        let image = NSImage(
+            systemSymbolName: "circle.dotted.circle",
+            variableValue: 0.51,
+            accessibilityDescription: nil
+        )
+        XCTAssertNotNil(image)
+    }
+
     func testClampDuration() {
         XCTAssertEqual(CrossfadeMath.clampDuration(0), 1)
         XCTAssertEqual(CrossfadeMath.clampDuration(20), 12)
         XCTAssertEqual(CrossfadeMath.clampDuration(6), 6)
+    }
+
+    func testEffectiveDurationMatchesRemainingWhenStartedLate() {
+        XCTAssertEqual(CrossfadeMath.effectiveDuration(configured: 5.0, remaining: 5.0), 5.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.effectiveDuration(configured: 5.0, remaining: 3.75), 3.75, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.effectiveDuration(configured: 5.0, remaining: 0.05), 0.25, accuracy: 0.0001)
+    }
+
+    func testTrackProgressFollowsTrackARemainingTime() {
+        XCTAssertEqual(CrossfadeMath.trackProgress(remaining: 5.0, crossfadeDuration: 5.0), 0.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.trackProgress(remaining: 3.75, crossfadeDuration: 5.0), 0.25, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.trackProgress(remaining: 2.5, crossfadeDuration: 5.0), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.trackProgress(remaining: 0.0, crossfadeDuration: 5.0), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.trackProgress(remaining: 7.0, crossfadeDuration: 5.0), 0.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.trackProgress(remaining: -1.0, crossfadeDuration: 5.0), 1.0, accuracy: 0.0001)
+    }
+
+    func testFadeOpacityBounds() {
+        XCTAssertEqual(CrossfadeMath.fadeOpacity(elapsed: 0.0, duration: 0.25, fadingIn: true), 0.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.fadeOpacity(elapsed: 0.25, duration: 0.25, fadingIn: true), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.fadeOpacity(elapsed: 0.0, duration: 0.30, fadingIn: false), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(CrossfadeMath.fadeOpacity(elapsed: 0.30, duration: 0.30, fadingIn: false), 0.0, accuracy: 0.0001)
+    }
+
+    func testPlayerCrossfadeTrackProgressUsesTrackATime() {
+        let player = Player()
+        let first = mockSong("1", duration: 180)
+        let second = mockSong("2", duration: 180)
+        player.queue = [first, second]
+        player.currentIndex = 0
+        player.configureCrossfade(enabled: true, fadeDuration: 5, applyToAlbums: true)
+        player.duration = 180
+        player.mpvEngine.duration = 180
+        player.currentTime = 177.5
+        player.isPlaying = true
+        player.isCrossfading = true
+        player.activeCrossfade = ActiveCrossfade(successorID: "2", startTime: 100, duration: 2.5)
+
+        let progress = player.crossfadeTrackProgress(at: 100)
+        XCTAssertEqual(progress, 0.5, accuracy: 0.001)
     }
 
     func testShouldCrossfadeRespectsAlbumSuppressionAndState() {
