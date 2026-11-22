@@ -19,6 +19,9 @@ extension Player {
                 )
                 guard self.mpvLoadGeneration == generation else { return }
                 self.isBuffering = self.isPlaying ? self.mpvEngine.isBuffering : false
+                if self.isBuffering || self.isLoading {
+                    self.scheduleBufferingWatchdogIfNeeded()
+                }
                 if self.mpvSeekRestartActive {
                     self.currentTime = self.heldSeekTarget ?? self.mpvStreamOffset
                     self.mpvRestartStepped = true
@@ -47,6 +50,8 @@ extension Player {
             if self.isCrossfading {
                 self.completeCrossfade()
             } else if self.recoverFromPrematureLocalEOFIfNeeded() {
+                return
+            } else if self.recoverFromPrematureRemoteEOFIfNeeded() {
                 return
             } else {
                 self.onTrackEnded?()
@@ -99,7 +104,10 @@ extension Player {
         mpvEngine.onBufferingUpdate = { [weak self] buffering in
             guard let self, self.engineKind == .mpv else { return }
             self.isBuffering = buffering
-            if !buffering {
+            if buffering {
+                self.scheduleBufferingWatchdogIfNeeded()
+            } else {
+                self.cancelBufferingWatchdog()
                 self.applyPendingSeekIfNeeded()
             }
         }
@@ -145,6 +153,7 @@ extension Player {
         }
         let display = seconds + mpvStreamOffset
         lastMPVTimePosTimestamp = CFAbsoluteTimeGetCurrent()
+        noteRemotePlaybackProgress(at: display)
         syncCurrentTimeAfterMPVUpdate(display: display)
         syncDurationFromMPVEngine()
         reportNowPlayingSecond(display)

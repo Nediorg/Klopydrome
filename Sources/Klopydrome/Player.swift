@@ -43,6 +43,10 @@ final class Player {
     var crossfadeStepProgress: Double = 0
     @ObservationIgnored var lastMPVTimePosTimestamp: CFAbsoluteTime = 0
     @ObservationIgnored var lastCrossfadeCompletedNaturally = false
+    @ObservationIgnored var remoteStreamRetryCount = 0
+    @ObservationIgnored var remoteStreamRecoveryAnchorTime: Double?
+    @ObservationIgnored var remoteStreamRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored var bufferingWatchdogTask: Task<Void, Never>?
     var nextTrackPreloadingEnabled = true
     var isLoading = false
     var isBuffering = false
@@ -300,6 +304,7 @@ final class Player {
     }
 
     func playMPV(_ url: URL, streamRecordURL: URL? = nil) {
+        resetRemoteStreamRecovery()
         mpvFallbackError = nil
         currentSourceURL = url
         engineKind = .mpv

@@ -133,10 +133,7 @@ final class MPVPlaybackEngine {
             mpv_set_option_string(mpv, option.name, option.value)
         }
         mpv_set_option_string(mpv, "pause", "yes")
-
-        mpv_set_option_string(mpv, "demuxer-max-bytes", "16MiB")
-        mpv_set_option_string(mpv, "demuxer-max-back-bytes", "8MiB")
-        mpv_set_option_string(mpv, "cache-secs", "10")
+        configureNetworkOptions(handle)
 
         mpv_observe_property(mpv, 0, "time-pos", MPV_FORMAT_DOUBLE)
         mpv_observe_property(mpv, 0, "duration", MPV_FORMAT_DOUBLE)
@@ -313,5 +310,19 @@ final class MPVPlaybackEngine {
         let control = PlaybackVolume.mpvControl(forOutputGain: volume)
         var scaled = Double(control) * 100
         mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &scaled)
+    }
+}
+
+private extension MPVPlaybackEngine {
+    func configureNetworkOptions(_ handle: OpaquePointer) {
+        mpv_set_option_string(
+            handle,
+            "stream-lavf-o",
+            "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5"
+        )
+        mpv_set_option_string(handle, "network-timeout", "10")
+        mpv_set_option_string(handle, "demuxer-max-bytes", "32MiB")
+        mpv_set_option_string(handle, "demuxer-max-back-bytes", "8MiB")
+        mpv_set_option_string(handle, "cache-secs", "300")
     }
 }

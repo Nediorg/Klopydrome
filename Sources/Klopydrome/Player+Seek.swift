@@ -132,6 +132,9 @@ extension Player {
     }
 
     func pause() {
+        cancelBufferingWatchdog()
+        remoteStreamRecoveryTask?.cancel()
+        remoteStreamRecoveryTask = nil
         if engineKind == .mpv {
             mpvEngine.pause()
             if isCrossfading {
@@ -161,6 +164,9 @@ extension Player {
                 onTrackRequest?(song)
             }
             isPlaying = true
+            if isBuffering || isLoading {
+                scheduleBufferingWatchdogIfNeeded()
+            }
             updateNowPlayingInfo()
             return
         }
@@ -179,6 +185,7 @@ extension Player {
 
     func stop() {
         mpvLoadGeneration += 1
+        resetRemoteStreamRecovery()
         cancelCrossfade()
         resetPreloadedNext()
         avPlayer?.pause()
