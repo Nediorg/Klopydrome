@@ -1,73 +1,37 @@
+import NavidromeClient
 import SwiftUI
 
 struct FadeTruncatedLabel: View {
     let text: String
     var font: Font = .system(size: 12)
     var color: Color = .primary
-
-    var minLeading: CGFloat = 8
-    var minTrailing: CGFloat = 24
+    var isHovered: Bool = false
+    var lane: PlayerLCDMetrics.HorizontalLane = .init(minLeading: 8, minTrailing: 24)
 
     @State private var idealWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
-    @State private var marqueeOffset: CGFloat = 0
+    @State private var marqueeStartDate: Date?
 
-    private var availableWidth: CGFloat {
-        max(0, containerWidth - minLeading - minTrailing)
+    private var placement: PlayerLCDMetrics.TextPlacement {
+        PlayerLCDMetrics.placement(lcdWidth: containerWidth, textWidth: idealWidth, lane: lane)
     }
 
-    private var isOverflowing: Bool {
-        containerWidth > 0 && availableWidth > 0 && idealWidth > availableWidth + 1
+    private var scrollDistance: CGFloat {
+        PlayerLCDMetrics.marqueeDistance(textWidth: idealWidth, availableWidth: placement.availableWidth)
     }
 
-    private var marqueeDistance: CGFloat {
-        max(0, idealWidth - availableWidth)
-    }
-
-    private var marqueeDuration: TimeInterval {
-        max(4, TimeInterval(marqueeDistance / 24))
-    }
-
-    private var leadingSpace: CGFloat {
-        guard containerWidth > 0, idealWidth > 0 else { return minLeading }
-        if isOverflowing {
-            return minLeading
-        }
-        let centered = (containerWidth - idealWidth) / 2
-        let clampedLeading = max(minLeading, centered)
-        if clampedLeading + idealWidth > containerWidth - minTrailing {
-            return max(minLeading, containerWidth - minTrailing - idealWidth)
-        }
-        return clampedLeading
+    private var shouldRunMarquee: Bool {
+        isHovered && placement.isOverflowing && scrollDistance > 0 && Motion.enabled
     }
 
     var body: some View {
         HStack(spacing: 0) {
             Color.clear
-                .frame(width: leadingSpace, height: 1)
+                .frame(width: placement.leadingOffset, height: 1)
 
-            ZStack(alignment: .leading) {
-                if isOverflowing && marqueeOffset > 0 {
-                    Text(text)
-                        .font(font)
-                        .foregroundStyle(color)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .offset(x: -marqueeOffset)
-                        .transition(.identity)
-                } else {
-                    Text(text)
-                        .font(font)
-                        .foregroundStyle(color)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .transition(.identity)
-                }
-            }
-            .frame(maxWidth: isOverflowing ? availableWidth : nil, alignment: .leading)
-            .clipped()
+            labelViewport
 
-            Spacer(minLength: minTrailing)
+            Spacer(minLength: lane.minTrailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
@@ -85,41 +49,82 @@ struct FadeTruncatedLabel: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
             containerWidth = $0
         }
-        .task(id: MarqueeKey(text: text, idealWidth: idealWidth, availableWidth: availableWidth)) {
-            await runMarquee()
+        .task(id: MarqueeKey(
+            text: text,
+            idealWidth: Int(idealWidth.rounded()),
+            availableWidth: Int(placement.availableWidth.rounded()),
+            isHovered: isHovered
+        )) {
+            await armMarquee()
         }
+    }
+
+    @ViewBuilder
+    private var labelViewport: some View {
+        if let startDate = marqueeStartDate, shouldRunMarquee {
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+                let elapsed = max(0, context.date.timeIntervalSince(startDate))
+                let offset = PlayerLCDMetrics.marqueeOffset(elapsed: elapsed, distance: scrollDistance)
+
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .offset(x: -offset)
+                    .frame(width: placement.availableWidth, alignment: .leading)
+                    .clipped()
+                    .mask(edgeFadeMask(
+                        width: placement.availableWidth,
+                        showLeadingFade: offset > 0.5,
+                        showTrailingFade: (scrollDistance - offset) > 0.5
+                    ))
+            }
+        } else {
+            Text(text)
+                .font(font)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: placement.isOverflowing ? placement.availableWidth : nil, alignment: .leading)
+        }
+    }
+
+    private func edgeFadeMask(
+        width: CGFloat,
+        showLeadingFade: Bool,
+        showTrailingFade: Bool
+    ) -> some View {
+        let fadeFraction = width > 0 ? min(0.18, PlayerLCDMetrics.marqueeEdgeFadeWidth / width) : 0
+        return LinearGradient(
+            stops: [
+                .init(color: showLeadingFade ? .clear : .black, location: 0),
+                .init(color: .black, location: showLeadingFade ? fadeFraction : 0),
+                .init(color: .black, location: showTrailingFade ? max(0, 1 - fadeFraction) : 1),
+                .init(color: showTrailingFade ? .clear : .black, location: 1)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     @MainActor
-    private func runMarquee() async {
-        guard isOverflowing, marqueeDistance > 2, Motion.enabled else {
-            marqueeOffset = 0
+    private func armMarquee() async {
+        marqueeStartDate = nil
+        guard shouldRunMarquee else { return }
+        do {
+            try await Task.sleep(for: .seconds(PlayerLCDMetrics.marqueeStartDelay))
+        } catch {
             return
         }
-
-        while !Task.isCancelled {
-            marqueeOffset = 0
-            guard await pause(for: 3.0) else { return }
-
-            withAnimation(.linear(duration: marqueeDuration)) {
-                marqueeOffset = marqueeDistance
-            }
-            guard await pause(for: marqueeDuration + 2.0) else { return }
-        }
-    }
-
-    private func pause(for duration: TimeInterval) async -> Bool {
-        do {
-            try await Task.sleep(for: .seconds(duration))
-            return !Task.isCancelled
-        } catch {
-            return false
-        }
+        guard !Task.isCancelled, shouldRunMarquee else { return }
+        marqueeStartDate = Date()
     }
 
     private struct MarqueeKey: Hashable {
         let text: String
-        let idealWidth: CGFloat
-        let availableWidth: CGFloat
+        let idealWidth: Int
+        let availableWidth: Int
+        let isHovered: Bool
     }
 }

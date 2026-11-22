@@ -1,20 +1,22 @@
 import SwiftUI
 import NavidromeClient
-import AppKit
 
 struct PlayerLCDView: View {
     @Environment(AppState.self) private var app
 
+    @State private var isContainerHovered = false
     @State private var coverHovered = false
-    @State private var hoverText = false
-    @State private var hoverTrailing = false
     @State private var hoverScrubber = false
-    private var nowHovered: Bool { coverHovered || hoverText || hoverTrailing || hoverScrubber }
+    @State private var isScrubbing = false
+    @State private var elapsedTimeWidth: CGFloat = 0
+    @State private var remainingTimeWidth: CGFloat = 0
+    private var nowHovered: Bool { isContainerHovered || coverHovered || hoverScrubber || isScrubbing }
 
     var body: some View {
         lcdBlock
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
+            .onHover { isContainerHovered = $0 }
             .contextMenu {
                 if let song = app.player.displaySong {
                     NowPlayingActionMenuItems(song: song)
@@ -26,7 +28,7 @@ struct PlayerLCDView: View {
         ZStack {
             lcdContent
                 .frame(maxWidth: .infinity)
-                .frame(height: 42)
+                .frame(height: PlayerLCDMetrics.lcdHeight)
                 .background {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(AMColor.surfaceLight)
@@ -36,13 +38,22 @@ struct PlayerLCDView: View {
                     if app.player.displaySong != nil {
                         MinimalScrubber(
                             isLCDHovered: nowHovered,
-                            onHover: { hoverScrubber = $0 }
+                            onHover: { hoverScrubber = $0 },
+                            onScrubbingChanged: { isScrubbing = $0 },
+                            onTimeWidthsChanged: { elapsed, remaining in
+                                if abs(elapsedTimeWidth - elapsed) > 0.5 {
+                                    elapsedTimeWidth = elapsed
+                                }
+                                if abs(remainingTimeWidth - remaining) > 0.5 {
+                                    remainingTimeWidth = remaining
+                                }
+                            }
                         )
-                            .frame(maxWidth: .infinity, alignment: .bottom)
-                            .frame(height: nowHovered ? 18 : 12)
-                            .padding(.leading, 42)
-                            .padding(.trailing, 2)
-                            .transition(.opacity)
+                        .frame(maxWidth: .infinity, alignment: .bottom)
+                        .frame(height: nowHovered ? 18 : 12)
+                        .padding(.leading, PlayerLCDMetrics.coverWidth)
+                        .padding(.trailing, 2)
+                        .transition(.opacity)
                     }
                 }
                 .overlay(alignment: .topTrailing) {
@@ -51,11 +62,8 @@ struct PlayerLCDView: View {
                             song: app.player.displaySong,
                             nowHovered: nowHovered
                         )
-                        .contentShape(Rectangle())
-                        .onHover { hoverTrailing = $0 }
                     }
                 }
-
                 .overlay {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)
@@ -63,7 +71,7 @@ struct PlayerLCDView: View {
                 }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 42)
+        .frame(height: PlayerLCDMetrics.lcdHeight)
     }
 
     private var lcdContent: some View {
@@ -140,7 +148,7 @@ struct PlayerLCDView: View {
             }
         }
         .animation(.snappy(duration: 0.15), value: coverHovered)
-        .help("Open MiniPlayer".localized)
+        .help(app.player.displaySong == nil ? "" : "Open MiniPlayer".localized)
         .accessibilityLabel(app.player.displaySong == nil
             ? "Not Playing".localized : "Open MiniPlayer".localized)
     }
@@ -151,22 +159,25 @@ struct PlayerLCDView: View {
                 text: app.player.displaySong?.displayTitle ?? "",
                 font: .system(size: 12, weight: .medium),
                 color: .primary,
-                minLeading: 50,
-                minTrailing: nowHovered ? 42 : 24
+                isHovered: nowHovered,
+                lane: PlayerLCDMetrics.titleLane(isHovered: nowHovered)
             )
 
             FadeTruncatedLabel(
                 text: app.player.displaySong?.displaySubtitle ?? "",
                 font: .system(size: 12),
                 color: .secondary,
-                minLeading: 50,
-                minTrailing: nowHovered ? 38 : 24
+                isHovered: nowHovered,
+                lane: PlayerLCDMetrics.subtitleLane(
+                    isHovered: nowHovered,
+                    elapsedWidth: elapsedTimeWidth,
+                    remainingWidth: remainingTimeWidth
+                )
             )
         }
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .leading)
         .clipped()
         .contentShape(Rectangle())
-        .onHover { hoverText = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(app.player.displaySong.map { "\($0.displayTitle), \($0.displayArtist ?? "")" } ?? "Not Playing".localized)
         .accessibilityAddTraits(.isButton)
@@ -184,7 +195,7 @@ struct PlayerLCDView: View {
 }
 
 struct TopTrailingControlsView: View {
-    static let actionButtonSide: CGFloat = 18
+    static let actionButtonSide: CGFloat = PlayerLCDMetrics.actionButtonSide
 
     @Environment(AppState.self) private var app
 
@@ -196,19 +207,10 @@ struct TopTrailingControlsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 2) {
-            if let song {
-                if nowHovered {
-                    NowPlayingEllipsisMenu(song: song)
-                        .transition(.opacity)
-                } else {
-                    Color.clear
-                        .frame(
-                            width: Self.actionButtonSide - 4,
-                            height: Self.actionButtonSide - 4
-                        )
-                        .padding(.trailing, 3)
-                }
+        HStack(spacing: PlayerLCDMetrics.controlsSpacing) {
+            if let song, nowHovered {
+                NowPlayingEllipsisMenu(song: song)
+                    .transition(.opacity)
             }
 
             Button {
@@ -218,7 +220,7 @@ struct TopTrailingControlsView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(isCurrentStarred ? AMColor.accent : Color.secondary)
                     .frame(width: Self.actionButtonSide, height: Self.actionButtonSide)
-                    .hoverFill(fill: Color.primary.opacity(0.08), cornerRadius: 2)
+                    .hoverFill(fill: Color.primary.opacity(0.08), cornerRadius: 3)
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
@@ -229,7 +231,7 @@ struct TopTrailingControlsView: View {
             .allowsHitTesting(song != nil)
         }
         .frame(height: 28)
-        .padding(.trailing, 4)
+        .padding(.trailing, PlayerLCDMetrics.controlsTrailingPadding)
         .offset(y: -2)
     }
 }
@@ -242,13 +244,13 @@ struct NowPlayingEllipsisMenu: View {
             NowPlayingActionMenuItems(song: song)
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 9, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.secondary)
                 .frame(
                     width: TopTrailingControlsView.actionButtonSide,
                     height: TopTrailingControlsView.actionButtonSide
                 )
-                .hoverFill(fill: Color.primary.opacity(0.08), cornerRadius: 2)
+                .hoverFill(fill: Color.primary.opacity(0.08), cornerRadius: 3)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -256,7 +258,6 @@ struct NowPlayingEllipsisMenu: View {
             width: TopTrailingControlsView.actionButtonSide,
             height: TopTrailingControlsView.actionButtonSide
         )
-        .padding(.trailing, 3)
         .contentShape(Rectangle())
         .help("More".localized)
         .accessibilityLabel("Song Actions".localized)

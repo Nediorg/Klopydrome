@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import NavidromeClient
 
 struct MainView: View {
@@ -203,10 +202,14 @@ struct MinimalScrubber: View {
 
     let isLCDHovered: Bool
     var onHover: ((Bool) -> Void)?
+    var onScrubbingChanged: ((Bool) -> Void)?
+    var onTimeWidthsChanged: ((CGFloat, CGFloat) -> Void)?
     private var trackHeight: CGFloat { isLCDHovered ? 5 : 3 }
     private var hitHeight: CGFloat { isLCDHovered ? 18 : 12 }
 
     @State private var dragProgress: CGFloat?
+    @State private var elapsedWidth: CGFloat = 0
+    @State private var remainingWidth: CGFloat = 0
 
     private var isLoading: Bool {
         app.player.isBuffering || app.player.isLoading
@@ -225,19 +228,28 @@ struct MinimalScrubber: View {
             let width = geo.size.width
             ZStack(alignment: .bottom) {
                 Color.clear
+                    .allowsHitTesting(false)
                 content(width: width)
                     .allowsHitTesting(false)
 
                 if isLCDHovered {
                     HStack {
                         Text(app.player.formattedCurrentTime())
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+                                elapsedWidth = newWidth
+                                onTimeWidthsChanged?(newWidth, remainingWidth)
+                            }
                         Spacer(minLength: 0)
                         Text(app.player.formattedRemainingTime())
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+                                remainingWidth = newWidth
+                                onTimeWidthsChanged?(elapsedWidth, newWidth)
+                            }
                     }
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundStyle(AMColor.secondaryText)
-                    .padding(.leading, 2)
-                    .padding(.trailing, 4)
+                    .padding(.leading, PlayerLCDMetrics.timeHorizontalPadding)
+                    .padding(.trailing, max(0, PlayerLCDMetrics.timeHorizontalPadding - 2))
                     .padding(.bottom, trackHeight)
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -250,6 +262,7 @@ struct MinimalScrubber: View {
                         InteractiveSliderTrack(
                             onDragStarted: {
                                 guard trackDuration > 0, width > 0 else { return }
+                                onScrubbingChanged?(true)
                                 if dragProgress == nil {
                                     app.player.beginScrub()
                                 }
@@ -260,9 +273,13 @@ struct MinimalScrubber: View {
                                 app.player.scrub(to: Double(ratio) * trackDuration)
                             },
                             onDragEnded: { ratio in
-                                guard trackDuration > 0, width > 0 else { return }
+                                guard trackDuration > 0, width > 0 else {
+                                    onScrubbingChanged?(false)
+                                    return
+                                }
                                 app.player.endScrub(at: Double(ratio) * trackDuration)
                                 dragProgress = nil
+                                onScrubbingChanged?(false)
                             },
                             onHoverChanged: { hovering in
                                 onHover?(hovering)
