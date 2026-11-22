@@ -149,8 +149,6 @@ final class AppState {
         !activeDownloadTasks.isEmpty || !downloadingSongIDs.isEmpty || !downloadedSongs.isEmpty
     }
 
-    var smartPlaylists: [SmartPlaylist] = []
-
     var followedPlaylistIDs: Set<String> = [] {
         didSet { saveFollowedPlaylists() }
     }
@@ -169,7 +167,6 @@ final class AppState {
     var cachedStreamKeys: Set<String> = []
     var cachedStreamKeysSeeded = false
     let configKey = "serverConfig"
-    let smartPlaylistsKey = "smartPlaylists"
     let followedKey = "followedPlaylists"
     private let queuePersistenceKey = "queuePersistenceEnabled"
     private let recentPlaylistsKey = "recentPlaylists"
@@ -198,7 +195,7 @@ final class AppState {
         configurePlayerLifecycle()
         loadPersisted()
         restorePlaybackExitPreferences()
-        player.configureAutomix(
+        player.configureCrossfade(
             enabled: serverConfig.effectiveAutomixEnabled,
             fadeDuration: serverConfig.effectiveAutomixFadeDuration,
             applyToAlbums: serverConfig.effectiveAutomixApplyToAlbums
@@ -211,7 +208,6 @@ final class AppState {
         player.configureNextTrackPreloading(
             enabled: serverConfig.effectiveNextTrackPreloadingEnabled
         )
-        loadSmartPlaylists()
         loadFollowedPlaylists()
         queuePersistenceEnabled = UserDefaults.standard.object(forKey: queuePersistenceKey) as? Bool ?? false
         NetworkMonitor.shared.onConnectivityRestored = { [weak self] in
@@ -265,7 +261,7 @@ final class AppState {
                 adaptiveCellularDataEnabled: config.effectiveAdaptiveCellularDataEnabled
             )
         }
-        player.configureAutomix(
+        player.configureCrossfade(
             enabled: config.effectiveAutomixEnabled,
             fadeDuration: config.effectiveAutomixFadeDuration,
             applyToAlbums: config.effectiveAutomixApplyToAlbums

@@ -6,8 +6,6 @@
 "format.album.moreByArtist" = "Ещё от %@";
 "format.album.play" = "Воспроизвести «%@»";
 "format.album.shuffle" = "Перемешать «%@»";
-"format.crossfade.accessibility" = "Выполняется %@";
-"format.crossfade.remaining" = "Плавный переход · %ld с";
 "format.duration.seconds" = "%ld с";
 "format.filter.count" = "%d из %d";
 "format.gain.decibels" = "%+.0f дБ";
@@ -500,7 +498,6 @@
 "No Animation" = "Без анимации";
 "No Artists" = "Нет артистов";
 "No connection to server." = "Нет соединения с сервером.";
-"No connection to the Navidrome server." = "Нет подключения к серверу Navidrome.";
 "No Downloaded Songs" = "Нет загруженных песен";
 "No Favorites" = "Нет избранного";
 "No Genres" = "Нет жанров";
@@ -543,7 +540,7 @@
 "On" = "Включить";
 "On Device" = "На устройстве";
 "One Song" = "Одну песню";
-"Open" = "Открытый";
+"Open" = "Открыть";
 "Open Mini Player" = "Открыть мини-плеер";
 "Open MiniPlayer" = "Открыть мини-плеер";
 "Operator" = "Оператор";
@@ -658,7 +655,6 @@
 "Repeat All" = "Повтор всего";
 "Repeat Off" = "Повтор выключен";
 "Repeat One" = "Повтор трека";
-"ReplayGain levels songs out regardless of crossfade. Silence trim and ReplayGain only apply to MPV playback." = "Коррекция громкости делает уровень песен ровнее независимо от плавного перехода. Обрезка тишины и ReplayGain работают только через MPV.";
 "Reset" = "Сбросить";
 "Reset Offset" = "Сбросить смещение";
 "Reset pitch and tempo to default" = "Вернуть сдвиг и темп по умолчанию";

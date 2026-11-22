@@ -226,7 +226,7 @@ struct CompactSongRow: View {
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
-    @State private var hoverTracker = HoverTracker()
+    @State private var isInside = false
 
     private var isPlaying: Bool { isCurrent && app.player.isPlaying }
 
@@ -320,9 +320,9 @@ struct CompactSongRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onPlay() }
-        .onHover { isInside in
-            hoverTracker.isInside = isInside
-            if isInside {
+        .onHover { inside in
+            isInside = inside
+            if inside {
                 if !ScrollGate.shared.isScrolling {
                     hovering = true
                 }
@@ -332,13 +332,18 @@ struct CompactSongRow: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidStart)) { _ in
+            if hovering {
+                hovering = false
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
-            if hoverTracker.isInside && !hovering {
+            if isInside && !hovering {
                 hovering = true
             }
         }
         .onDisappear {
-            hoverTracker.isInside = false
+            isInside = false
             hovering = false
         }
         .animation(.snappy(duration: 0.12), value: hovering)

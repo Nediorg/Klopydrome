@@ -119,12 +119,6 @@ enum SongColumn: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
-/// The rows handed to `Table` are a lazy window (`displayedSongs`: a prefix of
-/// `songs`, grown as its tail becomes visible). SwiftUI's `Table` materializes
-/// every row given to it on the main thread, so feeding it all 15k rows at once
-/// freezes the window for a minute; a small window keeps the NSTableView cheap
-/// while scrolling. The full `songs` array stays the source of truth for
-/// selection, context menus, and playback.
 struct SongTable: View {
     let songs: [SubsonicSong]
     @Binding var sortOrder: [KeyPathComparator<SubsonicSong>]

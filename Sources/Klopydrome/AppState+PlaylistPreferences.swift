@@ -3,39 +3,6 @@ import NavidromeClient
 
 extension AppState {
 
-    func loadSmartPlaylists() {
-        guard let data = UserDefaults.standard.data(forKey: smartPlaylistsKey),
-              let decoded = try? JSONDecoder().decode([SmartPlaylist].self, from: data) else {
-            return
-        }
-        smartPlaylists = decoded
-    }
-
-    func saveSmartPlaylists() {
-        guard let data = try? JSONEncoder().encode(smartPlaylists) else { return }
-        UserDefaults.standard.set(data, forKey: smartPlaylistsKey)
-    }
-
-    func upsertSmartPlaylist(_ playlist: SmartPlaylist) {
-        if let index = smartPlaylists.firstIndex(where: { $0.id == playlist.id }) {
-            smartPlaylists[index] = playlist
-        } else {
-            smartPlaylists.append(playlist)
-        }
-        saveSmartPlaylists()
-    }
-
-    func deleteSmartPlaylist(id: String) {
-        smartPlaylists.removeAll { $0.id == id }
-        saveSmartPlaylists()
-    }
-
-    func renameSmartPlaylist(id: String, name: String) {
-        guard let index = smartPlaylists.firstIndex(where: { $0.id == id }) else { return }
-        smartPlaylists[index].name = name
-        saveSmartPlaylists()
-    }
-
     func loadFollowedPlaylists() {
         guard let ids = UserDefaults.standard.stringArray(forKey: followedKey) else { return }
         followedPlaylistIDs = Set(ids)
@@ -54,36 +21,24 @@ extension AppState {
     }
 
     func toggleFollow(_ playlist: PlaylistSummary, skipOfflineConfirm: Bool = false) {
-        if !skipOfflineConfirm, !confirmOfflineAction() { return }
-        let willFollow = !isFollowed(playlist)
-        if willFollow {
-            followedPlaylistIDs.insert(playlist.id)
-        } else {
-            followedPlaylistIDs.remove(playlist.id)
-        }
-        if isOfflineSession {
-            queueOfflineStar(id: playlist.id, kind: .playlist, isStarred: willFollow)
-        }
+        toggleFollow(id: playlist.id, skipOfflineConfirm: skipOfflineConfirm)
     }
 
     func toggleFollow(_ playlist: PlaylistDetail, skipOfflineConfirm: Bool = false) {
-        if !skipOfflineConfirm, !confirmOfflineAction() { return }
-        let willFollow = !isFollowed(playlist)
-        if willFollow {
-            followedPlaylistIDs.insert(playlist.id)
-        } else {
-            followedPlaylistIDs.remove(playlist.id)
-        }
-        if isOfflineSession {
-            queueOfflineStar(id: playlist.id, kind: .playlist, isStarred: willFollow)
-        }
+        toggleFollow(id: playlist.id, skipOfflineConfirm: skipOfflineConfirm)
     }
 
-    func computeSmartPlaylist(_ playlist: SmartPlaylist) async throws -> [SubsonicSong] {
-        guard let engine = smartPlaylistEngine else {
-            throw SmartPlaylistError.notConnected
+    func toggleFollow(id: String, skipOfflineConfirm: Bool = false) {
+        if !skipOfflineConfirm, !confirmOfflineAction() { return }
+        let willFollow = !followedPlaylistIDs.contains(id)
+        if willFollow {
+            followedPlaylistIDs.insert(id)
+        } else {
+            followedPlaylistIDs.remove(id)
         }
-        return try await engine.compute(playlist)
+        if isOfflineSession {
+            queueOfflineStar(id: id, kind: .playlist, isStarred: willFollow)
+        }
     }
 
     func previewSmartQuery(_ query: SmartQuery) async throws -> [SubsonicSong] {

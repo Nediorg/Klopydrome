@@ -10,6 +10,7 @@ public protocol OfflineRepository: Sendable {
     func savePlaylists(_ playlists: [PlaylistSummary]) async throws
     func savePlaylistDetail(_ detail: PlaylistDetail) async throws
     func fetchPlaylistDetail(id: String) async throws -> PlaylistDetail?
+    func removePlaylist(id: String) async throws
     func fetchAlbums() async throws -> [SubsonicAlbum]
     func fetchPlaylists() async throws -> [PlaylistSummary]
     func fetchPlaylists(matchingDownloadedTrackIDs downloadedIDs: Set<String>) async throws -> [PlaylistSummary]

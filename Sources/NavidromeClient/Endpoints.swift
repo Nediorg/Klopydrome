@@ -219,7 +219,13 @@ public extension SubsonicClient {
     func createPlaylist(name: String, songIds: [String] = []) async throws -> PlaylistDetail {
         var params = [URLQueryItem(name: "name", value: name)]
         songIds.forEach { params.append(URLQueryItem(name: "songId", value: $0)) }
-        guard let playlist = try await requestEnvelope(endpoint: "createPlaylist", params: params).playlist else {
+        let envelope: SubsonicEnvelope
+        if supportedExtensions.contains("formPost") {
+            envelope = try await requestPostEnvelope(endpoint: "createPlaylist", bodyParams: params)
+        } else {
+            envelope = try await requestEnvelope(endpoint: "createPlaylist", params: params)
+        }
+        guard let playlist = envelope.playlist else {
             throw SubsonicError.server(code: 0, message: "Playlist was not returned")
         }
         return playlist

@@ -4,6 +4,10 @@ import NavidromeClient
 extension AppState {
     func addToPlaylist(_ songs: [SubsonicSong], playlistID: String) async {
         guard confirmOfflineAction() else { return }
+        if let target = library.playlists.first(where: { $0.id == playlistID }),
+           target.isSmart || (target.isReadonly ?? false) {
+            return
+        }
         if let client {
             try? await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
             recordRecentPlaylist(playlistID)
@@ -14,8 +18,54 @@ extension AppState {
                 await reloadPlaylist(updated)
             }
         } else {
-            queueOfflineAddToPlaylist(playlistID: playlistID, songIDs: songs.map(\.id))
-            recordRecentPlaylist(playlistID)
+            await applyOfflineAddToPlaylist(songs: songs, playlistID: playlistID)
+        }
+    }
+
+    private func applyOfflineAddToPlaylist(songs: [SubsonicSong], playlistID: String) async {
+        queueOfflineAddToPlaylist(playlistID: playlistID, songIDs: songs.map(\.id))
+        recordRecentPlaylist(playlistID)
+        if let idx = library.playlists.firstIndex(where: { $0.id == playlistID }) {
+            let p = library.playlists[idx]
+            let updated = PlaylistSummary(
+                id: p.id,
+                name: p.name,
+                comment: p.comment,
+                owner: p.owner,
+                coverArt: p.coverArt,
+                songCount: (p.songCount ?? 0) + songs.count,
+                duration: (p.duration ?? 0) + songs.reduce(0) { $0 + ($1.duration ?? 0) },
+                created: p.created,
+                changed: p.changed,
+                isPublic: p.isPublic,
+                isReadonly: p.isReadonly,
+                validUntil: p.validUntil
+            )
+            library.playlists[idx] = updated
+        }
+        var existingSongs = playlistLoadStates[playlistID]?.songs
+        if existingSongs == nil, let offlineRepository {
+            existingSongs = (try? await offlineRepository.fetchPlaylistDetail(id: playlistID))?.entry ?? []
+        }
+        var updatedSongs = existingSongs ?? []
+        updatedSongs.append(contentsOf: songs)
+
+        if var state = playlistLoadStates[playlistID] {
+            state.songs = updatedSongs
+            playlistLoadStates[playlistID] = state
+        }
+        if let offlineRepository {
+            let summary = library.playlists.first(where: { $0.id == playlistID })
+            let detail = PlaylistDetail(
+                id: playlistID,
+                name: summary?.name ?? "",
+                comment: summary?.comment,
+                songCount: updatedSongs.count,
+                duration: updatedSongs.reduce(0) { $0 + ($1.duration ?? 0) },
+                isPublic: summary?.isPublic ?? false,
+                entry: updatedSongs
+            )
+            try? await offlineRepository.savePlaylistDetail(detail)
         }
     }
 
@@ -37,8 +87,8 @@ extension AppState {
             await refreshPlaylists()
             return created
         } else {
-            queueOfflineCreatePlaylist(name: name, songIDs: songs.map(\.id), comment: comment, isPublic: isPublic)
             let tempID = "offline_\(UUID().uuidString)"
+            queueOfflineCreatePlaylist(tempID: tempID, name: name, songIDs: songs.map(\.id), comment: comment, isPublic: isPublic)
             let localSummary = PlaylistSummary(
                 id: tempID,
                 name: name,
@@ -87,6 +137,7 @@ extension AppState {
     }
 
     func cachedPlaylistDetail(for playlist: PlaylistSummary) -> PlaylistDetail? {
+        guard !playlist.isSmart else { return nil }
         guard let detail = library.playlistDetails[playlist.id],
               detail.changed == playlist.changed,
               detail.songCount == playlist.songCount else {
@@ -113,13 +164,20 @@ extension AppState {
 
     func removeSongsFromPlaylist(playlistID: String, at indices: [Int]) async {
         guard confirmOfflineAction() else { return }
+        if let target = library.playlists.first(where: { $0.id == playlistID }),
+           target.isSmart || (target.isReadonly ?? false) {
+            return
+        }
         guard !indices.isEmpty else { return }
         guard let removedPairs = await applyOptimisticPlaylistRemoval(
             playlistID: playlistID,
             indices: indices
         ) else { return }
 
-        guard let client else { return }
+        guard let client else {
+            queueOfflineRemoveFromPlaylist(playlistID: playlistID, indices: indices)
+            return
+        }
 
         do {
             try await client.updatePlaylist(id: playlistID, removeIndexes: indices)
@@ -290,6 +348,12 @@ extension AppState {
 
     func duplicatePlaylist(_ playlist: PlaylistSummary) async {
         guard confirmOfflineAction() else { return }
+        if playlist.isSmart {
+            guard let rules = await loadServerRules(id: playlist.id) else { return }
+            let newName = L10n.format("format.playlist.copyName", playlist.displayName)
+            _ = try? await createServerPlaylist(name: newName, comment: playlist.comment, query: rules)
+            return
+        }
         guard let client else { return }
         let songs = await playlistSongs(for: playlist)
         let newName = L10n.format("format.playlist.copyName", playlist.displayName)
@@ -298,6 +362,32 @@ extension AppState {
             try? await client.updatePlaylist(id: id, comment: comment)
         }
         await refreshPlaylists()
+    }
+
+    func migrateLegacyLocalSmartPlaylists() async {
+        guard let navidrome else { return }
+        guard let data = UserDefaults.standard.data(forKey: "smartPlaylists"),
+              let locals = try? JSONDecoder().decode([SmartPlaylist].self, from: data),
+              !locals.isEmpty else { return }
+        var remainingLocals: [SmartPlaylist] = []
+        var migratedAny = false
+        for local in locals {
+            guard let query = local.query ?? local.resolvedQuery else { continue }
+            do {
+                _ = try await navidrome.createPlaylist(name: local.name, comment: nil, rules: query.ndjsonValue)
+                migratedAny = true
+            } catch {
+                remainingLocals.append(local)
+            }
+        }
+        if remainingLocals.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "smartPlaylists")
+        } else if let encoded = try? JSONEncoder().encode(remainingLocals) {
+            UserDefaults.standard.set(encoded, forKey: "smartPlaylists")
+        }
+        if migratedAny {
+            await refreshPlaylists()
+        }
     }
 
     func deletePlaylist(_ playlist: PlaylistSummary) async {

@@ -126,25 +126,21 @@ struct AlbumGridView: View {
                     }
                 } else {
                     GeometryReader { geo in
-                        let available = geo.size.width - 48
-                        let count = max(1, Int((available + gap) / (minCard + gap)))
-                        let rawWidth = (available - CGFloat(count - 1) * gap) / CGFloat(count)
-                        let cardWidth = floor(rawWidth)
-                        let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
+                        let grid = AdaptiveGridGeometry(availableWidth: geo.size.width - 48, minCard: minCard, gap: gap)
                         ScrollView {
-                            LazyVGrid(columns: cols, spacing: gap) {
+                            LazyVGrid(columns: grid.columns, spacing: gap) {
                                 ForEach(displayAlbums) { album in
                                     Button {
                                         app.openAlbumInLibrary(album)
                                     } label: {
-                                        AlbumCard(album: album, width: cardWidth, reservesTitleLines: true)
+                                        AlbumCard(album: album, width: grid.cardWidth, reservesTitleLines: true)
                                             .equatable()
                                     }
                                     .buttonStyle(.plain)
                                 }
                                 if !allLoaded {
                                     Color.clear.frame(height: 200)
-                                        .gridCellColumns(count)
+                                        .gridCellColumns(grid.columnCount)
                                         .onAppear { Task { await loadMore() } }
                                 }
                             }

@@ -189,47 +189,20 @@ extension SmartPlaylistEditorView {
     func save() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        if let server {
-            saveServer(server)
-            return
-        }
-        let query: SmartQuery
-        if mode == .json {
-            guard let data = jsonText.data(using: .utf8),
-                  let parser = try? JSONDecoder().decode(SmartQuery.self, from: data) else {
-                jsonError = "Invalid JSON. Save canceled.".localized
-                return
-            }
-            query = parser
-        } else {
-            query = visualQuery()
-        }
-
-        var smartPlaylist = playlist ?? SmartPlaylist(name: trimmed)
-        smartPlaylist.name = trimmed
-        smartPlaylist.query = query
-        smartPlaylist.limit = query.limit
-        smartPlaylist.shuffleOrder = query.sort?.contains("random") == true
-        smartPlaylist.genre = nil
-        smartPlaylist.starredOnly = false
-        smartPlaylist.minPlayCount = nil
-        smartPlaylist.minRating = nil
-        app.upsertSmartPlaylist(smartPlaylist)
-        hasChanges = false
-        dismissModal()
-    }
-
-    func saveServer(_ target: ServerSmartPlaylist) {
         guard let query = buildQueryOrReturnToJSON() else {
             jsonError = "Invalid JSON. Save canceled.".localized
             return
         }
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard app.confirmOfflineAction() else { return }
         Task { @MainActor in
             do {
-                try await app.saveServerRules(id: target.id, name: trimmed,
-                                              isPublic: target.isPublic,
-                                              comment: target.comment, query: query)
+                if let server {
+                    try await app.saveServerRules(id: server.id, name: trimmed,
+                                                  isPublic: server.isPublic,
+                                                  comment: server.comment, query: query)
+                } else if let created = try await app.createServerPlaylist(name: trimmed, comment: nil, query: query) {
+                    app.showServerPlaylist(created)
+                }
                 hasChanges = false
                 dismissModal()
             } catch {
@@ -242,31 +215,16 @@ extension SmartPlaylistEditorView {
         let trimmed = saveAsName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         saveAsPresented = false
-        let query = buildQueryOrReturnToJSON()
-        guard let query else {
+        guard let query = buildQueryOrReturnToJSON() else {
             jsonError = "Invalid JSON. Save canceled.".localized
             return
         }
+        guard app.confirmOfflineAction() else { return }
         name = trimmed
-        if let server {
-            saveAsServer(server, name: trimmed, query: query)
-            return
-        }
-        var copy = SmartPlaylist(name: trimmed)
-        copy.query = query
-        copy.limit = query.limit
-        copy.shuffleOrder = query.sort?.contains("random") == true
-        app.upsertSmartPlaylist(copy)
-        app.showPlaylistsGrid()
-        hasChanges = false
-        dismissModal()
-    }
-
-    func saveAsServer(_ target: ServerSmartPlaylist, name: String, query: SmartQuery) {
+        let comment = server?.comment
         Task { @MainActor in
             do {
-                if let summary = try await app.createServerPlaylist(name: name,
-                                                                    comment: target.comment, query: query) {
+                if let summary = try await app.createServerPlaylist(name: trimmed, comment: comment, query: query) {
                     app.showServerPlaylist(summary)
                 }
                 hasChanges = false

@@ -158,7 +158,7 @@ struct GenreDetailView: View {
                 systemImage: "play.fill",
                 filled: true
             ) {
-                app.play(songs, at: 0)
+                app.play(sortedSongs, at: 0)
             }
             .disabled(playableSongs.isEmpty)
 
@@ -167,7 +167,7 @@ struct GenreDetailView: View {
                 systemImage: "shuffle",
                 filled: true
             ) {
-                app.playShuffled(songs)
+                app.playShuffled(sortedSongs)
             }
             .disabled(playableSongs.isEmpty)
 

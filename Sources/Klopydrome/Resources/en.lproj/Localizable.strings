@@ -6,8 +6,6 @@
 "format.album.moreByArtist" = "More by %@";
 "format.album.play" = "Play \"%@\"";
 "format.album.shuffle" = "Shuffle \"%@\"";
-"format.crossfade.accessibility" = "In progress: %@";
-"format.crossfade.remaining" = "Crossfade · %ld s";
 "format.duration.seconds" = "%ld s";
 "format.filter.count" = "%d of %d";
 "format.gain.decibels" = "%+.0f dB";
@@ -500,7 +498,6 @@
 "No Animation" = "No Animation";
 "No Artists" = "No Artists";
 "No connection to server." = "No connection to server.";
-"No connection to the Navidrome server." = "No connection to the Navidrome server.";
 "No Downloaded Songs" = "No Downloaded Songs";
 "No Favorites" = "No Favorites";
 "No Genres" = "No Genres";
@@ -658,7 +655,6 @@
 "Repeat All" = "Repeat All";
 "Repeat Off" = "Repeat Off";
 "Repeat One" = "Repeat One";
-"ReplayGain levels songs out regardless of crossfade. Silence trim and ReplayGain only apply to MPV playback." = "ReplayGain levels songs out regardless of crossfade. Silence trim and ReplayGain only apply to MPV playback.";
 "Reset" = "Reset";
 "Reset Offset" = "Reset Offset";
 "Reset pitch and tempo to default" = "Reset pitch and tempo to default";

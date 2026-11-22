@@ -451,3 +451,18 @@ struct EditRulesButton: View {
         .onHover { hovered = $0 }
     }
 }
+
+public struct AdaptiveGridGeometry {
+    public let cardWidth: CGFloat
+    public let columns: [GridItem]
+    public let columnCount: Int
+
+    public init(availableWidth: CGFloat, minCard: CGFloat, gap: CGFloat) {
+        let count = max(1, Int((availableWidth + gap) / (minCard + gap)))
+        let rawWidth = (availableWidth - CGFloat(count - 1) * gap) / CGFloat(count)
+        let width = floor(rawWidth)
+        self.cardWidth = width
+        self.columnCount = count
+        self.columns = Array(repeating: GridItem(.fixed(width), spacing: gap), count: count)
+    }
+}

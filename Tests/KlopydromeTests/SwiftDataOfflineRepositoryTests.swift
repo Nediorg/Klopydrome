@@ -16,7 +16,12 @@ final class SwiftDataOfflineRepositoryTests: XCTestCase {
     }
 
     func testMakeDefaultOnDisk() throws {
-        let repo = try SwiftDataOfflineRepository.makeDefault(serverHost: "testHost_\(UUID().uuidString)")
+        let host = "testHost_\(UUID().uuidString)"
+        let storeURL = SwiftDataOfflineRepository.storeURL(forServer: host)
+        defer {
+            try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
+        }
+        let repo = try SwiftDataOfflineRepository.makeDefault(serverHost: host)
         XCTAssertNotNil(repo)
     }
 

@@ -89,7 +89,7 @@ struct QueuePanelView: View {
                                 song: song,
                                 isCurrent: isCurrent(song),
                                 canRemove: selectedTab == .upNext,
-                                onRemove: { app.player.remove(at: index) },
+                                onRemove: { app.removeFromQueue(at: index) },
                                 showDivider: index < list.count - 1,
                                 action: { select(song, at: index) }
                             )
@@ -153,10 +153,9 @@ struct QueuePanelView: View {
     private func clearAction() {
         switch selectedTab {
         case .upNext:
-            app.player.stop()
-            app.player.setQueue([])
+            app.clearQueue()
         case .history:
-            app.player.clearHistory()
+            app.clearHistory()
         }
     }
 }

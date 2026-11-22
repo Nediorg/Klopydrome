@@ -227,25 +227,11 @@ struct SongInfoSheet: View {
         }
 
         guard let client = app.client else { return }
-        if let entries = try? await client.getLyricsBySongId(id: song.id) {
-            if let timed = entries.first(where: { $0.synced ?? false }),
-               let lines = timed.line, !lines.isEmpty {
-                lyricsLines = lines.compactMap(\.value)
-                return
-            }
-            if let plain = LyricsStore.plainText(from: entries), !plain.isEmpty {
+        if let result = await LyricsStore.fetchLyricsFromServer(song: song, client: client) {
+            if !result.syncedLines.isEmpty {
+                lyricsLines = result.syncedLines.compactMap(\.value)
+            } else if let plain = result.plainText, !plain.isEmpty {
                 lyricsLines = plain.components(separatedBy: "\n")
-                return
-            }
-        }
-
-        if let fallback = try? await client.getLyrics(artist: song.artist ?? "", title: song.title ?? ""),
-           let text = fallback.value, !text.isEmpty {
-            let timed = LrcTextParser.parse(text)
-            if !timed.isEmpty {
-                lyricsLines = timed.compactMap(\.value)
-            } else {
-                lyricsLines = text.components(separatedBy: "\n")
             }
         }
     }

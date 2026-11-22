@@ -159,7 +159,10 @@ extension AppState {
         let isConstrained = NetworkMonitor.shared.isConstrained || NetworkMonitor.shared.isExpensive
 
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.refreshPlaylists() }
+            group.addTask {
+                await self.migrateLegacyLocalSmartPlaylists()
+                await self.refreshPlaylists()
+            }
             group.addTask { await self.warmupRecentAlbums() }
 
             if !isConstrained {

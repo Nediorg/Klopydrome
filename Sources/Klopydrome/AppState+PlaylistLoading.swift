@@ -141,7 +141,8 @@ extension AppState {
         guard let diskCached = await cachedPlaylistDetailFromDisk(for: id) else { return false }
         guard playlistLoadTokens[id] == token, !Task.isCancelled else { return false }
 
-        if diskCached.changed == playlist.changed,
+        if !playlist.isSmart,
+           diskCached.changed == playlist.changed,
            diskCached.songCount == playlist.songCount {
             installCompletedPlaylist(diskCached, for: playlist)
             cachePlaylistDetail(diskCached)

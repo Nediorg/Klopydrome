@@ -227,6 +227,10 @@ enum TrackDownload {
             }
         }
         if isCancelled() { throw CancellationError() }
+        let minRequired = expected > 0 ? expected : 4096
+        guard received >= minRequired else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
     }
 
     static func savePanel(for song: SubsonicSong) -> NSSavePanel {

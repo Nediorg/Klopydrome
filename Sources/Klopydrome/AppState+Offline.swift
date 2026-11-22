@@ -34,7 +34,12 @@ extension AppState {
         guard let recording = automaticPlaybackRecording,
               recording.temporaryURL == temporaryURL,
               let cache,
-              (try? temporaryURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0 > 0 else {
+              let fileSize = (try? temporaryURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            return
+        }
+        let minBytes = AppState.minimumExpectedCacheBytes(for: recording.song)
+        guard fileSize >= minBytes else {
             try? FileManager.default.removeItem(at: temporaryURL)
             return
         }
@@ -249,7 +254,7 @@ extension AppState {
             return library.albums.contains(where: { $0.id == album.id })
         case .playlist(let playlist):
             return library.playlists.contains(where: { $0.id == playlist.id })
-        case .smartPlaylist, .genre:
+        case .genre:
             return false
         case .artist(let artist):
             return library.artistIndexes.contains { index in

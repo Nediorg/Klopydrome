@@ -47,14 +47,14 @@ extension ServerConfig {
     var effectivePlaybackEngine: PlaybackEngine { playbackEngine ?? .mpv }
     var effectiveAutomixEnabled: Bool { automixEnabled ?? false }
     var effectiveAutomixFadeDuration: Double {
-        min(12, max(1, automixFadeDuration ?? AutomixTransitionPlanner.defaultFade))
+        CrossfadeMath.clampDuration(automixFadeDuration ?? CrossfadeMath.defaultDuration)
     }
     var effectiveAutomixApplyToAlbums: Bool { automixApplyToAlbums ?? false }
     var effectiveReplayGainMode: ReplayGainMode {
         replayGainMode ?? (automixReplayGainEnabled.map { $0 ? .track : .off } ?? .off)
     }
     var effectiveReplayGainPreampDB: Float {
-        AutomixLoudness.clampPreamp(replayGainPreampDB ?? AutomixLoudness.crossfadeHeadroomDB)
+        AutomixLoudness.clampPreamp(replayGainPreampDB ?? AutomixLoudness.defaultPreampDB)
     }
     var effectiveSilenceTrimMode: SilenceTrimMode { silenceTrimMode ?? .off }
     var effectiveNextTrackPreloadingEnabled: Bool { nextTrackPreloadingEnabled ?? true }

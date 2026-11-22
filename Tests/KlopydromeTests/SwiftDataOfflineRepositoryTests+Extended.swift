@@ -194,4 +194,27 @@ extension SwiftDataOfflineRepositoryTests {
         XCTAssertEqual(fetchAfterRemove?.entry?.first?.id, "track-stream-later")
         XCTAssertEqual(fetchAfterRemove?.entry?.first?.title, "Later Song")
     }
+
+    func testRemovePlaylistRemovesPlaylistAndEntries() async throws {
+        let song = SubsonicSong(id: "track-pl-rem", title: "Playlist Track", duration: 180)
+        let playlist = PlaylistDetail(id: "pl-to-remove", name: "To Remove", songCount: 1, entry: [song])
+        try await repository.savePlaylistDetail(playlist)
+
+        let summaries = [PlaylistSummary(id: "pl-to-remove", name: "To Remove", songCount: 1, duration: 180)]
+        try await repository.savePlaylists(summaries)
+
+        let initialDetail = try await repository.fetchPlaylistDetail(id: "pl-to-remove")
+        XCTAssertNotNil(initialDetail)
+
+        let initialSummaries = try await repository.fetchPlaylists()
+        XCTAssertEqual(initialSummaries.count, 1)
+
+        try await repository.removePlaylist(id: "pl-to-remove")
+
+        let afterDetail = try await repository.fetchPlaylistDetail(id: "pl-to-remove")
+        XCTAssertNil(afterDetail)
+
+        let afterSummaries = try await repository.fetchPlaylists()
+        XCTAssertTrue(afterSummaries.isEmpty)
+    }
 }

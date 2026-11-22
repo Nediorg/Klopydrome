@@ -334,6 +334,9 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
     public let bookmarkPosition: Int?
     public let sortName: String?
     public let musicBrainzId: String?
+    public let bpm: Int?
+    public let comment: String?
+    public let replayGain: SubsonicReplayGain?
 
     public var displayTitle: String {
         if let title, !title.isEmpty { return title }
@@ -363,7 +366,8 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
                 albumId: String? = nil, artistId: String? = nil, albumArtist: String? = nil,
                 albumArtistId: String? = nil, composer: String? = nil, artists: [Artist]? = nil,
                 type: String? = nil, streamId: String? = nil, isVideo: Bool? = nil,
-                bookmarkPosition: Int? = nil, sortName: String? = nil, musicBrainzId: String? = nil) {
+                bookmarkPosition: Int? = nil, sortName: String? = nil, musicBrainzId: String? = nil,
+                bpm: Int? = nil, comment: String? = nil, replayGain: SubsonicReplayGain? = nil) {
         self.id = id
         self.parent = parent
         self.isDir = isDir
@@ -400,6 +404,28 @@ public struct SubsonicSong: Codable, Hashable, Identifiable, Sendable {
         self.bookmarkPosition = bookmarkPosition
         self.sortName = sortName
         self.musicBrainzId = musicBrainzId
+        self.bpm = bpm
+        self.comment = comment
+        self.replayGain = replayGain
+    }
+}
+
+public struct SubsonicReplayGain: Codable, Hashable, Sendable {
+    public let trackGain: Double?
+    public let albumGain: Double?
+    public let trackPeak: Double?
+    public let albumPeak: Double?
+
+    public init(
+        trackGain: Double? = nil,
+        albumGain: Double? = nil,
+        trackPeak: Double? = nil,
+        albumPeak: Double? = nil
+    ) {
+        self.trackGain = trackGain
+        self.albumGain = albumGain
+        self.trackPeak = trackPeak
+        self.albumPeak = albumPeak
     }
 }
 

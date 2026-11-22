@@ -32,7 +32,7 @@ enum ShareError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "No connection to the Navidrome server.".localized
+            return "No connection to server.".localized
         case .sharingDisabled:
             return "The server doesn't support link sharing (EnableSharing is off).".localized
         }
@@ -56,7 +56,7 @@ extension AppState {
                                                   expiresAt: expires,
                                                   downloadable: downloadable)
             return api.baseURL.appendingPathComponent("share").appendingPathComponent(share.id).absoluteString
-        } catch let NavidromeAPIError.http(code) where code == 404 {
+        } catch let NavidromeAPIError.http(code, _) where code == 404 {
             throw ShareError.sharingDisabled
         }
     }

@@ -221,9 +221,6 @@ struct ContentView: View {
                 stripTitlebarDecorations(in: container)
             }
         }
-        if let content = window.contentView {
-            clearMenuRecursively(in: content)
-        }
     }
 
     private func installSpaceBarMonitor() {

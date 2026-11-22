@@ -6,11 +6,7 @@ struct PlaylistsView: View {
 
     private var playlists: [PlaylistSummary] { app.library.playlists }
     @State private var loading = true
-    @State private var smartRenamePresented = false
-    @State private var smartRenameName: String = ""
-    @State private var smartRenameID: String = ""
     @State private var confirmingDeleteID: String?
-    @State private var confirmingDeleteSmart: SmartPlaylist?
 
     @State private var searchText = ""
     @State private var favoritesOnly = false
@@ -35,15 +31,6 @@ struct PlaylistsView: View {
         return list
     }
 
-    private var filteredSmartPlaylists: [SmartPlaylist] {
-        if favoritesOnly { return [] }
-        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !query.isEmpty else { return app.smartPlaylists }
-        return app.smartPlaylists.filter {
-            $0.name.lowercased().contains(query)
-        }
-    }
-
     private var displayedPlaylists: [PlaylistSummary] {
         Array(filteredPlaylists.prefix(displayedPlaylistCount))
     }
@@ -62,9 +49,9 @@ struct PlaylistsView: View {
             .zIndex(1)
 
             Group {
-                if loading && playlists.isEmpty && app.smartPlaylists.isEmpty {
+                if loading && playlists.isEmpty {
                     initialLoadingGrid
-                } else if playlists.isEmpty && app.smartPlaylists.isEmpty {
+                } else if playlists.isEmpty {
                     ContentUnavailableView {
                         Label("No Playlists".localized, systemImage: "music.note.list")
                     } description: {
@@ -77,7 +64,7 @@ struct PlaylistsView: View {
                         }
                     }
                     .emptyStatePinnedToTop()
-                } else if filteredPlaylists.isEmpty && filteredSmartPlaylists.isEmpty {
+                } else if filteredPlaylists.isEmpty {
                     ContentUnavailableView(
                         "Nothing Found".localized,
                         systemImage: "magnifyingglass",
@@ -86,45 +73,35 @@ struct PlaylistsView: View {
                     .emptyStatePinnedToTop()
                 } else {
                     GeometryReader { geo in
-                        let available = geo.size.width - 48
-                        let count = max(1, Int((available + gap) / (minCard + gap)))
-                        let rawWidth = (available - CGFloat(count - 1) * gap) / CGFloat(count)
-                        let cardWidth = floor(rawWidth)
-                        let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: count)
+                        let grid = AdaptiveGridGeometry(availableWidth: geo.size.width - 48, minCard: minCard, gap: gap)
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 24) {
-                                if !filteredSmartPlaylists.isEmpty {
-                                    smartSection(cols: cols, cardWidth: cardWidth)
+                            LazyVGrid(columns: grid.columns, spacing: gap) {
+                                ForEach(displayedPlaylists) { playlist in
+                                    Button {
+                                        app.openPlaylist(playlist)
+                                    } label: {
+                                        PlaylistTile(
+                                            playlist: playlist,
+                                            width: grid.cardWidth,
+                                            onRename: { rename(playlist) },
+                                            onEditRules: {
+                                                let server = ServerSmartPlaylist(summary: playlist)
+                                                app.openSmartPlaylistEditor(server: server)
+                                            },
+                                            onDelete: { confirmingDeleteID = playlist.id }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-
-                                LazyVGrid(columns: cols, spacing: gap) {
-                                    ForEach(displayedPlaylists) { playlist in
-                                        Button {
-                                            app.openPlaylist(playlist)
-                                        } label: {
-                                            PlaylistTile(
-                                                playlist: playlist,
-                                                width: cardWidth,
-                                                onRename: { rename(playlist) },
-                                                onEditRules: {
-                                                    let server = ServerSmartPlaylist(summary: playlist)
-                                                    app.openSmartPlaylistEditor(server: server)
-                                                },
-                                                onDelete: { confirmingDeleteID = playlist.id }
+                                if displayedPlaylistCount < filteredPlaylists.count {
+                                    Color.clear.frame(height: 1)
+                                        .gridCellColumns(grid.columnCount)
+                                        .onAppear {
+                                            displayedPlaylistCount = min(
+                                                displayedPlaylistCount + playlistPageSize,
+                                                filteredPlaylists.count
                                             )
                                         }
-                                        .buttonStyle(.plain)
-                                    }
-                                    if displayedPlaylistCount < filteredPlaylists.count {
-                                        Color.clear.frame(height: 1)
-                                            .gridCellColumns(count)
-                                            .onAppear {
-                                                displayedPlaylistCount = min(
-                                                    displayedPlaylistCount + playlistPageSize,
-                                                    filteredPlaylists.count
-                                                )
-                                            }
-                                    }
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -162,27 +139,6 @@ struct PlaylistsView: View {
             }
             Button("Cancel".localized, role: .cancel) { confirmingDeleteID = nil }
         }
-        .alert("Rename Smart Playlist".localized, isPresented: $smartRenamePresented) {
-            TextField("Playlist Name".localized, text: $smartRenameName)
-            Button("Rename".localized) { smartRename(smartRenameID, smartRenameName) }
-            Button("Cancel".localized, role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Delete Smart Playlist?".localized,
-            isPresented: Binding(
-                get: { confirmingDeleteSmart != nil },
-                set: { if !$0 { confirmingDeleteSmart = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Delete".localized, role: .destructive) {
-                if let smart = confirmingDeleteSmart {
-                    app.deleteSmartPlaylist(id: smart.id)
-                }
-                confirmingDeleteSmart = nil
-            }
-            Button("Cancel".localized, role: .cancel) { confirmingDeleteSmart = nil }
-        }
     }
 
     private var initialLoadingGrid: some View {
@@ -192,35 +148,6 @@ struct PlaylistsView: View {
             gap: gap,
             accessibilityLabel: "Loading playlists".localized
         )
-    }
-
-    private func smartSection(cols: [GridItem], cardWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Smart Playlists".localized)
-                .font(.title3.bold())
-                .foregroundStyle(.secondary)
-            LazyVGrid(columns: cols, spacing: gap) {
-                ForEach(filteredSmartPlaylists) { smart in
-                    Button {
-                        app.openSmartPlaylist(smart)
-                    } label: {
-                        SmartPlaylistTile(playlist: smart, width: cardWidth)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        SmartPlaylistContextMenuItems(playlist: smart) {
-                            app.openSmartPlaylistEditor(playlist: smart)
-                        } onRename: {
-                            smartRenameID = smart.id
-                            smartRenameName = smart.name
-                            smartRenamePresented = true
-                        } onDelete: {
-                            confirmingDeleteSmart = smart
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private func loadIfNeeded() async {
@@ -240,21 +167,14 @@ struct PlaylistsView: View {
     }
 
     private func delete(_ playlist: PlaylistSummary) {
-        guard let client = app.client else { return }
         Task {
-            try? await client.deletePlaylist(id: playlist.id)
+            await app.deletePlaylist(playlist)
             await load()
         }
     }
 
     private func rename(_ playlist: PlaylistSummary) {
         app.openCreatePlaylist(existing: playlist)
-    }
-
-    private func smartRename(_ id: String, _ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        app.renameSmartPlaylist(id: id, name: trimmed)
     }
 }
 
@@ -267,7 +187,7 @@ struct PlaylistTile: View {
 
     @Environment(AppState.self) private var app
     @State private var hovering = false
-    @State private var hoverTracker = HoverTracker()
+    @State private var isInside = false
 
     private var isFollowed: Bool { app.isFollowed(playlist) }
 
@@ -275,12 +195,19 @@ struct PlaylistTile: View {
         PlaylistCoverPreset.preset(for: playlist.id)
     }
 
+    private var subtitleText: String {
+        if playlist.isSmart {
+            return playlist.owner.map { "\($0) · \("Smart Playlist".localized)" } ?? "Smart Playlist".localized
+        }
+        return playlist.owner ?? "Playlist".localized
+    }
+
     var body: some View {
         let cardWidth = width ?? 165
         MediaCard(
             width: cardWidth,
             title: playlist.displayName,
-            subtitle: playlist.owner ?? "Playlist".localized,
+            subtitle: subtitleText,
             reservesTitleLines: true
         ) {
             if let coverArt = playlist.coverArt, !coverArt.isEmpty {
@@ -310,9 +237,9 @@ struct PlaylistTile: View {
                 .transition(.opacity)
             }
         }
-        .onHover { isInside in
-            hoverTracker.isInside = isInside
-            if isInside {
+        .onHover { inside in
+            isInside = inside
+            if inside {
                 if !ScrollGate.shared.isScrolling {
                     hovering = true
                 }
@@ -322,10 +249,19 @@ struct PlaylistTile: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidStart)) { _ in
+            if hovering {
+                hovering = false
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: ScrollGate.scrollDidEnd)) { _ in
-            if hoverTracker.isInside && !hovering {
+            if isInside && !hovering {
                 hovering = true
             }
+        }
+        .onDisappear {
+            isInside = false
+            hovering = false
         }
         .contextMenu {
             PlaylistContextMenuItems(
@@ -334,30 +270,6 @@ struct PlaylistTile: View {
                 onEditRules: onEditRules ?? {},
                 onDelete: onDelete ?? {}
             )
-        }
-    }
-}
-
-struct SmartPlaylistTile: View {
-    let playlist: SmartPlaylist
-    var width: CGFloat?
-
-    var body: some View {
-        let cardWidth = width ?? 165
-        MediaCard(
-            width: cardWidth,
-            title: playlist.name,
-            subtitle: playlist.ruleSummary,
-            reservesTitleLines: true
-        ) {
-            Image(systemName: "gearshape")
-                .font(.system(size: cardWidth * 0.44, weight: .light))
-                .foregroundStyle(.secondary)
-                .frame(width: cardWidth, height: cardWidth)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.gray.opacity(0.12))
-                )
         }
     }
 }

@@ -129,13 +129,20 @@ struct SongsView: View {
             processedSongs = []
             return
         }
-        reprocessing = true
-        let generation = reprocessGeneration + 1
-        reprocessGeneration = generation
-
         let onlyFav = favoritesOnly
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let order = sortOrder
+
+        if !onlyFav, query.isEmpty, order.isEmpty {
+            reprocessTask?.cancel()
+            processedSongs = []
+            reprocessing = false
+            return
+        }
+
+        reprocessing = true
+        let generation = reprocessGeneration + 1
+        reprocessGeneration = generation
         var starredIDs: Set<String>?
         if onlyFav { starredIDs = Set(base.filter { app.isStarred($0) }.map(\.id)) }
 
@@ -168,10 +175,11 @@ struct SongsView: View {
         _ source: [SubsonicSong], favoritesOnly: Bool, starredIDs: Set<String>?,
         query: String, sortOrder: [KeyPathComparator<SubsonicSong>]
     ) -> [SubsonicSong] {
-        var seenIDs = Set<String>()
-        var list = source.filter { seenIDs.insert($0.id).inserted }
+        var list: [SubsonicSong]
         if favoritesOnly, let starred = starredIDs {
-            list = list.filter { starred.contains($0.id) }
+            list = source.filter { starred.contains($0.id) }
+        } else {
+            list = source
         }
         guard !Task.isCancelled else { return [] }
         if !query.isEmpty {
@@ -226,7 +234,7 @@ struct SongsView: View {
         while !Task.isCancelled {
             let batch: [SubsonicSong]
             do {
-                batch = try await client.search3(query: "*", songCount: chunkSize, songOffset: offset).songs
+                batch = try await client.search3(query: "", songCount: chunkSize, songOffset: offset).songs
             } catch {
                 loadError = error.localizedDescription
                 break

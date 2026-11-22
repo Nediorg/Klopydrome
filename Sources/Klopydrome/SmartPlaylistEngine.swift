@@ -47,11 +47,17 @@ final class CachedLibraryRepo: SongRepo {
             return hit
         }
 
-        if genre == nil, let getLocal = localSongs {
+        if let getLocal = localSongs {
             let local = await getLocal()
             if !local.isEmpty {
-                cache.setObject(local as NSArray, forKey: key, cost: local.count * 1024)
-                return local
+                let filtered: [SubsonicSong]
+                if let genre {
+                    filtered = local.filter { $0.genre?.localizedCaseInsensitiveContains(genre) == true }
+                } else {
+                    filtered = local
+                }
+                cache.setObject(filtered as NSArray, forKey: key, cost: filtered.count * 1024)
+                return filtered
             }
         }
 
@@ -62,44 +68,13 @@ final class CachedLibraryRepo: SongRepo {
 
         let pool: [SubsonicSong]
         if let genre {
-            pool = try await crawlSongsByGenre(genre)
+            pool = (try? await client.getSongsByGenre(genre: genre, count: genrePageSize, offset: 0)) ?? []
         } else {
-            pool = try await fetchAllSongsViaSearchOrCrawl()
+            pool = (try? await client.search3(query: "", artistCount: 0, albumCount: 0, songCount: 500).songs) ?? []
         }
         cache.setObject(pool as NSArray, forKey: key, cost: pool.count * 1024)
         await persist(pool: pool, genre: genre)
         return pool
-    }
-
-    private func fetchAllSongsViaSearchOrCrawl() async throws -> [SubsonicSong] {
-        do {
-            var songs: [SubsonicSong] = []
-            var seen = Set<String>()
-            var offset = 0
-            let pageSize = 500
-            while songs.count < maxSongs {
-                try Task.checkCancellation()
-                let result = try await client.search3(
-                    query: "*",
-                    artistCount: 0,
-                    albumCount: 0,
-                    songCount: pageSize,
-                    songOffset: offset
-                )
-                let pageSongs = result.songs
-                if pageSongs.isEmpty { break }
-                for song in pageSongs where seen.insert(song.id).inserted {
-                    songs.append(song)
-                }
-                if pageSongs.count < pageSize { break }
-                offset += pageSize
-            }
-            if !songs.isEmpty {
-                return songs
-            }
-        } catch {
-        }
-        return try await crawlAllAlbums()
     }
 
     func clearMemoryCache() {
@@ -132,68 +107,6 @@ final class CachedLibraryRepo: SongRepo {
         guard let diskCache, let data = try? JSONEncoder().encode(pool) else { return }
         _ = try? await diskCache.write(data: data, to: .metadata, key: Self.diskKey(for: genre))
     }
-
-    private func crawlSongsByGenre(_ genre: String) async throws -> [SubsonicSong] {
-        var songs: [SubsonicSong] = []
-        var seen = Set<String>()
-        var offset = 0
-        while songs.count < maxSongs {
-            try Task.checkCancellation()
-            let page = try await client.getSongsByGenre(genre: genre, count: genrePageSize, offset: offset)
-            if page.isEmpty { break }
-            for song in page where seen.insert(song.id).inserted {
-                songs.append(song)
-            }
-            if page.count < genrePageSize { break }
-            offset += genrePageSize
-        }
-        return songs
-    }
-
-    private func crawlAllAlbums() async throws -> [SubsonicSong] {
-        var albums: [SubsonicAlbum] = []
-        var offset = 0
-        while true {
-            try Task.checkCancellation()
-            let page = try await client.getAlbumList2(
-                type: .alphabeticalByName, size: albumPageSize, offset: offset)
-            if page.isEmpty { break }
-            albums.append(contentsOf: page)
-            if page.count < albumPageSize { break }
-            offset += albumPageSize
-        }
-
-        var songs: [SubsonicSong] = []
-        var seen = Set<String>()
-        let batchSize = 8
-        var index = 0
-        while index < albums.count, songs.count < maxSongs {
-            try Task.checkCancellation()
-            let batch = Array(albums[index..<min(index + batchSize, albums.count)])
-            index += batch.count
-
-            let batchSongs = try await withThrowingTaskGroup(of: [SubsonicSong].self) { group in
-                for album in batch {
-                    group.addTask { [client] in
-                        try Task.checkCancellation()
-                        let detail = try await client.getAlbum(id: album.id)
-                        return detail.song ?? []
-                    }
-                }
-                var collected: [SubsonicSong] = []
-                for try await songs in group {
-                    collected.append(contentsOf: songs)
-                }
-                return collected
-            }
-
-            for song in batchSongs where seen.insert(song.id).inserted {
-                songs.append(song)
-                if songs.count >= maxSongs { break }
-            }
-        }
-        return songs
-    }
 }
 
 @MainActor
@@ -202,21 +115,6 @@ final class SmartPlaylistEngine {
 
     init(repo: any SongRepo) {
         self.repo = repo
-    }
-
-    func compute(_ playlist: SmartPlaylist) async throws -> [SubsonicSong] {
-        let query = playlist.query
-        let genre = query.flatMap(SmartQueryMath.genreHint) ?? playlist.trimmedGenre
-        let pool = try await repo.fetchPool(genre: genre)
-        try Task.checkCancellation()
-        return try await Task.detached(priority: .userInitiated) {
-            try Task.checkCancellation()
-            let matched = pool.filter { playlist.matches($0) }
-            try Task.checkCancellation()
-            let sorted = SmartQueryMath.sort(matched, sort: query?.sort, order: query?.order,
-                                             shuffle: playlist.shuffleOrder)
-            return SmartQueryMath.window(sorted, offset: query?.offset, limit: query?.limit ?? playlist.limit)
-        }.value
     }
 
     func preview(_ query: SmartQuery) async throws -> [SubsonicSong] {

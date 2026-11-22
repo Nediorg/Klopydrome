@@ -19,6 +19,25 @@ struct SmartPlaylist: Codable, Identifiable, Hashable {
 
     var hasQueryRules: Bool { query != nil }
 
+    var resolvedQuery: SmartQuery? {
+        if let query { return query }
+        var rules: [QueryExpr] = []
+        if let g = trimmedGenre {
+            rules.append(QueryExpr(rule: .is, field: "genre", value: .string(g)))
+        }
+        if starredOnly {
+            rules.append(QueryExpr(rule: .is, field: "starred", value: .bool(true)))
+        }
+        if let minPlayCount {
+            rules.append(QueryExpr(rule: .gte, field: "playCount", value: .number(Double(minPlayCount))))
+        }
+        if let minRating {
+            rules.append(QueryExpr(rule: .gte, field: "rating", value: .number(Double(minRating))))
+        }
+        guard !rules.isEmpty else { return nil }
+        return SmartQuery(root: QueryExpr(group: .all, children: rules), sort: shuffleOrder ? "random" : nil, limit: limit)
+    }
+
     func matches(_ song: SubsonicSong) -> Bool {
         if let query { return query.matches(song) }
         if let genre = trimmedGenre {

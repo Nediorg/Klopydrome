@@ -79,15 +79,7 @@ extension AppState {
         let capturedClient = client
         Task(priority: .userInitiated) {
             do {
-                switch (kind, willStar) {
-                case (.song, true): try await capturedClient.star(songIds: [id])
-                case (.song, false): try await capturedClient.unstar(songIds: [id])
-                case (.album, true): try await capturedClient.star(albumIds: [id])
-                case (.album, false): try await capturedClient.unstar(albumIds: [id])
-                case (.artist, true): try await capturedClient.star(artistIds: [id])
-                case (.artist, false): try await capturedClient.unstar(artistIds: [id])
-                case (.playlist, _): break
-                }
+                try await sendStar(client: capturedClient, id: id, kind: kind, isStarred: willStar)
             } catch is CancellationError {
                 return
             } catch {
@@ -111,6 +103,10 @@ extension AppState {
 
     @discardableResult
     func queueOfflineAddToPlaylist(playlistID: String, songIDs: [String]) -> Task<Void, Never>? {
+        if let target = library.playlists.first(where: { $0.id == playlistID }),
+           target.isSmart || (target.isReadonly ?? false) {
+            return nil
+        }
         guard let store = ensureOfflineMutationStore() else { return nil }
         return Task {
             await store.recordPlaylistAdd(playlistID: playlistID, songIDs: songIDs)
@@ -119,6 +115,7 @@ extension AppState {
 
     @discardableResult
     func queueOfflineCreatePlaylist(
+        tempID: String? = nil,
         name: String,
         songIDs: [String],
         comment: String?,
@@ -126,7 +123,19 @@ extension AppState {
     ) -> Task<Void, Never>? {
         guard let store = ensureOfflineMutationStore() else { return nil }
         return Task {
-            await store.recordPlaylistCreate(name: name, songIDs: songIDs, comment: comment, isPublic: isPublic)
+            await store.recordPlaylistCreate(tempID: tempID, name: name, songIDs: songIDs, comment: comment, isPublic: isPublic)
+        }
+    }
+
+    @discardableResult
+    func queueOfflineRemoveFromPlaylist(playlistID: String, indices: [Int]) -> Task<Void, Never>? {
+        if let target = library.playlists.first(where: { $0.id == playlistID }),
+           target.isSmart || (target.isReadonly ?? false) {
+            return nil
+        }
+        guard let store = ensureOfflineMutationStore() else { return nil }
+        return Task {
+            await store.recordPlaylistRemove(playlistID: playlistID, indices: indices)
         }
     }
 
@@ -266,48 +275,102 @@ extension AppState {
         }
     }
 
+    private func executeQueuedPlaylistAction(
+        _ action: QueuedPlaylistAction,
+        client: SubsonicClient
+    ) async throws -> String? {
+        switch action.type {
+        case .addSongs:
+            guard let playlistID = action.playlistID else { return nil }
+            try await client.updatePlaylist(id: playlistID, addSongIds: action.songIDs)
+            return nil
+        case .create:
+            guard let name = action.playlistName else { return nil }
+            let created = try await client.createPlaylist(name: name, songIds: action.songIDs)
+            let hasComment = (action.comment != nil && !action.comment!.isEmpty)
+            let isPublic = (action.isPublic == true)
+            if hasComment || isPublic {
+                try? await client.updatePlaylist(
+                    id: created.id,
+                    comment: action.comment,
+                    isPublic: isPublic
+                )
+            }
+            if let tempID = action.playlistID {
+                try? await offlineRepository?.removePlaylist(id: tempID)
+            }
+            return created.id
+        case .removeSongs:
+            guard let playlistID = action.playlistID, let indices = action.indices else { return nil }
+            try await client.updatePlaylist(id: playlistID, removeIndexes: indices)
+            return nil
+        }
+    }
+
     private func flushQueuedPlaylists(
         client: SubsonicClient,
         store: OfflineMutationStore,
         playlists: [QueuedPlaylistAction]
     ) async {
         var appliedIDs = Set<String>()
+        var resolvedTempIDs: [String: String] = [:]
         for action in playlists {
+            var effectiveAction = action
+            if let pid = action.playlistID, let realID = resolvedTempIDs[pid] {
+                effectiveAction = QueuedPlaylistAction(
+                    id: action.id,
+                    type: action.type,
+                    playlistID: realID,
+                    playlistName: action.playlistName,
+                    songIDs: action.songIDs,
+                    indices: action.indices,
+                    comment: action.comment,
+                    isPublic: action.isPublic,
+                    timestamp: action.timestamp
+                )
+            }
             do {
-                switch action.type {
-                case .addSongs:
-                    if let playlistID = action.playlistID {
-                        try await client.updatePlaylist(id: playlistID, addSongIds: action.songIDs)
-                        appliedIDs.insert(action.id)
-                    }
-                case .create:
-                    if let name = action.playlistName {
-                        let created = try await client.createPlaylist(name: name, songIds: action.songIDs)
-                        let hasComment = (action.comment != nil && !action.comment!.isEmpty)
-                        let isPublic = (action.isPublic == true)
-                        if hasComment || isPublic {
-                            try? await client.updatePlaylist(
-                                id: created.id,
-                                comment: action.comment,
-                                isPublic: isPublic
-                            )
-                        }
-                        appliedIDs.insert(action.id)
+                if let newRealID = try await executeQueuedPlaylistAction(effectiveAction, client: client) {
+                    if let tempID = action.playlistID {
+                        resolvedTempIDs[tempID] = newRealID
                     }
                 }
+                appliedIDs.insert(action.id)
             } catch is CancellationError {
-                return
+                break
             } catch {
                 let errDesc = String(describing: error)
                 Self.offlineMutationLog.error(
                     "flush playlist failed for \(action.id, privacy: .public): \(errDesc, privacy: .public)"
                 )
+                if shouldDropFailedPlaylistAction(error: error, action: effectiveAction) {
+                    appliedIDs.insert(action.id)
+                }
             }
         }
         if !appliedIDs.isEmpty {
             await store.removePlaylists(ids: appliedIDs)
             await refreshPlaylists()
         }
+    }
+
+    private func shouldDropFailedPlaylistAction(error: Error, action: QueuedPlaylistAction) -> Bool {
+        if let playlistID = action.playlistID,
+           let target = library.playlists.first(where: { $0.id == playlistID }),
+           target.isSmart || (target.isReadonly ?? false) {
+            return true
+        }
+        if let subError = error as? SubsonicError {
+            switch subError {
+            case .server(let code, _):
+                return code == 10 || code == 50 || code == 70
+            case .http(let status):
+                return status == 400 || status == 403 || status == 404 || status == 422
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     private func flushQueuedStars(
@@ -321,7 +384,7 @@ extension AppState {
                 try await sendStarRequest(client: client, star: star)
                 appliedIDs.insert(id)
             } catch is CancellationError {
-                return
+                break
             } catch {
                 Self.offlineMutationLog.error(
                     "flush star failed for \(id, privacy: .public): \(String(describing: error), privacy: .public)"
@@ -340,16 +403,20 @@ extension AppState {
         }
     }
 
-    private func sendStarRequest(client: SubsonicClient, star: QueuedStarAction) async throws {
-        switch (star.kind, star.isStarred) {
-        case (.song, true): try await client.star(songIds: [star.id])
-        case (.song, false): try await client.unstar(songIds: [star.id])
-        case (.album, true): try await client.star(albumIds: [star.id])
-        case (.album, false): try await client.unstar(albumIds: [star.id])
-        case (.artist, true): try await client.star(artistIds: [star.id])
-        case (.artist, false): try await client.unstar(artistIds: [star.id])
+    func sendStar(client: SubsonicClient, id: String, kind: StarKind, isStarred: Bool) async throws {
+        switch (kind, isStarred) {
+        case (.song, true): try await client.star(songIds: [id])
+        case (.song, false): try await client.unstar(songIds: [id])
+        case (.album, true): try await client.star(albumIds: [id])
+        case (.album, false): try await client.unstar(albumIds: [id])
+        case (.artist, true): try await client.star(artistIds: [id])
+        case (.artist, false): try await client.unstar(artistIds: [id])
         case (.playlist, _): break
         }
+    }
+
+    private func sendStarRequest(client: SubsonicClient, star: QueuedStarAction) async throws {
+        try await sendStar(client: client, id: star.id, kind: star.kind, isStarred: star.isStarred)
     }
 
     private func flushQueuedRatings(
@@ -363,7 +430,7 @@ extension AppState {
                 try await client.setRating(rating.rating, id: songID)
                 appliedIDs.insert(songID)
             } catch is CancellationError {
-                return
+                break
             } catch {
                 let desc = String(describing: error)
                 Self.offlineMutationLog.error(

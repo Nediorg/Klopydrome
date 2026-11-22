@@ -89,9 +89,12 @@ extension AppState {
     }
 
     func openSmartPlaylist(_ playlist: SmartPlaylist) {
-        MiniPlayerPanelController.shared.closeForLibraryNavigation()
-        nav.history.append(.smartPlaylist(playlist))
-        nav.navVersion += 1
+        if let summary = library.playlists.first(where: { $0.id == playlist.id }) {
+            openPlaylist(summary)
+            return
+        }
+        let fallback = PlaylistSummary(id: playlist.id, name: playlist.name, validUntil: "smart")
+        openPlaylist(fallback)
     }
 
     func navigateBack() {

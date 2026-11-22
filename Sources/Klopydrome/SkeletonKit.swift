@@ -145,17 +145,17 @@ struct SkeletonCardGrid: View {
 
     var body: some View {
         GeometryReader { geo in
-            let available = max(0, geo.size.width - horizontalPadding * 2)
-            let colCount = max(1, Int((available + gap) / (minCard + gap)))
-            let rawWidth = (available - CGFloat(colCount - 1) * gap) / CGFloat(colCount)
-            let cardWidth = floor(rawWidth)
-            let cols = Array(repeating: GridItem(.fixed(cardWidth), spacing: gap), count: colCount)
+            let grid = AdaptiveGridGeometry(
+                availableWidth: max(0, geo.size.width - horizontalPadding * 2),
+                minCard: minCard,
+                gap: gap
+            )
 
             ScrollView {
-                grid(cols: cols, cardWidth: cardWidth, forMask: false)
+                self.grid(cols: grid.columns, cardWidth: grid.cardWidth, forMask: false)
                     .shimmering()
                     .mask {
-                        grid(cols: cols, cardWidth: cardWidth, forMask: true)
+                        self.grid(cols: grid.columns, cardWidth: grid.cardWidth, forMask: true)
                     }
                     .padding(.horizontal, horizontalPadding)
                     .padding(.vertical, verticalPadding)

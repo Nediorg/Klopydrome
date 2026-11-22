@@ -123,7 +123,7 @@ extension AppState {
             )
         )
         resetCacheState()
-        Task { await self.seedCachedStreamKeys() }
+        await seedCachedStreamKeys()
         serverConfig = updatedConfig
         isOfflineSession = false
         await setupOfflineRepository(host: host)

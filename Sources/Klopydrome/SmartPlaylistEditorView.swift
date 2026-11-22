@@ -33,7 +33,7 @@ struct SmartPlaylistEditorView: View {
     @FocusState private var nameFocused: Bool
     @State var isLoadingInitialRules: Bool
 
-    init(playlist: SmartPlaylist?, server: ServerSmartPlaylist? = nil, onDismiss: (() -> Void)? = nil) {
+    init(playlist: SmartPlaylist? = nil, server: ServerSmartPlaylist? = nil, onDismiss: (() -> Void)? = nil) {
         self.playlist = playlist
         self.server = server
         self.onDismiss = onDismiss
@@ -54,9 +54,9 @@ struct SmartPlaylistEditorView: View {
         case failed(String)
     }
 
-    private var isNew: Bool { playlist == nil }
+    private var isNew: Bool { playlist == nil && server == nil }
     private var isServer: Bool { server != nil }
-    private var isNewLocal: Bool { playlist == nil && server == nil }
+    private var isNewPlaylist: Bool { playlist == nil && server == nil }
     private var loadID: String { server?.id ?? playlist?.id ?? "new" }
     private static let minEditorWidth: CGFloat = 720
     private static let maxEditorWidth: CGFloat = 960
@@ -93,6 +93,27 @@ struct SmartPlaylistEditorView: View {
                     Divider()
                     options
                     Divider()
+                    if let err = jsonError, mode == .visual {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                            Text(err)
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                            Spacer()
+                            Button {
+                                jsonError = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.red.opacity(0.08))
+                        Divider()
+                    }
                     editorBody
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .layoutPriority(1)
@@ -134,7 +155,7 @@ struct SmartPlaylistEditorView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text((isNewLocal ? "New Smart Playlist" : "Rule Editor").localized)
+            Text((isNewPlaylist ? "New Smart Playlist" : "Rule Editor").localized)
                 .font(.headline)
             TextField("Name".localized, text: $name)
                 .textFieldStyle(.roundedBorder)
@@ -250,11 +271,11 @@ struct SmartPlaylistEditorView: View {
                     dismissModal()
                 }
             }
-            if !isNewLocal {
+            if !isNewPlaylist {
                 Button("Save As…".localized) { saveAsPresented = true }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Button((isNewLocal ? "Create" : "Save").localized) { save() }
+            Button((isNewPlaylist ? "Create" : "Save").localized) { save() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)

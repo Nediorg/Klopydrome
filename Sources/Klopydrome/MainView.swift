@@ -31,7 +31,6 @@ struct MainView: View {
         .overlay(alignment: .topTrailing) {
             if debugShowPlayerState {
                 MiniPlayerDebugOverlay(app: app)
-                    .allowsHitTesting(false)
                     .padding(.top, 60)
             }
         }
@@ -141,8 +140,6 @@ struct DetailView: View {
                 AlbumDetailView(album: album)
             case .playlist(let playlist):
                 PlaylistDetailView(playlist: playlist)
-            case .smartPlaylist(let smart):
-                SmartPlaylistDetailView(playlist: smart)
             case .artist(let artist):
                 ArtistDetailView(artist: artist)
             case .song(let song):
@@ -179,7 +176,7 @@ struct MinimalScrubber: View {
     @State private var dragProgress: CGFloat?
 
     private var isLoading: Bool {
-        app.player.isPlaying && (app.player.isBuffering || app.player.isLoading)
+        app.player.isBuffering || app.player.isLoading
     }
 
     private var trackDuration: Double { app.player.trackDuration }
@@ -246,6 +243,7 @@ struct MinimalScrubber: View {
                     .accessibilityLabel("Playback position".localized)
                     .accessibilityValue(app.player.formattedCurrentTime())
                     .accessibilityAdjustableAction { direction in
+                        guard app.player.trackDuration > 0 else { return }
                         let step = direction == .increment ? 10.0 : -10.0
                         app.player.seek(to: min(max(app.player.currentTime + step, 0), app.player.trackDuration))
                     }
@@ -265,15 +263,14 @@ struct MinimalScrubber: View {
 
             if isLoading {
                 SweepBar(width: width, trackHeight: trackHeight)
-                    .opacity(0.6)
+            } else {
+                Rectangle()
+                    .fill(Color.secondary.opacity(isLCDHovered ? 0.85 : 0.65))
+                    .frame(height: trackHeight)
+                    .scaleEffect(x: trackProgress, anchor: .leading)
+
+                marker(width: width)
             }
-
-            Rectangle()
-                .fill(Color.secondary.opacity(isLCDHovered ? 0.85 : 0.65))
-                .frame(height: trackHeight)
-                .scaleEffect(x: trackProgress, anchor: .leading)
-
-            marker(width: width)
         }
         .frame(width: width, height: trackHeight)
         .clipped()

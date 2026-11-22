@@ -102,4 +102,66 @@ final class DownloadAndOfflineCachingTests: XCTestCase {
         app.cancelSongDownload(song1)
         XCTAssertFalse(app.downloadingSongIDs.contains("s1"))
     }
+
+    func testCachedURLPurgesCorruptSmallFiles() throws {
+        let app = AppState()
+        let song = SubsonicSong(id: "corrupt_test_track", title: "Corrupt Track", suffix: "mp3")
+        guard let cache = app.cache else { return }
+
+        let key = CacheManager.streamKey(songId: song.id, suffix: "mp3")
+        let fileURL = cache.fileURL(for: .streams, key: key)
+
+        try Data().write(to: fileURL)
+        app.cachedStreamKeys.insert(fileURL.lastPathComponent)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertNil(app.cachedURL(for: song))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(app.cachedStreamKeys.contains(fileURL.lastPathComponent))
+    }
+
+    func testCachedURLPurgesTruncatedFilesForLongDurationTrack() throws {
+        let app = AppState()
+        let song = SubsonicSong(id: "truncated_track", title: "Truncated Track", suffix: "opus", duration: 180)
+        guard let cache = app.cache else { return }
+
+        let key = CacheManager.streamKey(songId: song.id, suffix: "opus")
+        let fileURL = cache.fileURL(for: .streams, key: key)
+
+        let truncatedData = Data(repeating: 0, count: 50_000)
+        try truncatedData.write(to: fileURL)
+        app.cachedStreamKeys.insert(fileURL.lastPathComponent)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertNil(app.cachedURL(for: song))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(app.cachedStreamKeys.contains(fileURL.lastPathComponent))
+    }
+
+    func testMinimumExpectedCacheBytesFormula() {
+        let shortSong = SubsonicSong(id: "s_short", duration: 0)
+        XCTAssertEqual(AppState.minimumExpectedCacheBytes(for: shortSong), 4096)
+
+        let longSong = SubsonicSong(id: "s_long", duration: 180)
+        let expected = Int(Double(180) * 1500 * 0.75)
+        XCTAssertEqual(AppState.minimumExpectedCacheBytes(for: longSong), expected)
+    }
+
+    func testScheduleBackgroundCacheIfNeededDoesNotRunWhenTrackIsCached() throws {
+        let app = AppState()
+        let song = SubsonicSong(id: "cached_song", title: "Cached Song", suffix: "mp3", duration: 10)
+        guard let cache = app.cache else { return }
+
+        let key = CacheManager.streamKey(songId: song.id, suffix: "mp3")
+        let fileURL = cache.fileURL(for: .streams, key: key)
+        let validData = Data(repeating: 0, count: 20_000)
+        try validData.write(to: fileURL)
+        app.cachedStreamKeys.insert(fileURL.lastPathComponent)
+
+        XCTAssertNotNil(app.cachedURL(for: song))
+        app.scheduleBackgroundCacheIfNeeded(for: song)
+
+        XCTAssertFalse(app.player.isCaching)
+        XCTAssertFalse(app.activeCacheTasks.contains(song.id))
+    }
 }

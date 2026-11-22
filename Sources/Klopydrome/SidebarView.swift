@@ -251,7 +251,7 @@ struct SidebarView: View {
     private func playlistRow(_ text: String, icon: String, isSelected: Bool) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .foregroundStyle(isSelected ? .white : Color(nsColor: .darkGray))
+                .foregroundStyle(isSelected ? .white : .secondary)
                 .frame(width: 16, height: 16)
             Text(text.localized)
         }

@@ -13,10 +13,10 @@ extension SwiftDataOfflineRepository {
     }
 
     public func savePlaylists(_ playlists: [PlaylistSummary]) async throws {
+        let existing = try modelContext.fetch(FetchDescriptor<OfflinePlaylist>())
+        let existingByID = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for playlist in playlists {
-            let playlistID = playlist.id
-            let desc = FetchDescriptor<OfflinePlaylist>(predicate: #Predicate { $0.id == playlistID })
-            let model = try modelContext.fetch(desc).first ?? OfflinePlaylist(
+            let model = existingByID[playlist.id] ?? OfflinePlaylist(
                 id: playlist.id,
                 name: playlist.name ?? "Untitled"
             )
@@ -24,6 +24,18 @@ extension SwiftDataOfflineRepository {
             modelContext.insert(model)
         }
         try modelContext.save()
+    }
+
+    public func removePlaylist(id: String) async throws {
+        let desc = FetchDescriptor<OfflinePlaylist>(predicate: #Predicate { $0.id == id })
+        if let playlist = try modelContext.fetch(desc).first {
+            for entry in playlist.entries {
+                modelContext.delete(entry)
+            }
+            playlist.entries.removeAll()
+            modelContext.delete(playlist)
+            try modelContext.save()
+        }
     }
 
     public func savePlaylistDetail(_ detail: PlaylistDetail) async throws {
@@ -137,19 +149,10 @@ extension SwiftDataOfflineRepository {
         guard totalDownloaded > 0 else { return [:] }
 
         var downloadedByID: [String: OfflineTrack] = [:]
-        if totalDownloaded <= songIDs.count {
-            let desc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
-            let tracks = (try? modelContext.fetch(desc)) ?? []
-            for track in tracks where songIDs.contains(track.id) {
-                downloadedByID[track.id] = track
-            }
-        } else {
-            for songID in songIDs {
-                let desc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.id == songID && $0.isDownloaded })
-                if let track = try modelContext.fetch(desc).first {
-                    downloadedByID[songID] = track
-                }
-            }
+        let desc = FetchDescriptor<OfflineTrack>(predicate: #Predicate { $0.isDownloaded })
+        let tracks = (try? modelContext.fetch(desc)) ?? []
+        for track in tracks where songIDs.contains(track.id) {
+            downloadedByID[track.id] = track
         }
         return downloadedByID
     }

@@ -18,7 +18,30 @@ extension AppState {
         cachedStreamKeysSeeded = true
         guard let cache else { return }
         let keys = await cache.fileKeys(for: .streams)
-        cachedStreamKeys = Set(keys)
+        let dir = cache.directory(for: .streams)
+        var validKeys: [String] = []
+        validKeys.reserveCapacity(keys.count)
+        for key in keys {
+            let url = dir.appendingPathComponent(key)
+            if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size >= 4096 {
+                validKeys.append(key)
+            } else {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        cachedStreamKeys = Set(validKeys)
+        pruneStaleRecordings(in: cache)
+    }
+
+    private func pruneStaleRecordings(in cache: CacheManager) {
+        let recDir = cache.directory(for: .streams)
+            .deletingLastPathComponent()
+            .appendingPathComponent("recording", isDirectory: true)
+        guard let files = try? FileManager.default.contentsOfDirectory(at: recDir, includingPropertiesForKeys: nil) else { return }
+        let activeURL = automaticPlaybackRecording?.temporaryURL
+        for file in files where file != activeURL {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
     func resetCacheState() {

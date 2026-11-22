@@ -17,6 +17,7 @@ struct QueuedRatingAction: Codable, Equatable, Sendable {
 enum QueuedPlaylistActionType: String, Codable, Sendable {
     case addSongs
     case create
+    case removeSongs
 }
 
 struct QueuedPlaylistAction: Codable, Equatable, Sendable {
@@ -25,6 +26,7 @@ struct QueuedPlaylistAction: Codable, Equatable, Sendable {
     let playlistID: String?
     let playlistName: String?
     let songIDs: [String]
+    let indices: [Int]?
     let comment: String?
     let isPublic: Bool?
     let timestamp: Date
@@ -35,6 +37,7 @@ struct QueuedPlaylistAction: Codable, Equatable, Sendable {
         playlistID: String? = nil,
         playlistName: String? = nil,
         songIDs: [String] = [],
+        indices: [Int]? = nil,
         comment: String? = nil,
         isPublic: Bool? = nil,
         timestamp: Date = Date()
@@ -44,6 +47,7 @@ struct QueuedPlaylistAction: Codable, Equatable, Sendable {
         self.playlistID = playlistID
         self.playlistName = playlistName
         self.songIDs = songIDs
+        self.indices = indices
         self.comment = comment
         self.isPublic = isPublic
         self.timestamp = timestamp
@@ -96,11 +100,18 @@ actor OfflineMutationStore {
     }
 
     init(serverHost: String) {
-        let root = CacheManager.root(forServer: serverHost)
-        let metadataDir = root.appendingPathComponent("metadata", isDirectory: true)
-        try? FileManager.default.createDirectory(at: metadataDir, withIntermediateDirectories: true)
-        let url = metadataDir.appendingPathComponent("offline_mutations.json")
+        let storeURL = SwiftDataOfflineRepository.storeURL(forServer: serverHost)
+        let serverDir = storeURL.deletingLastPathComponent()
+        let url = serverDir.appendingPathComponent("offline_mutations.json")
         self.fileURL = url
+
+        let legacyRoot = CacheManager.root(forServer: serverHost)
+        let legacyURL = legacyRoot.appendingPathComponent("metadata", isDirectory: true).appendingPathComponent("offline_mutations.json")
+        if !FileManager.default.fileExists(atPath: url.path),
+           FileManager.default.fileExists(atPath: legacyURL.path) {
+            try? FileManager.default.moveItem(at: legacyURL, to: url)
+        }
+
         if let data = try? Data(contentsOf: url),
            let decoded = try? JSONDecoder().decode(OfflineMutations.self, from: data) {
             self.mutations = decoded
@@ -160,15 +171,27 @@ actor OfflineMutationStore {
         persist()
     }
 
-    func recordPlaylistCreate(name: String, songIDs: [String], comment: String?, isPublic: Bool? = nil) {
+    func recordPlaylistCreate(tempID: String? = nil, name: String, songIDs: [String], comment: String?, isPublic: Bool? = nil) {
         let action = QueuedPlaylistAction(
             id: UUID().uuidString,
             type: .create,
-            playlistID: nil,
+            playlistID: tempID,
             playlistName: name,
             songIDs: songIDs,
             comment: comment,
             isPublic: isPublic,
+            timestamp: Date()
+        )
+        mutations.playlists.append(action)
+        persist()
+    }
+
+    func recordPlaylistRemove(playlistID: String, indices: [Int]) {
+        let action = QueuedPlaylistAction(
+            id: UUID().uuidString,
+            type: .removeSongs,
+            playlistID: playlistID,
+            indices: indices,
             timestamp: Date()
         )
         mutations.playlists.append(action)

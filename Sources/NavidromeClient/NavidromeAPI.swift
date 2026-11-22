@@ -215,9 +215,23 @@ public final class NavidromeAPI {
             lock.unlock()
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw NavidromeAPIError.http(statusCode: http.statusCode)
+            let serverMessage = Self.extractErrorMessage(from: data)
+            throw NavidromeAPIError.http(statusCode: http.statusCode, message: serverMessage)
         }
         return (data, http)
+    }
+
+    private static func extractErrorMessage(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let error = json["error"] as? String, !error.isEmpty { return error }
+            if let msg = json["message"] as? String, !msg.isEmpty { return msg }
+        }
+        if let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty, text.count < 300, !text.hasPrefix("<") {
+            return text
+        }
+        return nil
     }
 }
 
@@ -240,7 +254,7 @@ public enum NavidromeAPIError: LocalizedError {
     case invalidRequest
     case invalidResponse
     case unauthorized
-    case http(statusCode: Int)
+    case http(statusCode: Int, message: String? = nil)
 
     public var errorDescription: String? {
         switch self {
@@ -252,7 +266,10 @@ public enum NavidromeAPIError: LocalizedError {
                 "Couldn't sign in to the server.",
                 comment: "NavidromeAPIError"
             )
-        case .http(let code):
+        case .http(let code, let message):
+            if let message, !message.isEmpty {
+                return message
+            }
             return String(
                 format: NSLocalizedString("Server error (HTTP %lld).", comment: "NavidromeAPIError"),
                 code

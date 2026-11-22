@@ -40,10 +40,6 @@ struct PlaylistDetailView: View {
     }
     private var displayedSongs: [SubsonicSong] { Array(filteredRows.prefix(displayedCount)) }
 
-    private var canEditTracks: Bool {
-        (currentDetail.isReadonly ?? false) == false
-    }
-
     private var topBar: some View {
         let barOpaque = isScrolled || isSearchExpanded || !filterText.isEmpty
         return LibraryHeader(
@@ -94,7 +90,7 @@ struct PlaylistDetailView: View {
                         DetailUnavailableView(message: loadError) {
                             app.loadPlaylistIfNeeded(currentDetail.summary, forceReload: true)
                         }
-                    } else if filteredRows.isEmpty && !displayedSongs.isEmpty {
+                    } else if filteredRows.isEmpty && !filterText.isEmpty {
                         ContentUnavailableView(
                             "Nothing Found".localized,
                             systemImage: "magnifyingglass",
@@ -102,6 +98,29 @@ struct PlaylistDetailView: View {
                         )
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 32)
+                    } else if rows.isEmpty {
+                        if currentDetail.isSmart {
+                            ContentUnavailableView {
+                                Label("No Matches".localized, systemImage: "gearshape")
+                            } description: {
+                                Text("There are no songs matching the rules for this smart playlist yet.".localized)
+                            } actions: {
+                                Button("Edit Rules".localized) {
+                                    app.openSmartPlaylistEditor(server: ServerSmartPlaylist(summary: currentDetail.summary))
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                        } else {
+                            ContentUnavailableView(
+                                "No Playlists".localized,
+                                systemImage: "music.note.list",
+                                description: Text("Create a playlist to group your music.".localized)
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                        }
                     } else {
                         ForEach(identifiedSongs) { item in
                             SongRow(

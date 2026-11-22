@@ -12,7 +12,9 @@ struct AddToPlaylistMenu: View {
         app ?? envApp
     }
 
-    private var playlists: [PlaylistSummary] { resolvedApp.library.playlists }
+    private var playlists: [PlaylistSummary] {
+        resolvedApp.library.playlists.filter { !($0.isReadonly ?? false) && !$0.isSmart }
+    }
 
     private func resolvedSongs() async -> [SubsonicSong] {
         if let fetchSongs {

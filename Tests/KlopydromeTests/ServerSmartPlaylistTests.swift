@@ -12,7 +12,7 @@ final class ServerSmartPlaylistTests: XCTestCase {
     func testEditorTargetPreservesServerPlaylistMetadata() {
         let summary = PlaylistSummary(
             id: "smart-1",
-            name: "Daily Mix",
+            name: "Smart Mix",
             comment: "Recent favourites",
             isPublic: true,
             validUntil: "2026-08-22T00:00:00Z"
@@ -21,7 +21,7 @@ final class ServerSmartPlaylistTests: XCTestCase {
         let target = ServerSmartPlaylist(summary: summary)
 
         XCTAssertEqual(target.id, "smart-1")
-        XCTAssertEqual(target.name, "Daily Mix")
+        XCTAssertEqual(target.name, "Smart Mix")
         XCTAssertEqual(target.comment, "Recent favourites")
         XCTAssertEqual(target.isPublic, true)
         XCTAssertNil(target.query)
@@ -31,7 +31,7 @@ final class ServerSmartPlaylistTests: XCTestCase {
     func testServerEditorStartsInRulesLoadingState() {
         let editor = SmartPlaylistEditorView(
             playlist: nil,
-            server: ServerSmartPlaylist(id: "smart-1", name: "Daily Mix")
+            server: ServerSmartPlaylist(id: "smart-1", name: "Smart Mix")
         )
 
         XCTAssertTrue(editor.isLoadingInitialRules)
@@ -45,13 +45,13 @@ final class ServerSmartPlaylistTests: XCTestCase {
         changedQuery.sort = "artist"
 
         XCTAssertFalse(SmartPlaylistEditorView.shouldConfirmDiscard(
-            name: "Daily Mix", query: query, originalName: "Daily Mix", originalQuery: query
+            name: "Smart Mix", query: query, originalName: "Smart Mix", originalQuery: query
         ))
         XCTAssertTrue(SmartPlaylistEditorView.shouldConfirmDiscard(
-            name: "Renamed", query: query, originalName: "Daily Mix", originalQuery: query
+            name: "Renamed", query: query, originalName: "Smart Mix", originalQuery: query
         ))
         XCTAssertTrue(SmartPlaylistEditorView.shouldConfirmDiscard(
-            name: "Daily Mix", query: changedQuery, originalName: "Daily Mix", originalQuery: query
+            name: "Smart Mix", query: changedQuery, originalName: "Smart Mix", originalQuery: query
         ))
     }
 
@@ -154,6 +154,86 @@ final class ServerSmartPlaylistTests: XCTestCase {
         let songs = try await repo.fetchPool(genre: nil)
         XCTAssertEqual(songs.count, 2)
         XCTAssertEqual(songs.map(\.id), ["loc-1", "loc-2"])
+    }
+
+    @MainActor
+    func testMigrateLegacyLocalSmartPlaylistsSendsToServerAndCleansUserDefaults() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "https://navidrome.test"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SmartPlaylistURLProtocol.self]
+        let api = NavidromeAPI(
+            baseURL: baseURL,
+            username: "user",
+            password: "password",
+            session: URLSession(configuration: configuration)
+        )
+        let app = AppState()
+        app.navidrome = api
+
+        let legacyQuery = SmartQuery(
+            root: QueryExpr(
+                group: .any,
+                children: [
+                    QueryExpr(rule: .contains, field: "artist", value: .string("Artist One")),
+                    QueryExpr(rule: .contains, field: "artist", value: .string("Artist Two"))
+                ]
+            )
+        )
+        let legacyPlaylist = SmartPlaylist(name: "Migrated Smart Playlist", query: legacyQuery)
+        let encoded = try JSONEncoder().encode([legacyPlaylist])
+        UserDefaults.standard.set(encoded, forKey: "smartPlaylists")
+
+        var didCreatePlaylist = false
+        SmartPlaylistURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            switch url.path {
+            case "/auth/login":
+                return Self.response(for: request, body: #"{"token":"test-token"}"#)
+            case "/api/playlist":
+                didCreatePlaylist = true
+                return Self.response(
+                    for: request,
+                    body: #"""
+                    {
+                      "id": "migrated-1",
+                      "name": "Migrated Smart Playlist",
+                      "rules": {
+                        "any": [{"contains": {"artist": "Artist One"}}, {"contains": {"artist": "Artist Two"}}]
+                      }
+                    }
+                    """#
+                )
+            default:
+                throw SmartPlaylistURLProtocol.Error.unexpectedRequest(url.path)
+            }
+        }
+
+        await app.migrateLegacyLocalSmartPlaylists()
+
+        XCTAssertTrue(didCreatePlaylist)
+        XCTAssertNil(UserDefaults.standard.data(forKey: "smartPlaylists"))
+    }
+
+    @MainActor
+    func testSmartPlaylistsGuardedAgainstModifications() async {
+        let app = AppState()
+        let smart = PlaylistSummary(
+            id: "smart-p1",
+            name: "Smart Mix",
+            validUntil: "2026-11-12T00:00:00Z"
+        )
+        let normal = PlaylistSummary(
+            id: "normal-p1",
+            name: "Normal Mix"
+        )
+        app.library.playlists = [smart, normal]
+
+        let task = app.queueOfflineAddToPlaylist(playlistID: "smart-p1", songIDs: ["song-1"])
+        XCTAssertNil(task)
+
+        let song = SubsonicSong(id: "song-1", title: "Test", duration: 100)
+        await app.addToPlaylist([song], playlistID: "smart-p1")
+        await app.removeSongsFromPlaylist(playlistID: "smart-p1", at: [0])
     }
 
     private static func response(for request: URLRequest, body: String) -> (HTTPURLResponse, Data) {

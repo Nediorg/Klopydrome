@@ -155,11 +155,7 @@ extension SearchResultsView {
                             song: song,
                             isCurrent: app.player.currentSong?.id == song.id
                         ) {
-                            if let idx = songs.firstIndex(where: { $0.id == song.id }) {
-                                app.play(songs, at: idx)
-                            } else {
-                                app.play([song], at: 0)
-                            }
+                            app.play(song, in: songs)
                         }
                     }
                 }

@@ -102,7 +102,7 @@ enum SongActionMenuBuilder {
             }
         })
 
-        let playlists = app.library.playlists
+        let playlists = app.library.playlists.filter { !($0.isReadonly ?? false) && !$0.isSmart }
         let recentIDs = app.recentPlaylistIDs
         let recents = playlists.filter { recentIDs.contains($0.id) }.sorted { firstPlaylist, secondPlaylist in
             (recentIDs.firstIndex(of: firstPlaylist.id) ?? .max) < (recentIDs.firstIndex(of: secondPlaylist.id) ?? .max)
