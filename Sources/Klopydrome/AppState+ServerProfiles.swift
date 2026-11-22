@@ -177,6 +177,13 @@ extension AppState {
         clearInMemoryCaches()
         lyrics.reset()
 
+        library = LibraryCache()
+        playlistLoadStates = [:]
+        recentPlaylistIDs = []
+        availableGenres = []
+        withMutation(keyPath: \.starOverrides) { starOverrides = [:] }
+        withMutation(keyPath: \.ratingOverrides) { ratingOverrides = [:] }
+
         downloadingSongIDs = []
         downloadingSongs = []
         activeDownloadTasks = []
@@ -200,6 +207,7 @@ extension AppState {
         didReadKeychainPassword = false
 
         nav.history = []
+        nav.selected = .home
         nav.selectedPlaylist = nil
         nav.searchQuery = ""
         sessionGeneration += 1

@@ -832,7 +832,7 @@
 "Up Next" = "На очереди";
 "Updating…" = "Обновление…";
 "Use default limit" = "Использовать лимит по умолчанию";
-"Username" = "Имя пользователя";
+"Username" = "Пользователь";
 "Validity period" = "Срок действия";
 "Value" = "Значение";
 "Version" = "Версия";
@@ -867,7 +867,7 @@
 "Add Server…" = "Добавить сервер…";
 "Add Server" = "Добавить сервер";
 "Switch" = "Переключить";
-"Active" = "Активный";
+"Active" = "Активен";
 "Delete Profile" = "Удалить профиль";
 "Delete Profile?" = "Удалить профиль?";
 "Servers" = "Серверы";
@@ -884,3 +884,11 @@
 "Switch to %@" = "Переключиться на %@";
 "Preferences" = "Настройки";
 "Section" = "Раздел";
+"No Servers" = "Нет серверов";
+"Select" = "Выбрать";
+"Address" = "Адрес";
+"Optional" = "Опционально";
+"Password is stored in macOS Keychain." = "Пароль хранится в связке ключей macOS.";
+"Allow self-signed certificates" = "Разрешить самоподписанные сертификаты";
+"Connect" = "Подключить";
+"Connect a media server" = "Подключите медиасервер";

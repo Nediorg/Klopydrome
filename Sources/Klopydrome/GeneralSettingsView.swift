@@ -8,9 +8,16 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            if !app.serverProfiles.isEmpty {
-                profilesSection
-            }
+            ProfilesSettingsSection(
+                profiles: app.serverProfiles,
+                activeProfileID: app.activeProfileID,
+                onSelect: { profile in
+                    Task { await app.switchToProfile(profile) }
+                },
+                onDelete: { profile in
+                    profileToDelete = profile
+                }
+            )
 
             accountSection
 
@@ -18,58 +25,6 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .onChange(of: app.serverConfig) { _, _ in
-            app.saveSettings()
-            app.refreshDiscordRichPresence()
-        }
-    }
-
-    private var profilesSection: some View {
-        Section("Profiles".localized) {
-            ForEach(app.serverProfiles) { profile in
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(profile.name)
-                                .font(.body.weight(profile.id == app.activeProfileID ? .semibold : .regular))
-                            if profile.id == app.activeProfileID {
-                                Text("Active".localized)
-                                    .font(.caption2.bold())
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
-                        Text("\(profile.username) @ \(profile.url)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    if profile.id != app.activeProfileID {
-                        Button("Switch".localized) {
-                            Task { await app.switchToProfile(profile) }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    Button(role: .destructive) {
-                        profileToDelete = profile
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Delete Profile".localized)
-                }
-            }
-
-            Button("Add Server…".localized) {
-                app.isAddingServer = true
-            }
-        }
         .confirmationDialog(
             "Delete Profile?".localized,
             isPresented: Binding(
@@ -87,6 +42,10 @@ struct GeneralSettingsView: View {
             Button("Cancel".localized, role: .cancel) {
                 profileToDelete = nil
             }
+        }
+        .onChange(of: app.serverConfig) { _, _ in
+            app.saveSettings()
+            app.refreshDiscordRichPresence()
         }
     }
 
@@ -182,5 +141,82 @@ struct GeneralSettingsView: View {
         } else {
             return .green
         }
+    }
+}
+
+// MARK: - Profiles Section
+
+struct ProfilesSettingsSection: View {
+    let profiles: [ServerProfile]
+    let activeProfileID: ServerProfile.ID?
+    let onSelect: (ServerProfile) -> Void
+    let onDelete: (ServerProfile) -> Void
+
+    @State private var isShowingConnectionSheet = false
+
+    var body: some View {
+        Section("Profiles".localized) {
+            ForEach(profiles) { profile in
+                ProfileRow(
+                    profile: profile,
+                    isActive: profile.id == activeProfileID,
+                    onSelect: { onSelect(profile) },
+                    onDelete: { onDelete(profile) }
+                )
+            }
+
+            Button("Add Server…".localized) {
+                isShowingConnectionSheet = true
+            }
+        }
+        .sheet(isPresented: $isShowingConnectionSheet) {
+            ServerConnectionSheet()
+        }
+    }
+}
+
+private struct ProfileRow: View {
+    let profile: ServerProfile
+    let isActive: Bool
+    let onSelect: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(profile.name)
+                    .fontWeight(.medium)
+
+                Text("\(profile.username) @ \(profile.url)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 16)
+
+            if isActive {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 7, height: 7)
+                    Text("Active".localized)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Button("Select".localized, action: onSelect)
+                    .controlSize(.small)
+            }
+
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Delete Profile".localized)
+        }
+        .padding(.vertical, 2)
     }
 }

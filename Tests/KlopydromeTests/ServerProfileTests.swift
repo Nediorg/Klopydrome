@@ -52,4 +52,28 @@ final class ServerProfileTests: XCTestCase {
         XCTAssertEqual(original.storageKey, decoded.storageKey)
         XCTAssertEqual(original.keychainAccount, decoded.keychainAccount)
     }
+
+    @MainActor
+    func testTeardownActiveSessionClearsLibraryPlaylistsAndState() {
+        let app = AppState()
+        let dummyPlaylist = PlaylistSummary(
+            id: "pl-1",
+            name: "Favorites",
+            songCount: 10,
+            duration: 120,
+            created: "2026-11-21T00:00:00Z",
+            changed: "2026-11-21T00:00:00Z"
+        )
+        app.library.playlists = [dummyPlaylist]
+        app.nav.selectedPlaylist = dummyPlaylist
+        app.nav.selected = .playlists
+        XCTAssertFalse(app.library.playlists.isEmpty)
+        XCTAssertNotNil(app.nav.selectedPlaylist)
+
+        app.teardownActiveSession()
+
+        XCTAssertTrue(app.library.playlists.isEmpty)
+        XCTAssertNil(app.nav.selectedPlaylist)
+        XCTAssertEqual(app.nav.selected, .home)
+    }
 }

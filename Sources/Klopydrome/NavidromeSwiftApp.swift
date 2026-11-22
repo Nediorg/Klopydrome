@@ -93,23 +93,6 @@ struct ContentView: View {
                         adaptiveCellularDataEnabled: app.serverConfig.effectiveAdaptiveCellularDataEnabled
                     )
                 }
-            if app.shouldShowLoginView {
-                AMColor.background.ignoresSafeArea()
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 180, weight: .ultraLight))
-                    .foregroundStyle(Color.primary.opacity(0.05))
-                    .accessibilityHidden(true)
-                Color.black.opacity(0.45).ignoresSafeArea()
-                LoginView()
-                    .frame(width: 420)
-                    .padding(12)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                    }
-                    .shadow(radius: 20)
-            }
         }
         .background(WindowMinSizeConfigurator(
             minSize: NSSize(width: LayoutMetrics.windowMinWidth, height: 600)

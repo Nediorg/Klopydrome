@@ -884,3 +884,11 @@
 "Switch to %@" = "Switch to %@";
 "Preferences" = "Preferences";
 "Section" = "Section";
+"No Servers" = "No Servers";
+"Select" = "Select";
+"Address" = "Address";
+"Optional" = "Optional";
+"Password is stored in macOS Keychain." = "Password is stored in macOS Keychain.";
+"Allow self-signed certificates" = "Allow self-signed certificates";
+"Connect" = "Connect";
+"Connect a media server" = "Connect a media server";

@@ -64,6 +64,9 @@ struct MainView: View {
         .sheet(item: $app.shareTarget) { target in
             ShareSheet(target: target)
         }
+        .sheet(isPresented: $app.isAddingServer) {
+            ServerConnectionSheet()
+        }
         .inWindowModal(item: $app.inspectingSong) { song in
             SongInfoSheet(
                 song: song,
@@ -147,7 +150,19 @@ struct DetailView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let current = app.nav.history.last {
+        if app.activeProfile == nil && !app.isOfflineSession {
+            ContentUnavailableView {
+                Label("No Servers".localized, systemImage: "server.rack")
+            } description: {
+                Text("Connect a media server".localized)
+            } actions: {
+                Button("Add Server".localized) {
+                    app.isAddingServer = true
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(AMColor.accent)
+            }
+        } else if let current = app.nav.history.last {
             switch current {
             case .album(let album):
                 AlbumDetailView(album: album).id(album.id)
