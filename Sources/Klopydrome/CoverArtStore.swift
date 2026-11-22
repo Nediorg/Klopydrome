@@ -41,8 +41,9 @@ final class CoverArtStore: @unchecked Sendable {
 
     let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 120
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        config.waitsForConnectivity = false
         return URLSession(configuration: config)
     }()
 

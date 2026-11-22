@@ -25,11 +25,15 @@ final class CoverArtFailureClassificationTests: XCTestCase {
         XCTAssertTrue(isTransient(URLError(.timedOut)))
         XCTAssertTrue(isTransient(URLError(.networkConnectionLost)))
         XCTAssertTrue(isTransient(URLError(.notConnectedToInternet)))
+        XCTAssertTrue(isTransient(URLError(.cannotConnectToHost)))
+        XCTAssertTrue(isTransient(URLError(.cannotFindHost)))
+        XCTAssertTrue(isTransient(URLError(.dnsLookupFailed)))
+        XCTAssertTrue(isTransient(URLError(.badServerResponse)))
     }
 
     func testUnknownErrorsStayDead() {
-        XCTAssertTrue(isDead(URLError(.cannotFindHost)))
-        XCTAssertTrue(isDead(URLError(.badServerResponse)))
+        XCTAssertTrue(isDead(URLError(.unsupportedURL)))
+        XCTAssertTrue(isDead(URLError(.badURL)))
         XCTAssertTrue(isDead(NSError(domain: "test", code: 1)))
     }
 }

@@ -181,4 +181,43 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertEqual(app.library.songs.count, 2)
         XCTAssertEqual(app.library.favoritesSongs.map(\.id), ["s1"])
     }
+
+    func testUpdateHomeSnapshotPreservesCachedShelvesOnError() {
+        let app = AppState()
+        let cachedAlbum = SubsonicAlbum(id: "alb-1", title: "Cached Album")
+        app.library.homeShelves = [.recent: [cachedAlbum]]
+
+        app.updateHomeSnapshot(
+            shelves: [.recent: [], .newest: []],
+            shelfErrors: [.recent: "Server unavailable", .newest: "Server unavailable"],
+            favoritesArtists: nil,
+            favoritesAlbums: nil,
+            favoritesSongs: nil
+        )
+
+        XCTAssertEqual(app.library.homeShelves[.recent]?.map(\.id), ["alb-1"])
+        XCTAssertNil(app.library.homeShelfErrors[.recent])
+        XCTAssertEqual(app.library.homeShelfErrors[.newest], "Server unavailable")
+    }
+
+    func testEnsureOfflineMutationStoreUsesEffectiveStorageKey() async {
+        let app = AppState()
+        let profile = ServerProfile(
+            name: "Home",
+            url: "https://music.example.com",
+            username: "alice",
+            authMode: .token
+        )
+        app.serverProfiles = [profile]
+        app.activeProfileID = profile.id
+        app.serverConfig.url = profile.url
+        app.serverConfig.username = profile.username
+
+        let store = app.ensureOfflineMutationStore()
+        XCTAssertNotNil(store)
+        XCTAssertEqual(
+            store?.fileURL.deletingLastPathComponent(),
+            SwiftDataOfflineRepository.storeURL(forServer: profile.storageKey).deletingLastPathComponent()
+        )
+    }
 }

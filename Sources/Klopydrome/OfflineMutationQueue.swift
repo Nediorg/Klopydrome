@@ -86,7 +86,7 @@ struct OfflineMutations: Codable, Equatable, Sendable {
 }
 
 actor OfflineMutationStore {
-    private let fileURL: URL
+    nonisolated let fileURL: URL
     private var mutations: OfflineMutations
 
     init(fileURL: URL) {

@@ -32,8 +32,14 @@ extension AppState {
 
     func ensureOfflineMutationStore() -> OfflineMutationStore? {
         if let offlineMutationStore { return offlineMutationStore }
-        let hostCandidate = URL(string: serverConfig.url)?.host ?? currentOfflineHost
-        guard let host = hostCandidate, !host.isEmpty else { return nil }
+        let storageCandidate: String? = {
+            if let currentOfflineHost, !currentOfflineHost.isEmpty {
+                return currentOfflineHost
+            }
+            guard !serverConfig.url.isEmpty else { return nil }
+            return effectiveStorageKey
+        }()
+        guard let host = storageCandidate, !host.isEmpty else { return nil }
         let store = OfflineMutationStore(serverHost: host)
         self.offlineMutationStore = store
         return store
@@ -229,6 +235,7 @@ extension AppState {
         promptUser: Bool = true,
         context: PendingMutationsContext? = nil
     ) async {
+        guard !isFlushingOfflineMutations else { return }
         guard let client, let store = ensureOfflineMutationStore() else { return }
         let mutations = await store.currentMutations()
         guard !mutations.isEmpty else { return }

@@ -123,8 +123,21 @@ extension AppState {
         favoritesAlbums: [SubsonicAlbum]?,
         favoritesSongs: [SubsonicSong]? = nil
     ) {
-        library.homeShelves = shelves
-        library.homeShelfErrors = shelfErrors
+        var mergedShelves = library.homeShelves
+        var mergedErrors: [AlbumListType: String] = [:]
+        for (type, albums) in shelves {
+            if let error = shelfErrors[type], albums.isEmpty,
+               let existing = library.homeShelves[type], !existing.isEmpty {
+                mergedShelves[type] = existing
+            } else {
+                mergedShelves[type] = albums
+                if let error = shelfErrors[type] {
+                    mergedErrors[type] = error
+                }
+            }
+        }
+        library.homeShelves = mergedShelves
+        library.homeShelfErrors = mergedErrors
         if let favoritesArtists {
             library.favoritesArtists = favoritesArtists
         }

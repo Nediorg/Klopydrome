@@ -2,20 +2,36 @@ import Foundation
 import NavidromeClient
 
 extension AppState {
+    private func isOfflineFallbackError(_ error: Error) -> Bool {
+        if let subsonic = error as? SubsonicError, subsonic == .offline { return true }
+        switch TransportErrorClassifier.classify(error) {
+        case .noNetwork, .serverUnreachable, .serverError:
+            return true
+        case .authFailure, .clientError, .cancelled:
+            return false
+        }
+    }
+
     func addToPlaylist(_ songs: [SubsonicSong], playlistID: String) async {
         guard confirmOfflineAction() else { return }
         if let target = library.playlists.first(where: { $0.id == playlistID }),
            target.isSmart || (target.isReadonly ?? false) {
             return
         }
-        if let client {
-            try? await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
-            recordRecentPlaylist(playlistID)
-            invalidatePlaylistDetail(for: playlistID)
-            await refreshPlaylists()
-            let isCurrent = nav.selectedPlaylist?.id == playlistID || nav.history.last?.playlistID == playlistID
-            if let updated = library.playlists.first(where: { $0.id == playlistID }), isCurrent {
-                await reloadPlaylist(updated)
+        if let client, allowsNetworkRequests {
+            do {
+                try await client.updatePlaylist(id: playlistID, addSongIds: songs.map(\.id))
+                recordRecentPlaylist(playlistID)
+                invalidatePlaylistDetail(for: playlistID)
+                await refreshPlaylists()
+                let isCurrent = nav.selectedPlaylist?.id == playlistID || nav.history.last?.playlistID == playlistID
+                if let updated = library.playlists.first(where: { $0.id == playlistID }), isCurrent {
+                    await reloadPlaylist(updated)
+                }
+            } catch where isOfflineFallbackError(error) {
+                await applyOfflineAddToPlaylist(songs: songs, playlistID: playlistID)
+            } catch {
+                return
             }
         } else {
             await applyOfflineAddToPlaylist(songs: songs, playlistID: playlistID)
@@ -77,41 +93,55 @@ extension AppState {
         isPublic: Bool = false
     ) async -> PlaylistDetail? {
         guard confirmOfflineAction() else { return nil }
-        if let client {
-            let created = try? await client.createPlaylist(name: name, songIds: songs.map(\.id))
-            guard let id = created?.id else { return nil }
-            recordRecentPlaylist(id)
-            if (comment != nil && !comment!.isEmpty) || isPublic {
-                try? await client.updatePlaylist(id: id, comment: comment, isPublic: isPublic)
+        if let client, allowsNetworkRequests {
+            do {
+                let created = try await client.createPlaylist(name: name, songIds: songs.map(\.id))
+                recordRecentPlaylist(created.id)
+                if (comment != nil && !comment!.isEmpty) || isPublic {
+                    try? await client.updatePlaylist(id: created.id, comment: comment, isPublic: isPublic)
+                }
+                await refreshPlaylists()
+                return created
+            } catch where isOfflineFallbackError(error) {
+                await applyOfflineCreatePlaylist(name: name, songs: songs, comment: comment, isPublic: isPublic)
+                return nil
+            } catch {
+                return nil
             }
-            await refreshPlaylists()
-            return created
-        } else {
-            let tempID = "offline_\(UUID().uuidString)"
-            queueOfflineCreatePlaylist(tempID: tempID, name: name, songIDs: songs.map(\.id), comment: comment, isPublic: isPublic)
-            let localSummary = PlaylistSummary(
+        }
+        await applyOfflineCreatePlaylist(name: name, songs: songs, comment: comment, isPublic: isPublic)
+        return nil
+    }
+
+    private func applyOfflineCreatePlaylist(
+        name: String,
+        songs: [SubsonicSong],
+        comment: String?,
+        isPublic: Bool
+    ) async {
+        let tempID = "offline_\(UUID().uuidString)"
+        queueOfflineCreatePlaylist(tempID: tempID, name: name, songIDs: songs.map(\.id), comment: comment, isPublic: isPublic)
+        let localSummary = PlaylistSummary(
+            id: tempID,
+            name: name,
+            comment: comment,
+            songCount: songs.count,
+            duration: songs.reduce(0) { $0 + ($1.duration ?? 0) },
+            isPublic: isPublic
+        )
+        library.playlists.insert(localSummary, at: 0)
+        recordRecentPlaylist(tempID)
+        if let offlineRepository {
+            let detail = PlaylistDetail(
                 id: tempID,
                 name: name,
                 comment: comment,
                 songCount: songs.count,
                 duration: songs.reduce(0) { $0 + ($1.duration ?? 0) },
-                isPublic: isPublic
+                isPublic: isPublic,
+                entry: songs
             )
-            library.playlists.insert(localSummary, at: 0)
-            recordRecentPlaylist(tempID)
-            if let offlineRepository {
-                let detail = PlaylistDetail(
-                    id: tempID,
-                    name: name,
-                    comment: comment,
-                    songCount: songs.count,
-                    duration: songs.reduce(0) { $0 + ($1.duration ?? 0) },
-                    isPublic: isPublic,
-                    entry: songs
-                )
-                try? await offlineRepository.savePlaylistDetail(detail)
-            }
-            return nil
+            try? await offlineRepository.savePlaylistDetail(detail)
         }
     }
 
@@ -174,7 +204,7 @@ extension AppState {
             indices: indices
         ) else { return }
 
-        guard let client else {
+        guard let client, allowsNetworkRequests else {
             queueOfflineRemoveFromPlaylist(playlistID: playlistID, indices: indices)
             return
         }
@@ -185,8 +215,10 @@ extension AppState {
             if let serverSummary = library.playlists.first(where: { $0.id == playlistID }) {
                 await applyServerPlaylistRemoval(playlistID: playlistID, serverSummary: serverSummary)
             }
+        } catch where isOfflineFallbackError(error) {
+            queueOfflineRemoveFromPlaylist(playlistID: playlistID, indices: indices)
         } catch {
-            rollbackPlaylistRemoval(playlistID: playlistID, removedPairs: removedPairs, error: error)
+            await rollbackPlaylistRemoval(playlistID: playlistID, removedPairs: removedPairs, error: error)
         }
     }
 
@@ -280,7 +312,7 @@ extension AppState {
         playlistID: String,
         removedPairs: [(index: Int, song: SubsonicSong)],
         error: Error
-    ) {
+    ) async {
         guard var rollbackState = playlistLoadStates[playlistID] else { return }
         for pair in removedPairs.reversed() {
             let insertIdx = min(pair.index, rollbackState.songs.count)
@@ -306,6 +338,8 @@ extension AppState {
             )
             rollbackState.detail = rolledBackDetail
             cachePlaylistDetail(rolledBackDetail)
+            await persistPlaylistDetailToDisk(rolledBackDetail)
+            try? await offlineRepository?.savePlaylistDetail(rolledBackDetail)
             syncPlaylistSummaryWithDetail(rolledBackDetail)
         }
         rollbackState.error = error.localizedDescription
@@ -403,8 +437,12 @@ extension AppState {
 
     func deletePlaylist(_ playlist: PlaylistSummary) async {
         guard confirmOfflineAction() else { return }
-        guard let client else { return }
-        try? await client.deletePlaylist(id: playlist.id)
+        guard let client, allowsNetworkRequests else { return }
+        do {
+            try await client.deletePlaylist(id: playlist.id)
+        } catch {
+            return
+        }
         if nav.selectedPlaylist?.id == playlist.id {
             nav.selected = .playlists
             nav.selectedPlaylist = nil

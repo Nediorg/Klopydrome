@@ -187,7 +187,7 @@ extension AppState {
     }
 
     private func waitForNetworkConnectivity(taskID: UUID, songID: String) async -> Bool {
-        while !NetworkMonitor.shared.isPathSatisfied {
+        while !NetworkMonitor.shared.isPathSatisfied || !allowsNetworkRequests {
             await MainActor.run { setTaskState(taskID, .waitingForNetwork) }
             if Task.isCancelled || isDownloadCancelled(songID: songID) { return false }
             try? await Task.sleep(for: .seconds(2))
@@ -205,7 +205,7 @@ extension AppState {
                 return true
             } catch is CancellationError {
                 return false
-            } catch let error as URLError where isTransientNetworkError(error) {
+            } catch where isTransientDownloadError(error) {
                 attempt += 1
                 guard await waitForNetworkConnectivity(taskID: taskID, songID: song.id) else { return false }
                 if attempt < 3 {
@@ -218,13 +218,14 @@ extension AppState {
         return false
     }
 
-    private func isTransientNetworkError(_ error: URLError) -> Bool {
-        switch error.code {
-        case .notConnectedToInternet, .networkConnectionLost, .timedOut,
-             .cannotConnectToHost, .dnsLookupFailed, .internationalRoamingOff,
-             .callIsActive, .dataNotAllowed:
+    private func isTransientDownloadError(_ error: Error) -> Bool {
+        if let subsonicError = error as? SubsonicError, subsonicError == .offline {
             return true
-        default:
+        }
+        switch TransportErrorClassifier.classify(error) {
+        case .noNetwork, .serverUnreachable, .serverError:
+            return true
+        case .authFailure, .clientError, .cancelled:
             return false
         }
     }

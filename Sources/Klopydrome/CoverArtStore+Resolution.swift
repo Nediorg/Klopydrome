@@ -16,7 +16,7 @@ extension CoverArtStore {
         if let size, size > 0, let larger = await findLargerCachedCoverOnDisk(coverArt: coverArt, than: size) {
             return .image(larger)
         }
-        guard let client else {
+        guard let client, client.isCircuitOpen?() != true else {
             if let fallback = await findAnyCachedCoverOnDisk(coverArt: coverArt, requestedSize: size) {
                 return .image(fallback)
             }
@@ -102,24 +102,35 @@ extension CoverArtStore {
            let image = decodeImage(from: data, requestedSize: size) {
             return .image(image)
         }
-        guard client != nil else { return .transient }
+        guard let client, client.isCircuitOpen?() != true else { return .transient }
         return await fetch(url: resolved, cacheKey: cacheKey, requestedSize: size)
     }
 
     func fetch(url: URL, cacheKey: String?, requestedSize: Int?) async -> FetchOutcome {
         guard !Task.isCancelled else { return .transient }
+        if client?.isCircuitOpen?() == true { return .transient }
         coverLogger.debug("gate acquire url=\(url.absoluteString, privacy: .private)")
         let outcome = await gate.execute { [weak self] () -> FetchOutcome in
             guard let self, !Task.isCancelled else { return .transient }
+            if self.client?.isCircuitOpen?() == true { return .transient }
             coverLogger.debug("gate acquired url=\(url.absoluteString, privacy: .private)")
             do {
                 let (data, response) = try await self.session.data(from: url)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                let http = response as? HTTPURLResponse
+                guard http?.statusCode == 200 else {
+                    let code = http?.statusCode ?? -1
                     coverLogger.debug("fetch http \(code) url=\(url.absoluteString, privacy: .private)")
+                    self.reportCoverHTTPFailure(statusCode: code)
                     return code == 404 ? .dead : .transient
                 }
                 guard let image = self.decodeImage(from: data, requestedSize: requestedSize) else {
+                    if TransportErrorClassifier.isProxyErrorHTML(
+                        data,
+                        contentType: http?.value(forHTTPHeaderField: "Content-Type")
+                    ) {
+                        self.client?.onHealthEvent?(.failure(.serverError(502), message: nil))
+                        return .transient
+                    }
                     coverLogger.debug(
                         "fetch bad data url=\(url.absoluteString, privacy: .private) bytes=\(data.count)"
                     )
@@ -134,20 +145,39 @@ extension CoverArtStore {
                 return .image(image)
             } catch {
                 coverLogger.error("fetch error url=\(url.absoluteString, privacy: .private) \(error.localizedDescription, privacy: .private)")
+                self.reportCoverTransportFailure(error)
                 return Self.classifyFetchError(error)
             }
         }
         return outcome ?? .transient
     }
 
+    private func reportCoverHTTPFailure(statusCode: Int) {
+        let kind = TransportErrorClassifier.classifyHTTPStatus(statusCode)
+        switch kind {
+        case .serverError, .authFailure:
+            client?.onHealthEvent?(.failure(kind, message: nil))
+        case .noNetwork, .serverUnreachable, .clientError, .cancelled:
+            break
+        }
+    }
+
+    private func reportCoverTransportFailure(_ error: Error) {
+        let kind = TransportErrorClassifier.classify(error)
+        switch kind {
+        case .noNetwork, .serverUnreachable, .serverError, .authFailure:
+            client?.onHealthEvent?(.failure(kind, message: error.localizedDescription))
+        case .clientError, .cancelled:
+            break
+        }
+    }
+
     static func classifyFetchError(_ error: Error) -> FetchOutcome {
-        if error is CancellationError { return .transient }
-        if Task.isCancelled { return .transient }
-        guard let code = (error as? URLError)?.code else { return .dead }
-        switch code {
-        case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cancelled:
+        if error is CancellationError || Task.isCancelled { return .transient }
+        switch TransportErrorClassifier.classify(error) {
+        case .cancelled, .noNetwork, .serverUnreachable, .serverError:
             return .transient
-        default:
+        case .authFailure, .clientError:
             return .dead
         }
     }
