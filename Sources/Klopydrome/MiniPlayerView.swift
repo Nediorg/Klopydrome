@@ -69,6 +69,10 @@ struct MiniPlayerView: View {
         .onChange(of: app.visiblePlayerPanel) { _, _ in
             updateWindowChrome(controlsVisible, activePanel)
         }
+        .onChange(of: app.serverConfig.theme) { _, newTheme in
+            MiniPlayerPanelController.shared.syncAppearance(with: newTheme)
+        }
+        .preferredColorScheme(app.appearance)
         .onDisappear {
             hideControlsTask?.cancel()
         }

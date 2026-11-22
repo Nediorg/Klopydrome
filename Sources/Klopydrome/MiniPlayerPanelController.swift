@@ -1,4 +1,5 @@
 import AppKit
+import NavidromeClient
 import SwiftUI
 
 @MainActor
@@ -32,6 +33,7 @@ final class MiniPlayerPanelController: NSObject {
         let sourceWindow = NSApp.mainWindow === panel ? mainWindow : NSApp.mainWindow
         let shouldPositionPanel = panel == nil
         let panel = panel ?? makePanel(app: app)
+        syncAppearance(with: app.serverConfig.theme)
         if shouldPositionPanel {
             position(panel, relativeTo: sourceWindow)
         }
@@ -327,6 +329,20 @@ final class MiniPlayerPanelController: NSObject {
         if panel.inLiveResize { return true }
         let point = content.convert(panel.mouseLocationOutsideOfEventStream, from: nil)
         return content.bounds.insetBy(dx: -8, dy: -8).contains(point)
+    }
+}
+
+extension MiniPlayerPanelController {
+    func syncAppearance(with theme: AppTheme?) {
+        guard let panel else { return }
+        switch theme {
+        case .dark:
+            panel.appearance = NSAppearance(named: .darkAqua)
+        case .light:
+            panel.appearance = NSAppearance(named: .aqua)
+        case .system, nil:
+            panel.appearance = nil
+        }
     }
 }
 
