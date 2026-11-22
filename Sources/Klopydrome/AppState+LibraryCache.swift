@@ -14,7 +14,7 @@ final class LibraryCache {
     var favoritesAlbums: [SubsonicAlbum] = []
     var favoritesSongs: [SubsonicSong] = []
     var playlists: [PlaylistSummary] = []
-    private static let maxDetailCacheCapacity = 25
+    private static let maxDetailCacheCapacity = 12
 
     @ObservationIgnored private var playlistDetailOrder: [String] = []
     var playlistDetails: [String: PlaylistDetail] = [:] {

@@ -7,13 +7,13 @@ import SwiftUI
 final class MiniPlayerVariableBlurCache: @unchecked Sendable {
     static let shared = MiniPlayerVariableBlurCache()
 
-    private let context = CIContext(options: [.useSoftwareRenderer: false])
+    private let context = CIContext(options: [.useSoftwareRenderer: false, .cacheIntermediates: false])
     private let cache = NSCache<NSString, NSImage>()
     private let lock = NSLock()
 
     private init() {
-        cache.countLimit = 4
-        cache.totalCostLimit = 8 * 1024 * 1024
+        cache.countLimit = 2
+        cache.totalCostLimit = 4 * 1024 * 1024
     }
 
     func clear() {
@@ -37,6 +37,18 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
         return lock.withLock { cache.object(forKey: key) }
     }
 
+    func prewarmBlur(coverArt: String, source: NSImage, size: CGFloat) {
+        let targetSize = CGSize(width: size, height: size)
+        let key = cacheKey(coverArt: coverArt, targetSize: targetSize)
+        if lock.withLock({ cache.object(forKey: key) != nil }) {
+            return
+        }
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            _ = self.renderBlur(coverArt: coverArt, source: source, targetSize: targetSize)
+        }
+    }
+
     func prewarmBlur(coverArt: String, size: CGFloat) {
         let targetSize = CGSize(width: size, height: size)
         let key = cacheKey(coverArt: coverArt, targetSize: targetSize)
@@ -45,7 +57,7 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
         }
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            let sourceBox = await CoverArtStore.shared.image(coverArt: coverArt, size: Int(size * 2))
+            let sourceBox = await CoverArtStore.shared.image(coverArt: coverArt, size: Int(size))
             guard let sourceImage = sourceBox.image else { return }
             _ = self.renderBlur(coverArt: coverArt, source: sourceImage, targetSize: targetSize)
         }
@@ -75,7 +87,7 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
             return nil
         }
 
-        guard let maskCI = createMaskImage(width: width, height: height)?.clampedToExtent() else { return nil }
+        guard let maskCI = createMaskImage(height: height)?.clampedToExtent() else { return nil }
         guard let filter = CIFilter(name: "CIMaskedVariableBlur") else { return nil }
         filter.setValue(scaledCI, forKey: kCIInputImageKey)
         filter.setValue(maskCI, forKey: "inputMask")
@@ -126,19 +138,19 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
         return translatedCI.transformed(by: CGAffineTransform(scaleX: scale, y: scale)).clampedToExtent()
     }
 
-    private func createMaskImage(width: Int, height: Int) -> CIImage? {
+    private func createMaskImage(height: Int) -> CIImage? {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(
             data: nil,
-            width: width,
+            width: 1,
             height: height,
             bitsPerComponent: 8,
-            bytesPerRow: width * 4,
+            bytesPerRow: 4,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
-        guard let rawData = ctx.data?.bindMemory(to: UInt8.self, capacity: width * height * 4) else {
+        guard let rawData = ctx.data?.bindMemory(to: UInt8.self, capacity: height * 4) else {
             return nil
         }
 
@@ -156,13 +168,11 @@ final class MiniPlayerVariableBlurCache: @unchecked Sendable {
                 progress = min(1.0, (rowDouble - startRow) / rowSpan)
             }
             let greenValue = UInt8(clamping: Int(progress * 255.0))
-            for col in 0..<width {
-                let offset = (row * width + col) * 4
-                rawData[offset + 0] = greenValue
-                rawData[offset + 1] = greenValue
-                rawData[offset + 2] = greenValue
-                rawData[offset + 3] = 255
-            }
+            let offset = row * 4
+            rawData[offset + 0] = greenValue
+            rawData[offset + 1] = greenValue
+            rawData[offset + 2] = greenValue
+            rawData[offset + 3] = 255
         }
 
         guard let maskCG = ctx.makeImage() else { return nil }
@@ -249,7 +259,7 @@ struct MiniPlayerBlurredArtworkView: View {
         if let cached = MiniPlayerVariableBlurCache.shared.cached(coverArt: coverArt, targetSize: targetSize) {
             result = cached
         } else {
-            let sourceBox = await CoverArtStore.shared.image(coverArt: coverArt, size: Int(size * 2))
+            let sourceBox = await CoverArtStore.shared.image(coverArt: coverArt, size: Int(size))
             guard let sourceImage = sourceBox.image else { return }
 
             result = await Task.detached(priority: .userInitiated) {
@@ -289,10 +299,6 @@ struct MiniPlayerBlurredArtworkView: View {
         let nextIndex = player.currentIndex + 1
         if player.queue.indices.contains(nextIndex), let nextArt = player.queue[nextIndex].coverArt {
             MiniPlayerVariableBlurCache.shared.prewarmBlur(coverArt: nextArt, size: size)
-        }
-        let prevIndex = player.currentIndex - 1
-        if player.queue.indices.contains(prevIndex), let prevArt = player.queue[prevIndex].coverArt {
-            MiniPlayerVariableBlurCache.shared.prewarmBlur(coverArt: prevArt, size: size)
         }
     }
 

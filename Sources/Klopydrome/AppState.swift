@@ -39,7 +39,7 @@ final class AppState {
     var lyrics = LyricsStore()
     var nav = NavigationState()
     var library = LibraryCache()
-    private static let maxPlaylistLoadStatesCapacity = 25
+    private static let maxPlaylistLoadStatesCapacity = 10
     @ObservationIgnored private var playlistLoadOrder: [String] = []
     var playlistLoadStates: [String: PlaylistLoadState] = [:] {
         didSet {
@@ -292,8 +292,10 @@ final class AppState {
         CoverArtStore.shared.clearMemoryCache()
         MiniPlayerVariableBlurCache.shared.clear()
         clearInMemoryCaches()
+        let cacheManager = cache
         Task {
             await offlineRepository?.clearMemoryCache()
+            await cacheManager?.clearInMemoryCaches()
         }
     }
 

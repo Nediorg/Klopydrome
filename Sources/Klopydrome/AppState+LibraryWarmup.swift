@@ -22,18 +22,18 @@ extension AppState {
 
     private func readCached<T: Decodable>(cache: CacheManager, key: String) async -> T? {
         guard let data = await cache.readData(for: .metadata, key: key) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+        return autoreleasepool { try? JSONDecoder().decode(T.self, from: data) }
     }
 
     private func readCachedArray<T: Decodable>(cache: CacheManager, key: String) async -> [T]? {
-        guard let data = await cache.readData(for: .metadata, key: key),
-              let items = try? JSONDecoder().decode([T].self, from: data),
-              !items.isEmpty else { return nil }
+        guard let data = await cache.readData(for: .metadata, key: key) else { return nil }
+        let items: [T]? = autoreleasepool { try? JSONDecoder().decode([T].self, from: data) }
+        guard let items, !items.isEmpty else { return nil }
         return items
     }
 
     private func writeCached<T: Encodable>(cache: CacheManager, key: String, value: T) async {
-        guard let data = try? JSONEncoder().encode(value) else { return }
+        guard let data: Data = autoreleasepool(invoking: { try? JSONEncoder().encode(value) }) else { return }
         _ = try? await cache.write(data: data, to: .metadata, key: key)
     }
 

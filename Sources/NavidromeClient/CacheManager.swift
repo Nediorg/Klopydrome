@@ -178,6 +178,10 @@ public actor CacheManager {
         for kind in CacheKind.allCases {
             await clear(kind: kind)
         }
+        clearInMemoryCaches()
+    }
+
+    public func clearInMemoryCaches() {
         discographyByArtist = [:]
         discographyArtistOrder = []
     }

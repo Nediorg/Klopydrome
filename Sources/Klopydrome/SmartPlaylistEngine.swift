@@ -37,7 +37,7 @@ final class CachedLibraryRepo: SongRepo {
         self.client = client
         self.diskCache = cache
         self.localSongs = localSongs
-        self.cache.countLimit = 32
+        self.cache.countLimit = 8
         self.cache.totalCostLimit = 16 << 20
     }
 
@@ -56,13 +56,13 @@ final class CachedLibraryRepo: SongRepo {
                 } else {
                     filtered = local
                 }
-                cache.setObject(filtered as NSArray, forKey: key, cost: filtered.count * 1024)
+                cache.setObject(filtered as NSArray, forKey: key, cost: filtered.count * 2560)
                 return filtered
             }
         }
 
         if let persisted = await loadDisk(genre: genre) {
-            cache.setObject(persisted as NSArray, forKey: key, cost: persisted.count * 1024)
+            cache.setObject(persisted as NSArray, forKey: key, cost: persisted.count * 2560)
             return persisted
         }
 
@@ -72,7 +72,7 @@ final class CachedLibraryRepo: SongRepo {
         } else {
             pool = (try? await client.search3(query: "", artistCount: 0, albumCount: 0, songCount: 500).songs) ?? []
         }
-        cache.setObject(pool as NSArray, forKey: key, cost: pool.count * 1024)
+        cache.setObject(pool as NSArray, forKey: key, cost: pool.count * 2560)
         await persist(pool: pool, genre: genre)
         return pool
     }

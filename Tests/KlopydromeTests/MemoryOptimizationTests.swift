@@ -9,21 +9,17 @@ final class MemoryOptimizationTests: XCTestCase {
     func testLibraryCacheLRUEviction() {
         let cache = LibraryCache()
 
-        // Insert 26 album details
-        for idx in 0..<26 {
+        for idx in 0..<13 {
             let detail = AlbumDetail(id: "album-\(idx)", name: "Album \(idx)")
             cache.albumDetails["album-\(idx)"] = detail
         }
-        XCTAssertEqual(cache.albumDetails.count, 25)
-        // First album (album-0) should have been evicted
+        XCTAssertEqual(cache.albumDetails.count, 12)
         XCTAssertNil(cache.albumDetails["album-0"])
-        XCTAssertNotNil(cache.albumDetails["album-25"])
+        XCTAssertNotNil(cache.albumDetails["album-12"])
 
-        // Access album-1, then insert album-26
         cache.recordAlbumDetailAccess("album-1")
-        cache.albumDetails["album-26"] = AlbumDetail(id: "album-26", name: "Album 26")
-        XCTAssertEqual(cache.albumDetails.count, 25)
-        // album-1 was promoted to MRU, so album-2 should be evicted instead of album-1
+        cache.albumDetails["album-13"] = AlbumDetail(id: "album-13", name: "Album 13")
+        XCTAssertEqual(cache.albumDetails.count, 12)
         XCTAssertNotNil(cache.albumDetails["album-1"])
         XCTAssertNil(cache.albumDetails["album-2"])
     }
@@ -31,18 +27,17 @@ final class MemoryOptimizationTests: XCTestCase {
     func testPlaylistDetailLRUEviction() {
         let cache = LibraryCache()
 
-        for idx in 0..<26 {
+        for idx in 0..<13 {
             let detail = PlaylistDetail(id: "playlist-\(idx)", name: "Playlist \(idx)")
             cache.playlistDetails["playlist-\(idx)"] = detail
         }
-        XCTAssertEqual(cache.playlistDetails.count, 25)
+        XCTAssertEqual(cache.playlistDetails.count, 12)
         XCTAssertNil(cache.playlistDetails["playlist-0"])
-        XCTAssertNotNil(cache.playlistDetails["playlist-25"])
+        XCTAssertNotNil(cache.playlistDetails["playlist-12"])
 
-        // Access playlist-1, then insert playlist-26
         cache.recordPlaylistDetailAccess("playlist-1")
-        cache.playlistDetails["playlist-26"] = PlaylistDetail(id: "playlist-26", name: "Playlist 26")
-        XCTAssertEqual(cache.playlistDetails.count, 25)
+        cache.playlistDetails["playlist-13"] = PlaylistDetail(id: "playlist-13", name: "Playlist 13")
+        XCTAssertEqual(cache.playlistDetails.count, 12)
         XCTAssertNotNil(cache.playlistDetails["playlist-1"])
         XCTAssertNil(cache.playlistDetails["playlist-2"])
     }
@@ -50,18 +45,17 @@ final class MemoryOptimizationTests: XCTestCase {
     func testArtistDetailLRUEviction() {
         let cache = LibraryCache()
 
-        for idx in 0..<26 {
+        for idx in 0..<13 {
             let detail = ArtistDetail(id: "artist-\(idx)", name: "Artist \(idx)")
             cache.artistDetails["artist-\(idx)"] = detail
         }
-        XCTAssertEqual(cache.artistDetails.count, 25)
+        XCTAssertEqual(cache.artistDetails.count, 12)
         XCTAssertNil(cache.artistDetails["artist-0"])
-        XCTAssertNotNil(cache.artistDetails["artist-25"])
+        XCTAssertNotNil(cache.artistDetails["artist-12"])
 
-        // Access artist-1, then insert artist-26
         cache.recordArtistDetailAccess("artist-1")
-        cache.artistDetails["artist-26"] = ArtistDetail(id: "artist-26", name: "Artist 26")
-        XCTAssertEqual(cache.artistDetails.count, 25)
+        cache.artistDetails["artist-13"] = ArtistDetail(id: "artist-13", name: "Artist 13")
+        XCTAssertEqual(cache.artistDetails.count, 12)
         XCTAssertNotNil(cache.artistDetails["artist-1"])
         XCTAssertNil(cache.artistDetails["artist-2"])
     }
@@ -69,20 +63,19 @@ final class MemoryOptimizationTests: XCTestCase {
     func testAppStatePlaylistLoadStatesLRUEviction() {
         let app = AppState()
 
-        for idx in 0..<26 {
+        for idx in 0..<11 {
             let summary = PlaylistSummary(id: "pl-\(idx)", name: "PL \(idx)")
             let state = PlaylistLoadState(summary: summary)
             app.playlistLoadStates["pl-\(idx)"] = state
         }
-        XCTAssertEqual(app.playlistLoadStates.count, 25)
+        XCTAssertEqual(app.playlistLoadStates.count, 10)
         XCTAssertNil(app.playlistLoadStates["pl-0"])
-        XCTAssertNotNil(app.playlistLoadStates["pl-25"])
+        XCTAssertNotNil(app.playlistLoadStates["pl-10"])
 
-        // Access pl-1, then insert pl-26
         app.recordPlaylistAccess("pl-1")
-        let summary26 = PlaylistSummary(id: "pl-26", name: "PL 26")
-        app.playlistLoadStates["pl-26"] = PlaylistLoadState(summary: summary26)
-        XCTAssertEqual(app.playlistLoadStates.count, 25)
+        let summary11 = PlaylistSummary(id: "pl-11", name: "PL 11")
+        app.playlistLoadStates["pl-11"] = PlaylistLoadState(summary: summary11)
+        XCTAssertEqual(app.playlistLoadStates.count, 10)
         XCTAssertNotNil(app.playlistLoadStates["pl-1"])
         XCTAssertNil(app.playlistLoadStates["pl-2"])
     }
@@ -160,10 +153,28 @@ final class MemoryOptimizationTests: XCTestCase {
 
         let rendered = cache.renderBlur(coverArt: "test-blur", source: dummy, targetSize: CGSize(width: 100, height: 100))
         XCTAssertNotNil(rendered)
+        XCTAssertEqual(rendered?.size.width, 100)
+        XCTAssertEqual(rendered?.size.height, 100)
         XCTAssertNotNil(cache.cached(coverArt: "test-blur", targetSize: CGSize(width: 100, height: 100)))
 
         cache.clear()
         XCTAssertNil(cache.cached(coverArt: "test-blur", targetSize: CGSize(width: 100, height: 100)))
+    }
+
+    func testCacheManagerClearInMemoryCachesDropsDiscography() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CacheClearMem-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let cache = CacheManager(rootURL: tempDir)
+        await cache.cacheDiscography([SubsonicSong(id: "s-1", title: "Track")], for: "artist-1")
+        let cachedBefore = await cache.cachedDiscography(for: "artist-1")
+        XCTAssertEqual(cachedBefore?.count, 1)
+
+        await cache.clearInMemoryCaches()
+        let cachedAfter = await cache.cachedDiscography(for: "artist-1")
+        XCTAssertNil(cachedAfter)
     }
 
     func testShuffleStateSingleBackupQueue() {

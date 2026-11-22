@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import NavidromeClient
 
 extension Player {
     func updateNowPlayingInfo() {
@@ -26,7 +27,9 @@ extension Player {
         nowPlayingArtworkTask = Task { [weak self] in
             guard let self else { return }
             let loaded = await CoverArtStore.shared.image(coverArt: coverArt, size: 600)
-            MiniPlayerVariableBlurCache.shared.prewarmBlur(coverArt: coverArt, size: side)
+            if let image = loaded.image {
+                MiniPlayerVariableBlurCache.shared.prewarmBlur(coverArt: coverArt, source: image, size: side)
+            }
             guard !Task.isCancelled,
                   self.displaySong?.id == songID,
                   self.displaySong?.coverArt == coverArt,
