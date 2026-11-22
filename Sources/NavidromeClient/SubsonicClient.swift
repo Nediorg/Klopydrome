@@ -34,7 +34,35 @@ public final class SubsonicClient: @unchecked Sendable {
     private var sessionToken: String
     private var _supportedExtensions: Set<String> = []
     private var _extensionVersions: [String: Set<Int>] = [:]
+    private var _onHealthEvent: (@Sendable (TransportHealthEvent) -> Void)?
+    private var _isCircuitOpen: (@Sendable () -> Bool)?
     private let stateLock = NSLock()
+
+    public var onHealthEvent: (@Sendable (TransportHealthEvent) -> Void)? {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _onHealthEvent
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _onHealthEvent = newValue
+        }
+    }
+
+    public var isCircuitOpen: (@Sendable () -> Bool)? {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _isCircuitOpen
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _isCircuitOpen = newValue
+        }
+    }
 
     public var supportedExtensions: Set<String> {
         stateLock.lock()
@@ -151,10 +179,16 @@ public final class SubsonicClient: @unchecked Sendable {
 
     // MARK: - HTTP
 
-    private func isTransient(error: Error) -> Bool {
+    struct RequestOptions {
+        var maxAttempts: Int = 2
+        var bypassCircuitBreaker: Bool = false
+        var reportSuccess: Bool = true
+    }
+
+    private func isRetryable(error: Error) -> Bool {
         if let urlError = error as? URLError {
             switch urlError.code {
-            case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost:
+            case .timedOut, .networkConnectionLost:
                 return true
             default:
                 return false
@@ -166,54 +200,22 @@ public final class SubsonicClient: @unchecked Sendable {
         return false
     }
 
-    func requestData(
-        endpoint: String,
-        params: [URLQueryItem] = [],
-        json: Bool = true,
-        maxAttempts: Int = 3
-    ) async throws -> Data {
-        var lastError: Error?
-        for attempt in 1...maxAttempts {
-            do {
-                let url = try buildURL(endpoint: endpoint, params: params, json: json)
-                let (data, response) = try await session.data(from: url)
-                if let http = response as? HTTPURLResponse {
-                    guard (200..<300).contains(http.statusCode) else {
-                        throw SubsonicError.http(status: http.statusCode)
-                    }
-                }
-                return data
-            } catch {
-                lastError = error
-                if attempt < maxAttempts && isTransient(error: error) {
-                    let delay = Double(attempt) * 0.3
-                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    continue
-                }
-                throw error
-            }
-        }
-        throw lastError ?? SubsonicError.server(code: 0, message: "Request failed")
+    private func reportHealth(_ event: TransportHealthEvent) {
+        onHealthEvent?(event)
     }
 
-    func requestPostData(
-        endpoint: String,
-        params: [URLQueryItem] = [],
-        bodyParams: [URLQueryItem] = [],
-        json: Bool = true,
-        maxAttempts: Int = 3
-    ) async throws -> Data {
-        let url = try buildURL(endpoint: endpoint, params: params, json: json)
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        var comp = URLComponents()
-        comp.queryItems = bodyParams
-        let bodyString = comp.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-        request.httpBody = bodyString?.data(using: .utf8)
+    private func reportError(_ error: Error) {
+        let kind = TransportErrorClassifier.classify(error)
+        guard kind != .cancelled else { return }
+        reportHealth(.failure(kind, message: error.localizedDescription))
+    }
 
+    private func executeRequest(_ request: URLRequest, options: RequestOptions) async throws -> Data {
+        if !options.bypassCircuitBreaker, isCircuitOpen?() == true {
+            throw SubsonicError.offline
+        }
         var lastError: Error?
-        for attempt in 1...maxAttempts {
+        for attempt in 1...max(1, options.maxAttempts) {
             do {
                 let (data, response) = try await session.data(for: request)
                 if let http = response as? HTTPURLResponse {
@@ -221,23 +223,56 @@ public final class SubsonicClient: @unchecked Sendable {
                         throw SubsonicError.http(status: http.statusCode)
                     }
                 }
+                if options.reportSuccess {
+                    reportHealth(.success)
+                }
                 return data
             } catch {
                 lastError = error
-                if attempt < maxAttempts && isTransient(error: error) {
+                if attempt < options.maxAttempts && isRetryable(error: error) {
                     let delay = Double(attempt) * 0.3
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
                 }
+                reportError(error)
                 throw error
             }
         }
-        throw lastError ?? SubsonicError.server(code: 0, message: "Request failed")
+        let fallback = lastError ?? SubsonicError.server(code: 0, message: "Request failed")
+        reportError(fallback)
+        throw fallback
     }
 
-    func requestEnvelope(endpoint: String, params: [URLQueryItem] = []) async throws -> SubsonicEnvelope {
-        let data = try await requestData(endpoint: endpoint, params: params)
-        return try decodeEnvelope(from: data)
+    func requestData(
+        endpoint: String,
+        params: [URLQueryItem] = [],
+        json: Bool = true,
+        maxAttempts: Int = 2
+    ) async throws -> Data {
+        let url = try buildURL(endpoint: endpoint, params: params, json: json)
+        let request = URLRequest(url: url)
+        return try await executeRequest(request, options: RequestOptions(maxAttempts: maxAttempts))
+    }
+
+    func requestEnvelope(
+        endpoint: String,
+        params: [URLQueryItem] = [],
+        maxAttempts: Int = 2,
+        timeout: TimeInterval? = nil,
+        bypassCircuitBreaker: Bool = false
+    ) async throws -> SubsonicEnvelope {
+        let url = try buildURL(endpoint: endpoint, params: params, json: true)
+        var request = URLRequest(url: url)
+        if let timeout {
+            request.timeoutInterval = timeout
+        }
+        let options = RequestOptions(
+            maxAttempts: maxAttempts,
+            bypassCircuitBreaker: bypassCircuitBreaker,
+            reportSuccess: false
+        )
+        let data = try await executeRequest(request, options: options)
+        return try decodeAndReportEnvelope(from: data)
     }
 
     func requestPostEnvelope(
@@ -245,8 +280,32 @@ public final class SubsonicClient: @unchecked Sendable {
         params: [URLQueryItem] = [],
         bodyParams: [URLQueryItem] = []
     ) async throws -> SubsonicEnvelope {
-        let data = try await requestPostData(endpoint: endpoint, params: params, bodyParams: bodyParams)
-        return try decodeEnvelope(from: data)
+        let url = try buildURL(endpoint: endpoint, params: params, json: true)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var comp = URLComponents()
+        comp.queryItems = bodyParams
+        let bodyString = comp.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        request.httpBody = bodyString?.data(using: .utf8)
+        let options = RequestOptions(maxAttempts: 2, reportSuccess: false)
+        let data = try await executeRequest(request, options: options)
+        return try decodeAndReportEnvelope(from: data)
+    }
+
+    private func decodeAndReportEnvelope(from data: Data) throws -> SubsonicEnvelope {
+        do {
+            let envelope = try decodeEnvelope(from: data)
+            reportHealth(.success)
+            return envelope
+        } catch {
+            if TransportErrorClassifier.isProxyErrorHTML(data) {
+                reportHealth(.failure(.serverError(502), message: error.localizedDescription))
+            } else {
+                reportError(error)
+            }
+            throw error
+        }
     }
 
     private func decodeEnvelope(from data: Data) throws -> SubsonicEnvelope {

@@ -58,11 +58,39 @@ public final class NavidromeAPI {
 
     private let lock = NSLock()
     private var _token: String?
+    private var _onHealthEvent: (@Sendable (TransportHealthEvent) -> Void)?
+    private var _isCircuitOpen: (@Sendable () -> Bool)?
 
     public var token: String? {
         lock.lock()
         defer { lock.unlock() }
         return _token
+    }
+
+    public var onHealthEvent: (@Sendable (TransportHealthEvent) -> Void)? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _onHealthEvent
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _onHealthEvent = newValue
+        }
+    }
+
+    public var isCircuitOpen: (@Sendable () -> Bool)? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isCircuitOpen
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isCircuitOpen = newValue
+        }
     }
 
     public init(baseURL: URL, username: String, password: String, session: URLSession? = nil) {
@@ -73,7 +101,8 @@ public final class NavidromeAPI {
             self.session = session
         } else {
             let configuration = URLSessionConfiguration.default
-            configuration.timeoutIntervalForRequest = 60
+            configuration.timeoutIntervalForRequest = 15
+            configuration.waitsForConnectivity = false
             configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
             configuration.urlCache = nil
             configuration.httpAdditionalHeaders = ["User-Agent": "Klopydrome/1.16.1"]
@@ -84,35 +113,81 @@ public final class NavidromeAPI {
     // MARK: - Auth
 
     public func login() async throws {
-        lock.lock()
-        if _token != nil {
-            lock.unlock()
-            return
-        }
-        lock.unlock()
+        if token != nil { return }
+        if isCircuitOpen?() == true { throw NavidromeAPIError.offline }
 
-        let endpoints = ["auth/login", "api/authenticate"]
-        for endpoint in endpoints {
-            guard let url = baseURL.appendingPathComponent(endpoint) as URL? else { continue }
-            do {
-                let body = try JSONEncoder().encode(["username": username, "password": password])
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.httpBody = body
-                let (data, response) = try await session.data(for: request)
-                if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                    let login = try JSONDecoder().decode(NdLoginResponse.self, from: data)
-                    lock.lock()
-                    _token = login.token
-                    lock.unlock()
-                    return
-                }
-            } catch {
+        var lastTransportError: Error?
+        var sawAuthFailure = false
+
+        for endpoint in ["auth/login", "api/authenticate"] {
+            switch await attemptLogin(endpoint: endpoint) {
+            case .succeeded(let freshToken):
+                setToken(freshToken)
+                onHealthEvent?(.success)
+                return
+            case .authRejected:
+                sawAuthFailure = true
+            case .transportFailed(let error):
+                lastTransportError = error
+            case .notFound:
                 continue
             }
         }
-        throw NavidromeAPIError.unauthorized
+
+        if let lastTransportError, !sawAuthFailure {
+            reportError(lastTransportError)
+            throw lastTransportError
+        }
+        let error = NavidromeAPIError.unauthorized
+        reportError(error)
+        throw error
+    }
+
+    private enum LoginAttemptResult {
+        case succeeded(String)
+        case authRejected
+        case notFound
+        case transportFailed(Error)
+    }
+
+    private func attemptLogin(endpoint: String) async -> LoginAttemptResult {
+        let url = baseURL.appendingPathComponent(endpoint)
+        do {
+            let body = try JSONEncoder().encode(["username": username, "password": password])
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return .transportFailed(NavidromeAPIError.invalidResponse)
+            }
+            if (200..<300).contains(http.statusCode) {
+                if TransportErrorClassifier.isProxyErrorHTML(data, contentType: http.value(forHTTPHeaderField: "Content-Type")) {
+                    return .transportFailed(NavidromeAPIError.http(statusCode: 502, message: nil))
+                }
+                let login = try JSONDecoder().decode(NdLoginResponse.self, from: data)
+                return .succeeded(login.token)
+            }
+            if http.statusCode == 401 || http.statusCode == 403 { return .authRejected }
+            if http.statusCode == 404 { return .notFound }
+            let message = Self.extractErrorMessage(from: data)
+            return .transportFailed(NavidromeAPIError.http(statusCode: http.statusCode, message: message))
+        } catch {
+            return .transportFailed(error)
+        }
+    }
+
+    private func setToken(_ newToken: String?) {
+        lock.lock()
+        _token = newToken
+        lock.unlock()
+    }
+
+    private func reportError(_ error: Error) {
+        let kind = TransportErrorClassifier.classify(error)
+        guard kind != .cancelled else { return }
+        onHealthEvent?(.failure(kind, message: error.localizedDescription))
     }
 
     // MARK: - Playlists
@@ -193,11 +268,10 @@ public final class NavidromeAPI {
         body: Data?,
         isRetry: Bool = false
     ) async throws -> (Data, HTTPURLResponse) {
+        if isCircuitOpen?() == true { throw NavidromeAPIError.offline }
         try await login()
         guard let token else { throw NavidromeAPIError.unauthorized }
-        guard let url = baseURL.appendingPathComponent(path) as URL? else {
-            throw NavidromeAPIError.invalidURL
-        }
+        let url = baseURL.appendingPathComponent(path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "X-ND-Authorization")
@@ -205,28 +279,29 @@ public final class NavidromeAPI {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = body
         }
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw NavidromeAPIError.invalidResponse
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw NavidromeAPIError.invalidResponse
+            }
+            if http.statusCode == 401 && !isRetry {
+                setToken(nil)
+                return try await send(path: path, method: method, body: body, isRetry: true)
+            }
+            if let rotated = http.value(forHTTPHeaderField: "x-nd-authorization"),
+               rotated.hasPrefix("Bearer ") {
+                setToken(String(rotated.dropFirst("Bearer ".count)))
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                let serverMessage = Self.extractErrorMessage(from: data)
+                throw NavidromeAPIError.http(statusCode: http.statusCode, message: serverMessage)
+            }
+            onHealthEvent?(.success)
+            return (data, http)
+        } catch {
+            reportError(error)
+            throw error
         }
-        if http.statusCode == 401 && !isRetry {
-            lock.lock()
-            self._token = nil
-            lock.unlock()
-            return try await send(path: path, method: method, body: body, isRetry: true)
-        }
-        if let rotated = http.value(forHTTPHeaderField: "x-nd-authorization"),
-           rotated.hasPrefix("Bearer ") {
-            let fresh = String(rotated.dropFirst("Bearer ".count))
-            lock.lock()
-            self._token = fresh
-            lock.unlock()
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let serverMessage = Self.extractErrorMessage(from: data)
-            throw NavidromeAPIError.http(statusCode: http.statusCode, message: serverMessage)
-        }
-        return (data, http)
     }
 
     private static func extractErrorMessage(from data: Data) -> String? {
@@ -262,6 +337,7 @@ public enum NavidromeAPIError: LocalizedError {
     case invalidRequest
     case invalidResponse
     case unauthorized
+    case offline
     case http(statusCode: Int, message: String? = nil)
 
     public var errorDescription: String? {
@@ -274,6 +350,8 @@ public enum NavidromeAPIError: LocalizedError {
                 "Couldn't sign in to the server.",
                 comment: "NavidromeAPIError"
             )
+        case .offline:
+            return NSLocalizedString("Server is currently offline.", comment: "NavidromeAPIError")
         case .http(let code, let message):
             if let message, !message.isEmpty {
                 return message

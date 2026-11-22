@@ -689,6 +689,7 @@
 "Server" = "Сервер";
 "Server address" = "Адрес сервера";
 "Server error (HTTP %lld)." = "Ошибка сервера (HTTP %lld).";
+"Server is currently offline." = "Сервер недоступен.";
 "Server Offline" = "Сервер офлайн";
 "Server unavailable. Saved albums and songs on this computer are available." = "Сервер недоступен. Доступны сохранённые альбомы и песни на этом компьютере.";
 "Server unavailable. Saved tracks are available." = "Сервер недоступен. Доступны сохранённые треки.";

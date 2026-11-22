@@ -3,6 +3,7 @@ import Foundation
 public enum SubsonicError: Error, LocalizedError, Equatable {
     case invalidURL
     case insecureConnection
+    case offline
     case http(status: Int)
     case server(code: Int, message: String)
     case decoding(description: String)
@@ -16,6 +17,8 @@ public enum SubsonicError: Error, LocalizedError, Equatable {
                 "The connection is not secure. Add https:// to the server address, or explicitly allow plain HTTP.",
                 comment: "SubsonicError"
             )
+        case .offline:
+            return NSLocalizedString("Server is currently offline.", comment: "SubsonicError")
         case .http(let status):
             return String(
                 format: NSLocalizedString("HTTP error %lld.", comment: "SubsonicError"),

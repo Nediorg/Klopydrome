@@ -689,6 +689,7 @@
 "Server" = "Server";
 "Server address" = "Server address";
 "Server error (HTTP %lld)." = "Server error (HTTP %lld).";
+"Server is currently offline." = "Server is currently offline.";
 "Server Offline" = "Server Offline";
 "Server unavailable. Saved albums and songs on this computer are available." = "Server unavailable. Saved albums and songs on this computer are available.";
 "Server unavailable. Saved tracks are available." = "Server unavailable. Saved tracks are available.";

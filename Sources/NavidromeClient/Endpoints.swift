@@ -6,6 +6,15 @@ public extension SubsonicClient {
         _ = try await requestEnvelope(endpoint: "ping")
     }
 
+    func pingProbe(timeout: TimeInterval = 5) async throws {
+        _ = try await requestEnvelope(
+            endpoint: "ping",
+            maxAttempts: 1,
+            timeout: timeout,
+            bypassCircuitBreaker: true
+        )
+    }
+
     func getOpenSubsonicExtensions() async throws -> [OpenSubsonicExtension] {
         let envelope = try await requestEnvelope(endpoint: "getOpenSubsonicExtensions")
         let exts = envelope.openSubsonicExtensions ?? []
