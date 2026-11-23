@@ -188,6 +188,11 @@ struct PlaylistTile: View {
     @Environment(AppState.self) private var app
     @State private var hovering = false
     @State private var isInside = false
+    @State private var isDropTargeted = false
+
+    private var canAcceptDrop: Bool {
+        !playlist.isSmart && app.canEditPlaylist(playlist)
+    }
 
     private var isFollowed: Bool { app.isFollowed(playlist) }
 
@@ -262,6 +267,23 @@ struct PlaylistTile: View {
         .onDisappear {
             isInside = false
             hovering = false
+        }
+        .overlay {
+            if isDropTargeted && canAcceptDrop {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(AMColor.accent, lineWidth: 2)
+            }
+        }
+        .dropDestination(for: TrackDragPayload.self) { items, _ in
+            guard canAcceptDrop, let payload = items.first else { return false }
+            Task {
+                let songs = await app.resolveSongs(for: payload)
+                guard !songs.isEmpty else { return }
+                await app.addSongsCheckingDuplicates(songs, to: playlist)
+            }
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = canAcceptDrop && targeted
         }
         .contextMenu {
             PlaylistContextMenuItems(

@@ -324,6 +324,7 @@ struct CompactSongRow: View {
                 .fill(Color.primary.opacity(hovering ? 0.06 : 0))
         )
         .contentShape(Rectangle())
+        .draggable(TrackDragPayload.song(song.id))
         .onTapGesture(count: 2) { onPlay() }
         .onHover { inside in
             isInside = inside

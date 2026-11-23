@@ -127,12 +127,12 @@ struct HomeView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 18) {
                         ForEach(albums) { album in
-                            Button {
-                                app.openAlbumInLibrary(album)
-                            } label: {
-                                AlbumCard(album: album)
-                            }
-                            .buttonStyle(.plain)
+                            AlbumCard(album: album)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    app.openAlbumInLibrary(album)
+                                }
+                                .accessibilityAddTraits(.isButton)
                         }
                     }
                     .padding(.vertical, 8)

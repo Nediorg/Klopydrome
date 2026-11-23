@@ -130,13 +130,13 @@ struct AlbumGridView: View {
                         ScrollView {
                             LazyVGrid(columns: grid.columns, spacing: gap) {
                                 ForEach(displayAlbums) { album in
-                                    Button {
-                                        app.openAlbumInLibrary(album)
-                                    } label: {
-                                        AlbumCard(album: album, width: grid.cardWidth, reservesTitleLines: true)
-                                            .equatable()
-                                    }
-                                    .buttonStyle(.plain)
+                                    AlbumCard(album: album, width: grid.cardWidth, reservesTitleLines: true)
+                                        .equatable()
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            app.openAlbumInLibrary(album)
+                                        }
+                                        .accessibilityAddTraits(.isButton)
                                 }
                                 if !allLoaded {
                                     Color.clear.frame(height: 200)

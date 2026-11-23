@@ -85,6 +85,7 @@ struct SongRow: View {
             }
         }
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
+        .contentShape(Rectangle())
         .draggable(dragPayload)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(song.displayTitle), \(song.artist ?? "")")

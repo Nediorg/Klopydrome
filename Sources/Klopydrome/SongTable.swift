@@ -120,19 +120,28 @@ struct SongTable: View {
     private var displayedSongs: [SubsonicSong] { songs }
 
     @State private var selection = Set<SubsonicSong.ID>()
-    @State private var selectionRef = SongSelectionRef()
     @State private var hoverManager = RowHoverManager()
+
+    private func dragPayload(for song: SubsonicSong) -> TrackDragPayload {
+        if selection.contains(song.id) && selection.count > 1 {
+            let orderedIDs = displayedSongs.filter { selection.contains($0.id) }.map(\.id)
+            return .songs(orderedIDs.isEmpty ? [song.id] : orderedIDs)
+        }
+        return .song(song.id)
+    }
 
     var body: some View {
         let currentSongID = app.player.currentSong?.id
 
-        Table(displayedSongs, selection: $selection, sortOrder: $sortOrder,
+        Table(of: SubsonicSong.self, selection: $selection, sortOrder: $sortOrder,
               columnCustomization: $columnCustomization) {
             firstColumns(currentSongID: currentSongID)
             secondColumns()
-        }
-        .onChange(of: selection) { _, newValue in
-            selectionRef.ids = newValue
+        } rows: {
+            ForEach(displayedSongs) { song in
+                TableRow(song)
+                    .draggable(dragPayload(for: song))
+            }
         }
         .onChange(of: songs) {
             hoverManager.reset()
@@ -204,8 +213,7 @@ struct SongTable: View {
                 song: song,
                 app: app,
                 hoverState: hoverManager.state(for: song.id),
-                isCurrent: song.id == currentSongID,
-                selectionRef: selectionRef
+                isCurrent: song.id == currentSongID
             )
         }
         .width(min: column.minWidth, ideal: column.idealWidth, max: column.maxWidth)
@@ -283,17 +291,6 @@ struct SongTable: View {
     }
 }
 
-private final class SongSelectionRef {
-    var ids = Set<SubsonicSong.ID>()
-
-    func dragPayload(for songID: SubsonicSong.ID) -> TrackDragPayload {
-        if ids.contains(songID) && ids.count > 1 {
-            return .songs(Array(ids))
-        }
-        return .song(songID)
-    }
-}
-
 private struct SongContextMenu: View {
     let song: SubsonicSong
     let songs: [SubsonicSong]
@@ -320,7 +317,6 @@ private struct TitleColumnCell: View {
     let app: AppState
     let hoverState: RowHoverState
     let isCurrent: Bool
-    let selectionRef: SongSelectionRef
 
     var body: some View {
         HStack(spacing: 6) {
@@ -340,7 +336,6 @@ private struct TitleColumnCell: View {
         }
         .padding(.leading, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .draggable(selectionRef.dragPayload(for: song.id))
     }
 }
 

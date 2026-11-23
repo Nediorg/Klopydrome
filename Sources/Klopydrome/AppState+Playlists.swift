@@ -427,7 +427,7 @@ extension AppState {
     func canEditPlaylist(_ playlist: PlaylistSummary) -> Bool {
         if playlist.isReadonly == true && !playlist.isSmart { return false }
         if let owner = playlist.owner, !owner.isEmpty {
-            let current = serverConfig.username
+            let current = effectiveUsername
             if !current.isEmpty && owner.localizedCaseInsensitiveCompare(current) != .orderedSame {
                 return false
             }
@@ -462,9 +462,29 @@ extension AppState {
 
     func movePlaylistTrack(playlistId: String, fromIndex: Int, toIndex: Int) async throws {
         guard confirmOfflineAction() else { return }
-        if let navidrome {
-            try await navidrome.movePlaylistTrack(playlistId: playlistId, fromIndex: fromIndex, toIndex: toIndex)
-            invalidatePlaylistDetail(for: playlistId)
+        guard let navidrome else { throw SubsonicError.offline }
+        try await navidrome.movePlaylistTrack(playlistId: playlistId, fromIndex: fromIndex, toIndex: toIndex)
+        if var state = playlistLoadStates[playlistId], let oldDetail = state.detail {
+            let updatedDetail = PlaylistDetail(
+                id: oldDetail.id,
+                name: oldDetail.name,
+                comment: oldDetail.comment,
+                owner: oldDetail.owner,
+                coverArt: oldDetail.coverArt,
+                songCount: state.songs.count,
+                duration: oldDetail.duration,
+                created: oldDetail.created,
+                changed: oldDetail.changed,
+                isPublic: oldDetail.isPublic,
+                isReadonly: oldDetail.isReadonly,
+                validUntil: oldDetail.validUntil,
+                entry: state.songs
+            )
+            state.detail = updatedDetail
+            playlistLoadStates[playlistId] = state
+            cachePlaylistDetail(updatedDetail)
+            await persistPlaylistDetailToDisk(updatedDetail)
+            try? await offlineRepository?.savePlaylistDetail(updatedDetail)
         }
     }
 }

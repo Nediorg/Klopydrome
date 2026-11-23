@@ -166,6 +166,28 @@ struct PlaylistDetailView: View {
                             .padding(.leading, -22)
                             .padding(.trailing, 26)
                         }
+                        if isReorderingEnabled {
+                            Color.clear
+                                .frame(height: 32)
+                                .contentShape(Rectangle())
+                                .modifier(PlaylistRowReorderModifier(
+                                    isEnabled: true,
+                                    playlistIndex: rows.count,
+                                    dropTargetIndex: dropTargetPlaylistIndex,
+                                    onDrop: { payload in
+                                        handlePlaylistReorder(payload, toIndex: rows.count)
+                                    },
+                                    onTargetChange: { targeted in
+                                        if targeted {
+                                            dropTargetPlaylistIndex = rows.count
+                                        } else if dropTargetPlaylistIndex == rows.count {
+                                            dropTargetPlaylistIndex = nil
+                                        }
+                                    }
+                                ))
+                                .padding(.leading, -22)
+                                .padding(.trailing, 26)
+                        }
                         if displayedCount < filteredRows.count {
                             Color.clear.frame(height: 80)
                                 .id("sentinel_\(displayedCount)")

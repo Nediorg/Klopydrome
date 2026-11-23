@@ -155,31 +155,52 @@ extension PlaylistDetailView {
         .padding(.bottom, 16)
     }
 
+    static func reorderedDestination(from fromIndex: Int, to toIndex: Int, count: Int) -> Int? {
+        guard fromIndex >= 0, fromIndex < count else { return nil }
+        let clampedTo = min(max(toIndex, 0), count)
+        guard fromIndex != clampedTo, fromIndex + 1 != clampedTo else { return nil }
+        return fromIndex < clampedTo ? clampedTo - 1 : clampedTo
+    }
+
     func handlePlaylistReorder(_ payload: TrackDragPayload, toIndex: Int) {
-        guard case .playlistTrack(let pID, let fromIndex, _) = payload.kind,
-              pID == currentDetail.id,
-              fromIndex != toIndex else { return }
+        if case .playlistTrack(let pID, let fromIndex, _) = payload.kind, pID == currentDetail.id {
+            guard var currentState = app.playlistLoadStates[currentDetail.id] else { return }
+            let originalSongs = currentState.songs
+            guard let destination = Self.reorderedDestination(
+                from: fromIndex,
+                to: toIndex,
+                count: originalSongs.count
+            ) else { return }
 
-        guard var currentState = app.playlistLoadStates[currentDetail.id] else { return }
-        let originalSongs = currentState.songs
-        guard fromIndex >= 0 && fromIndex < originalSongs.count else { return }
+            var updatedSongs = originalSongs
+            let song = updatedSongs.remove(at: fromIndex)
+            updatedSongs.insert(song, at: destination)
+            currentState.songs = updatedSongs
+            app.playlistLoadStates[currentDetail.id] = currentState
 
-        var updatedSongs = originalSongs
-        let song = updatedSongs.remove(at: fromIndex)
-        let destination = min(max(toIndex, 0), updatedSongs.count)
-        updatedSongs.insert(song, at: destination)
-        currentState.songs = updatedSongs
-        app.playlistLoadStates[currentDetail.id] = currentState
-
-        Task {
-            do {
-                try await app.movePlaylistTrack(playlistId: currentDetail.id, fromIndex: fromIndex, toIndex: toIndex)
-            } catch {
-                if var revertState = app.playlistLoadStates[currentDetail.id] {
-                    revertState.songs = originalSongs
-                    app.playlistLoadStates[currentDetail.id] = revertState
+            Task {
+                do {
+                    try await app.movePlaylistTrack(
+                        playlistId: currentDetail.id,
+                        fromIndex: fromIndex,
+                        toIndex: destination
+                    )
+                } catch {
+                    if var revertState = app.playlistLoadStates[currentDetail.id] {
+                        revertState.songs = originalSongs
+                        app.playlistLoadStates[currentDetail.id] = revertState
+                    }
                 }
             }
+            return
+        }
+
+        guard !currentDetail.isSmart, app.canEditPlaylist(currentDetail.summary) else { return }
+        let targetPlaylist = currentDetail.summary
+        Task {
+            let songs = await app.resolveSongs(for: payload)
+            guard !songs.isEmpty else { return }
+            await app.addSongsCheckingDuplicates(songs, to: targetPlaylist)
         }
     }
 }

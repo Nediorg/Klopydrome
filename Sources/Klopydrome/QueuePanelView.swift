@@ -111,6 +111,30 @@ struct QueuePanelView: View {
                                 }
                             ))
                         }
+                        if selectedTab == .upNext {
+                            Color.clear
+                                .frame(height: 28)
+                                .contentShape(Rectangle())
+                                .dropDestination(for: TrackDragPayload.self) { items, _ in
+                                    guard let payload = items.first else { return false }
+                                    handleDrop(payload, targetIndex: app.player.queue.count)
+                                    return true
+                                } isTargeted: { targeted in
+                                    if targeted {
+                                        dropTargetIndex = app.player.queue.count
+                                    } else if dropTargetIndex == app.player.queue.count {
+                                        dropTargetIndex = nil
+                                    }
+                                }
+                                .overlay(alignment: .top) {
+                                    if dropTargetIndex == app.player.queue.count {
+                                        Rectangle()
+                                            .fill(AMColor.accent)
+                                            .frame(height: 2)
+                                            .padding(.horizontal, 4)
+                                    }
+                                }
+                        }
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -181,18 +205,28 @@ struct QueuePanelView: View {
         }
     }
 
+    static func queueMoveDestination(from srcIndex: Int, to targetIndex: Int, count: Int) -> Int? {
+        guard srcIndex >= 0, srcIndex < count else { return nil }
+        let clamped = min(max(targetIndex, 0), count)
+        guard srcIndex != clamped, srcIndex + 1 != clamped else { return nil }
+        return clamped
+    }
+
     private func handleDrop(_ payload: TrackDragPayload, targetIndex: Int) {
         switch payload.kind {
         case .queueItem(let srcIndex, _):
-            guard srcIndex != targetIndex else { return }
-            let destination = srcIndex < targetIndex ? targetIndex + 1 : targetIndex
+            guard let destination = Self.queueMoveDestination(
+                from: srcIndex,
+                to: targetIndex,
+                count: app.player.queue.count
+            ) else { return }
             app.moveInQueue(fromOffsets: IndexSet(integer: srcIndex), toOffset: destination)
         default:
             Task {
                 let songs = await app.resolveSongs(for: payload)
                 guard !songs.isEmpty else { return }
                 app.insertIntoQueue(songs, at: targetIndex)
-                await app.saveQueueToServer()
+                app.saveQueueToServer()
             }
         }
     }
@@ -245,90 +279,89 @@ struct QueueTrackRow: View {
     private var isPlaying: Bool { isCurrent && app.player.isPlaying }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                ZStack {
-                    CoverArtView(coverArt: song.coverArt, size: 36, cornerRadius: 4)
+        HStack(spacing: 8) {
+            ZStack {
+                CoverArtView(coverArt: song.coverArt, size: 36, cornerRadius: 4)
 
-                    if isCurrent && !hovering {
-                        Color.black.opacity(0.35)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white)
-                    } else if hovering {
-                        Color.black.opacity(0.35)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white)
-                    }
+                if isCurrent && !hovering {
+                    Color.black.opacity(0.35)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    Image(systemName: "speaker.wave.2.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                } else if hovering {
+                    Color.black.opacity(0.35)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
                 }
-                .frame(width: 36, height: 36)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 4) {
-                        Text(song.displayTitle)
-                            .font(AMFont.rowTitle)
-                            .foregroundStyle(isCurrent ? AMColor.accent : AMColor.primaryText)
-                            .lineLimit(1)
-                        if song.isExplicit {
-                            ExplicitBadge()
-                        }
-                    }
-                    Text(song.displaySubtitle)
-                        .font(AMFont.rowSubtitle)
-                        .foregroundStyle(AMColor.secondaryText)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 4) {
-                    if canRemove && hovering {
-                        Button {
-                            onRemove?()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Color.secondary)
-                                .frame(width: 22, height: 22)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help("Remove from Queue".localized)
-                        .transition(.identity)
-                    }
-
-                    SongEllipsisMenu(
-                        song: song,
-                        selection: [song],
-                        foregroundStyle: .secondary,
-                        app: app,
-                        extraActions: canRemove ? [
-                            SongMenuExtraAction(
-                                title: "Remove from Queue".localized,
-                                systemImage: "trash",
-                                action: { onRemove?() }
-                            )
-                        ] : [],
-                        compact: true,
-                        side: 24
-                    )
-                }
-                .fixedSize(horizontal: true, vertical: false)
             }
-            .padding(.leading, 7)
-            .padding(.trailing, 10)
-            .padding(.vertical, 6)
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .background {
-                if hovering {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(song.displayTitle)
+                        .font(AMFont.rowTitle)
+                        .foregroundStyle(isCurrent ? AMColor.accent : AMColor.primaryText)
+                        .lineLimit(1)
+                    if song.isExplicit {
+                        ExplicitBadge()
+                    }
                 }
+                Text(song.displaySubtitle)
+                    .font(AMFont.rowSubtitle)
+                    .foregroundStyle(AMColor.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 4) {
+                if canRemove && hovering {
+                    Button {
+                        onRemove?()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove from Queue".localized)
+                    .transition(.identity)
+                }
+
+                SongEllipsisMenu(
+                    song: song,
+                    selection: [song],
+                    foregroundStyle: .secondary,
+                    app: app,
+                    extraActions: canRemove ? [
+                        SongMenuExtraAction(
+                            title: "Remove from Queue".localized,
+                            systemImage: "trash",
+                            action: { onRemove?() }
+                        )
+                    ] : [],
+                    compact: true,
+                    side: 24
+                )
+            }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.leading, 7)
+        .padding(.trailing, 10)
+        .padding(.vertical, 6)
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background {
+            if hovering {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
             }
         }
-        .buttonStyle(.plain)
+        .onTapGesture(perform: action)
+        .accessibilityAddTraits(.isButton)
         .frame(height: 48)
         .overlay(alignment: .bottom) {
             if showDivider {

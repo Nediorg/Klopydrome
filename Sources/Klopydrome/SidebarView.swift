@@ -65,7 +65,6 @@ struct SidebarView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .tag(Selection.playlistID(playlist.id))
                         .modifier(PlaylistDropTargetModifier(
                             isEnabled: !playlist.isSmart && app.canEditPlaylist(playlist),
                             onDrop: { payload in
@@ -76,6 +75,7 @@ struct SidebarView: View {
                                 }
                             }
                         ))
+                        .tag(Selection.playlistID(playlist.id))
                         .contextMenu {
                             PlaylistContextMenuItems(playlist: playlist) {
                                 beginRename(playlist)
@@ -105,7 +105,6 @@ struct SidebarView: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .tag(Selection.playlistID(playlist.id))
                             .modifier(PlaylistDropTargetModifier(
                                 isEnabled: !playlist.isSmart && app.canEditPlaylist(playlist),
                                 onDrop: { payload in
@@ -116,6 +115,7 @@ struct SidebarView: View {
                                     }
                                 }
                             ))
+                            .tag(Selection.playlistID(playlist.id))
                             .contextMenu {
                                 PlaylistContextMenuItems(playlist: playlist) {
                                     beginRename(playlist)

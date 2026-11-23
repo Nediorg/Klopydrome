@@ -53,6 +53,8 @@ struct DownloadedSongRow: View {
         .background {
             rowBackground
         }
+        .contentShape(Rectangle())
+        .draggable(TrackDragPayload.songs(contextMenuSelection.map(\.id)))
         .onHover { isHovered = $0 }
         .contextMenu {
             SongActionItems(
