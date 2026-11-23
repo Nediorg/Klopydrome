@@ -42,6 +42,59 @@ final class NavidromeAPITests: XCTestCase {
         XCTAssertEqual(api.token, "rotated-jwt-token")
     }
 
+    func testMovePlaylistTrackUsesOneBasedNavidromeIndices() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockAPIURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        let api = NavidromeAPI(
+            baseURL: URL(string: "http://mock.navidrome.test")!,
+            username: "admin",
+            password: "password",
+            session: session
+        )
+
+        var loginCount = 0
+        var capturedPath: String?
+        var capturedInsertBefore: String?
+
+        MockAPIURLProtocol.requestHandler = { [weak self] request in
+            guard let self, let url = request.url else { throw MockAPIURLProtocol.MockError.badURL }
+            if url.path.hasSuffix("/auth/login") {
+                return self.handleLoginRequest(url: url, count: &loginCount)
+            }
+            if request.httpMethod == "PUT", url.path.contains("/api/playlist/pl-1/tracks/") {
+                capturedPath = url.path
+                if let bodyData = Self.readBody(from: request),
+                   let json = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] {
+                    capturedInsertBefore = json["insert_before"] as? String
+                }
+                let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, Data("{}".utf8))
+            }
+            throw MockAPIURLProtocol.MockError.unhandled(url.path)
+        }
+
+        try await api.movePlaylistTrack(playlistId: "pl-1", fromIndex: 0, toIndex: 2)
+
+        XCTAssertEqual(capturedPath, "/api/playlist/pl-1/tracks/1")
+        XCTAssertEqual(capturedInsertBefore, "3")
+    }
+
+    private static func readBody(from request: URLRequest) -> Data? {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            if read > 0 { data.append(buffer, count: read) } else { break }
+        }
+        return data
+    }
+
     private func handleLoginRequest(url: URL, count: inout Int) -> (HTTPURLResponse, Data) {
         count += 1
         let tokenString = count == 1 ? "stale-jwt-token" : "fresh-jwt-token"

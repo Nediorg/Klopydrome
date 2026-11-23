@@ -62,6 +62,14 @@ public extension SubsonicClient {
         return envelope.similarSongs2?.song ?? envelope.similarSongs?.song ?? []
     }
 
+    func getSong(id: String) async throws -> SubsonicSong {
+        let params = [URLQueryItem(name: "id", value: id)]
+        guard let song = try await requestEnvelope(endpoint: "getSong", params: params).song else {
+            throw SubsonicError.server(code: 70, message: "Song not found")
+        }
+        return song
+    }
+
     func getAlbum(id: String) async throws -> AlbumDetail {
         let params = [URLQueryItem(name: "id", value: id)]
         guard let album = try await requestEnvelope(endpoint: "getAlbum", params: params).album else {
