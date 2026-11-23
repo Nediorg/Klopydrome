@@ -118,7 +118,7 @@ final class MPVPlaybackEngine {
         pump.mpv = handle
         pump.engine = self
         mpv_set_option_string(mpv, "vo", "null")
-        mpv_set_option_string(mpv, "ao", "coreaudio")
+        mpv_set_option_string(mpv, "ao", "coreaudio,null")
         mpv_set_option_string(mpv, "audio-format", "float")
         mpv_set_option_string(mpv, "input-media-keys", "no")
         mpv_set_option_string(mpv, "gapless-audio", "yes")
