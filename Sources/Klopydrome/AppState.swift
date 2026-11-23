@@ -278,6 +278,7 @@ final class AppState {
             }
         }
         setupMemoryPressureMonitoring()
+        TrackFileExporter.shared.configure(environment: trackExportEnvironment)
     }
 
     private func setupMemoryPressureMonitoring() {

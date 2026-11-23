@@ -17,7 +17,6 @@ struct PlaylistDetailView: View {
     @State private var commentHovered = false
     @State var sortOption: PlaylistTrackSort = .playlistOrder
     @State var sortAscending: Bool = true
-    @State var dropTargetPlaylistIndex: Int?
     private let pageSize = 100
 
     private struct ScrollOffsetKey: PreferenceKey {
@@ -150,17 +149,8 @@ struct PlaylistDetailView: View {
                             .equatable()
                             .modifier(PlaylistRowReorderModifier(
                                 isEnabled: isReorderingEnabled,
-                                playlistIndex: item.playlistIndex,
-                                dropTargetIndex: dropTargetPlaylistIndex,
                                 onDrop: { payload in
                                     handlePlaylistReorder(payload, toIndex: item.playlistIndex)
-                                },
-                                onTargetChange: { targeted in
-                                    if targeted {
-                                        dropTargetPlaylistIndex = item.playlistIndex
-                                    } else if dropTargetPlaylistIndex == item.playlistIndex {
-                                        dropTargetPlaylistIndex = nil
-                                    }
                                 }
                             ))
                             .padding(.leading, -22)
@@ -172,17 +162,8 @@ struct PlaylistDetailView: View {
                                 .contentShape(Rectangle())
                                 .modifier(PlaylistRowReorderModifier(
                                     isEnabled: true,
-                                    playlistIndex: rows.count,
-                                    dropTargetIndex: dropTargetPlaylistIndex,
                                     onDrop: { payload in
                                         handlePlaylistReorder(payload, toIndex: rows.count)
-                                    },
-                                    onTargetChange: { targeted in
-                                        if targeted {
-                                            dropTargetPlaylistIndex = rows.count
-                                        } else if dropTargetPlaylistIndex == rows.count {
-                                            dropTargetPlaylistIndex = nil
-                                        }
                                     }
                                 ))
                                 .padding(.leading, -22)

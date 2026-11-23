@@ -38,7 +38,6 @@ struct QueuePanelView: View {
     @Environment(AppState.self) private var app
     @State private var selectedTab: Tab = .upNext
     @State private var confirmingClear = false
-    @State private var dropTargetIndex: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,17 +96,10 @@ struct QueuePanelView: View {
                             .modifier(QueueRowDragDropModifier(
                                 isEnabled: selectedTab == .upNext,
                                 index: index,
-                                songID: song.id,
-                                isDropTarget: dropTargetIndex == index,
+                                song: song,
+                                exportInfo: { app.exportInfo(for: song) },
                                 onDrop: { payload in
                                     handleDrop(payload, targetIndex: index)
-                                },
-                                onTargetChange: { targeted in
-                                    if targeted {
-                                        dropTargetIndex = index
-                                    } else if dropTargetIndex == index {
-                                        dropTargetIndex = nil
-                                    }
                                 }
                             ))
                         }
@@ -115,25 +107,12 @@ struct QueuePanelView: View {
                             Color.clear
                                 .frame(height: 28)
                                 .contentShape(Rectangle())
-                                .dropDestination(for: TrackDragPayload.self) { items, _ in
-                                    guard let payload = items.first else { return false }
-                                    handleDrop(payload, targetIndex: app.player.queue.count)
-                                    return true
-                                } isTargeted: { targeted in
-                                    if targeted {
-                                        dropTargetIndex = app.player.queue.count
-                                    } else if dropTargetIndex == app.player.queue.count {
-                                        dropTargetIndex = nil
+                                .modifier(PlaylistRowReorderModifier(
+                                    isEnabled: true,
+                                    onDrop: { payload in
+                                        handleDrop(payload, targetIndex: app.player.queue.count)
                                     }
-                                }
-                                .overlay(alignment: .top) {
-                                    if dropTargetIndex == app.player.queue.count {
-                                        Rectangle()
-                                            .fill(AMColor.accent)
-                                            .frame(height: 2)
-                                            .padding(.horizontal, 4)
-                                    }
-                                }
+                                ))
                         }
                     }
                     .padding(.horizontal, 6)
@@ -235,24 +214,30 @@ struct QueuePanelView: View {
 private struct QueueRowDragDropModifier: ViewModifier {
     let isEnabled: Bool
     let index: Int
-    let songID: String
-    let isDropTarget: Bool
+    let song: SubsonicSong
+    let exportInfo: () -> TrackDragPayload.ExportInfo
     let onDrop: (TrackDragPayload) -> Void
-    let onTargetChange: (Bool) -> Void
+
+    @State private var isTargeted = false
 
     func body(content: Content) -> some View {
         if isEnabled {
             content
-                .draggable(TrackDragPayload.queueItem(index: index, songID: songID))
+                .trackDraggable(
+                    label: { song.displayTitle },
+                    payload: {
+                        TrackDragPayload.queueItem(index: index, songID: song.id, exportInfo: exportInfo())
+                    }
+                )
                 .dropDestination(for: TrackDragPayload.self) { items, _ in
                     guard let payload = items.first else { return false }
                     onDrop(payload)
                     return true
                 } isTargeted: { targeted in
-                    onTargetChange(targeted)
+                    isTargeted = targeted
                 }
                 .overlay(alignment: .top) {
-                    if isDropTarget {
+                    if isTargeted {
                         Rectangle()
                             .fill(AMColor.accent)
                             .frame(height: 2)

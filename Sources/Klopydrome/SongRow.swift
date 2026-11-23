@@ -36,8 +36,17 @@ struct SongRow: View {
     }
 
     private var dragPayload: TrackDragPayload {
-        if actionTargets.count == 1, let playlist, let playlistIndex {
-            return .playlistTrack(playlistID: playlist.id, index: playlistIndex, songID: song.id)
+        if actionTargets.count == 1 {
+            let info = app.exportInfo(for: song)
+            if let playlist, let playlistIndex {
+                return .playlistTrack(
+                    playlistID: playlist.id,
+                    index: playlistIndex,
+                    songID: song.id,
+                    exportInfo: info
+                )
+            }
+            return .song(song.id, exportInfo: info)
         }
         return .songs(actionTargets.map(\.id))
     }
@@ -86,7 +95,14 @@ struct SongRow: View {
         }
         .frame(height: showAlbum ? 46 : (showsArtist ? 40 : 32))
         .contentShape(Rectangle())
-        .draggable(dragPayload)
+        .trackDraggable(
+            label: {
+                actionTargets.count > 1
+                    ? "\(actionTargets.count) \(Pluralized.song(actionTargets.count))"
+                    : song.displayTitle
+            },
+            payload: { dragPayload }
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(song.displayTitle), \(song.artist ?? "")")
         .accessibilityValue(isCurrentPlaying ? "Playing".localized : "")

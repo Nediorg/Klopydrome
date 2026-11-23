@@ -207,10 +207,9 @@ extension PlaylistDetailView {
 
 struct PlaylistRowReorderModifier: ViewModifier {
     let isEnabled: Bool
-    let playlistIndex: Int
-    let dropTargetIndex: Int?
     let onDrop: (TrackDragPayload) -> Void
-    let onTargetChange: (Bool) -> Void
+
+    @State private var isTargeted = false
 
     func body(content: Content) -> some View {
         if isEnabled {
@@ -220,10 +219,10 @@ struct PlaylistRowReorderModifier: ViewModifier {
                     onDrop(payload)
                     return true
                 } isTargeted: { targeted in
-                    onTargetChange(targeted)
+                    isTargeted = targeted
                 }
                 .overlay(alignment: .top) {
-                    if dropTargetIndex == playlistIndex {
+                    if isTargeted {
                         Rectangle()
                             .fill(AMColor.accent)
                             .frame(height: 2)

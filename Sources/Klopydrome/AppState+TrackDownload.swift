@@ -163,6 +163,16 @@ enum TrackDownload {
     private static let disallowedFilenameCharacters = CharacterSet(charactersIn: "/\\:")
 
     static func transfer(_ remoteURL: URL, to destinationURL: URL) async {
+        do {
+            try await transferFile(remoteURL, to: destinationURL)
+        } catch {
+            let log = Logger(subsystem: "app.klopydrome", category: "track-download")
+            log.error("download failed: \(String(describing: error), privacy: .public)")
+            try? FileManager.default.removeItem(at: destinationURL)
+        }
+    }
+
+    static func transferFile(_ remoteURL: URL, to destinationURL: URL) async throws {
         let log = Logger(subsystem: "app.klopydrome", category: "track-download")
         let progress = Progress()
         progress.kind = .file
@@ -172,10 +182,9 @@ enum TrackDownload {
         let cancelled = OSAllocatedUnfairLock<Bool>(initialState: false)
         progress.cancellationHandler = { cancelled.withLock { $0 = true } }
 
-        FileManager.default.createFile(atPath: destinationURL.path, contents: nil)
-        guard let handle = try? FileHandle(forWritingTo: destinationURL) else {
-            log.error("cannot open \(destinationURL.path, privacy: .public) for writing")
-            return
+        guard FileManager.default.createFile(atPath: destinationURL.path, contents: nil),
+              let handle = try? FileHandle(forWritingTo: destinationURL) else {
+            throw CocoaError(.fileWriteUnknown)
         }
         defer { try? handle.close() }
 
@@ -183,32 +192,30 @@ enum TrackDownload {
         defer { progress.unpublish() }
         log.info("download started → \(destinationURL.lastPathComponent, privacy: .public)")
 
-        do {
-            var written: Int64 = 0
-            for try await chunk in HTTPChunkStreamer.chunks(from: remoteURL) {
-                switch chunk {
-                case .head(let expectedContentLength):
-                    if expectedContentLength > 0 {
-                        progress.totalUnitCount = expectedContentLength
-                    }
-                case .body(let data):
-                    if cancelled.withLock({ $0 }) { throw URLError(.cancelled) }
-                    try handle.write(contentsOf: data)
-                    written += Int64(data.count)
-                    progress.completedUnitCount = written
+        var written: Int64 = 0
+        for try await chunk in HTTPChunkStreamer.chunks(from: remoteURL) {
+            switch chunk {
+            case .head(let expectedContentLength):
+                if expectedContentLength > 0 {
+                    progress.totalUnitCount = expectedContentLength
                 }
+            case .body(let data):
+                if cancelled.withLock({ $0 }) { throw URLError(.cancelled) }
+                try handle.write(contentsOf: data)
+                written += Int64(data.count)
+                progress.completedUnitCount = written
             }
-            if cancelled.withLock({ $0 }) {
-                throw URLError(.cancelled)
-            }
-            if written == 0 {
-                throw URLError(.badServerResponse)
-            }
-            log.info("download finished: \(written) bytes")
-        } catch {
-            log.error("download failed: \(String(describing: error), privacy: .public)")
-            try? FileManager.default.removeItem(at: destinationURL)
         }
+        if cancelled.withLock({ $0 }) {
+            throw URLError(.cancelled)
+        }
+        if written == 0 {
+            throw URLError(.badServerResponse)
+        }
+        guard AudioFileValidator.isValidAudioFile(at: destinationURL) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        log.info("download finished: \(written) bytes")
     }
 
     static func streamToFile(
@@ -271,6 +278,20 @@ enum TrackDownload {
             return "\(sanitized).\(fileExtension(for: song))"
         }
         return sanitized
+    }
+
+    static func exportFilename(for song: SubsonicSong, fileExtension: String? = nil) -> String {
+        let artist = song.artist?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let title = song.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = artist.isEmpty ? title : "\(artist) - \(title)"
+        let sanitizedBase = sanitizeFilename(base)
+        let rawExt = (fileExtension ?? song.suffix ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let sanitizedExt = rawExt.components(separatedBy: disallowedFilenameCharacters)
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+            .lowercased()
+        let ext = sanitizedExt.isEmpty ? "mp3" : sanitizedExt
+        return "\(sanitizedBase).\(ext)"
     }
 
     static func transcodeSettings(in config: ServerConfig) -> (format: String?, maxBitRate: Int)? {

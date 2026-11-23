@@ -54,7 +54,18 @@ struct DownloadedSongRow: View {
             rowBackground
         }
         .contentShape(Rectangle())
-        .draggable(TrackDragPayload.songs(contextMenuSelection.map(\.id)))
+        .trackDraggable(
+            label: {
+                contextMenuSelection.count > 1
+                    ? "\(contextMenuSelection.count) \(Pluralized.song(contextMenuSelection.count))"
+                    : song.displayTitle
+            },
+            payload: {
+                contextMenuSelection.count == 1
+                    ? TrackDragPayload.song(song.id, exportInfo: app.exportInfo(for: song))
+                    : TrackDragPayload.songs(contextMenuSelection.map(\.id))
+            }
+        )
         .onHover { isHovered = $0 }
         .contextMenu {
             SongActionItems(

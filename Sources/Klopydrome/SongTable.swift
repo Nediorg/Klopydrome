@@ -125,9 +125,11 @@ struct SongTable: View {
     private func dragPayload(for song: SubsonicSong) -> TrackDragPayload {
         if selection.contains(song.id) && selection.count > 1 {
             let orderedIDs = displayedSongs.filter { selection.contains($0.id) }.map(\.id)
-            return .songs(orderedIDs.isEmpty ? [song.id] : orderedIDs)
+            if orderedIDs.count > 1 {
+                return .songs(orderedIDs)
+            }
         }
-        return .song(song.id)
+        return .song(song.id, exportInfo: app.exportInfo(for: song, allowRemote: false))
     }
 
     var body: some View {

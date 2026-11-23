@@ -58,6 +58,45 @@ extension AppState {
         return ids.compactMap { songMap[$0] }
     }
 
+    var trackExportEnvironment: TrackFileExporter.Environment {
+        TrackFileExporter.Environment(
+            cache: cache,
+            client: client,
+            allowsNetworkRequests: allowsNetworkRequests,
+            configuredFormat: serverConfig.format,
+            maxBitRate: serverConfig.maxBitRate
+        )
+    }
+
+    func exportInfo(for song: SubsonicSong, allowRemote: Bool = true) -> TrackDragPayload.ExportInfo {
+        TrackFileExporter.shared.updateEnvironment(trackExportEnvironment)
+        let cachedSuffix = cachedStreamSuffix(for: song)
+        let canExport = cachedSuffix != nil || (allowRemote && allowsNetworkRequests && client != nil)
+        let filename = TrackDownload.exportFilename(for: song, fileExtension: cachedSuffix ?? song.suffix)
+        return TrackDragPayload.ExportInfo(
+            suggestedFilename: filename,
+            canExport: canExport,
+            suffix: song.suffix,
+            duration: song.duration
+        )
+    }
+
+    private func cachedStreamSuffix(for song: SubsonicSong) -> String? {
+        guard let cache else { return nil }
+        if !cachedStreamKeysSeeded {
+            Task { await seedCachedStreamKeys() }
+        }
+        guard !cachedStreamKeys.isEmpty else { return nil }
+        for suffix in candidateSuffixes(for: song) {
+            let key = CacheManager.streamKey(songId: song.id, suffix: suffix)
+            let name = cache.fileURL(for: .streams, key: key).lastPathComponent
+            if cachedStreamKeys.contains(name) {
+                return suffix
+            }
+        }
+        return nil
+    }
+
     private func resolveSongsWithFallback(byIDs ids: [String]) async -> [SubsonicSong] {
         let local = resolveSongs(byIDs: ids)
         if local.count == ids.count || !allowsNetworkRequests {
