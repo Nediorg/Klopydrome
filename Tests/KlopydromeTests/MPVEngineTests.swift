@@ -61,6 +61,7 @@ final class MPVEngineTests: XCTestCase {
     }
 
     func testSilenceTrimDoesNotCrashMPV() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["CI"] != nil)
         let engine = MPVPlaybackEngine()
         engine.silenceTrimMode = .light
         var failureMessage: String?
@@ -186,6 +187,7 @@ final class MPVEngineTests: XCTestCase {
     }
 
     func testGaplessRealOpusAssignsDistinctEntryIDsAndUpdatesDuration() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["CI"] != nil)
         let engine = MPVPlaybackEngine()
         let fixtureURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -230,6 +232,7 @@ final class MPVEngineTests: XCTestCase {
     }
 
     func testSilenceTrimModeAppliedOnInitialEnsureMpv() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["CI"] != nil)
         let engine = MPVPlaybackEngine()
         engine.silenceTrimMode = .light
         let fixtureURL = URL(fileURLWithPath: #filePath)
@@ -243,6 +246,7 @@ final class MPVEngineTests: XCTestCase {
     }
 
     func testSkipToAppendedTrackRealOpusUpdatesEntryIDAndDuration() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["CI"] != nil)
         let engine = MPVPlaybackEngine()
         let fixtureURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

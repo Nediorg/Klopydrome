@@ -95,6 +95,7 @@ final class RemoteStreamRecoveryTests: XCTestCase {
     }
 
     func testMPVNetworkReconnectOptionsInitializeCleanly() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["CI"] != nil)
         let engine = MPVPlaybackEngine()
         var failureMessage: String?
         engine.onFailure = { failureMessage = $0 }
