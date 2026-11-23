@@ -97,6 +97,8 @@ extension AppState {
             songId: recording.song.id,
             suffix: effectiveSuffix(for: recording.song)
         )
+        let meta = AudioTagMetadata(song: recording.song, coverArtData: coverArtData(for: recording.song))
+        try? await AudioMetadataWriter.inject(meta, into: temporaryURL)
         do {
             try await cache.moveFile(from: temporaryURL, to: .streams, key: key)
             cachedStreamKeys.insert(cache.fileURL(for: .streams, key: key).lastPathComponent)

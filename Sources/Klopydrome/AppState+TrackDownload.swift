@@ -16,7 +16,12 @@ extension AppState {
 
         if let localURL, client == nil {
             try? FileManager.default.removeItem(at: chosenURL)
-            try? FileManager.default.copyItem(at: localURL, to: chosenURL)
+            if (try? FileManager.default.copyItem(at: localURL, to: chosenURL)) != nil {
+                let meta = AudioTagMetadata(song: song, coverArtData: coverArtData(for: song))
+                Task {
+                    try? await AudioMetadataWriter.inject(meta, into: chosenURL)
+                }
+            }
             return
         }
 
@@ -24,9 +29,11 @@ extension AppState {
         let wantsOriginal = accessory.checkbox.state == .on || transcodeSettings == nil
         let remoteURL: URL?
         var destinationURL = chosenURL
+        var exportMetadata: AudioTagMetadata?
         if wantsOriginal {
             remoteURL = client.downloadURL(songId: song.id, maxBitRate: 0, format: "raw")
         } else if let transcodeSettings {
+            exportMetadata = AudioTagMetadata(song: song, coverArtData: coverArtData(for: song))
             remoteURL = client.streamURL(songId: song.id,
                                          maxBitRate: transcodeSettings.maxBitRate,
                                          format: transcodeSettings.format,
@@ -40,7 +47,7 @@ extension AppState {
         }
         guard let remoteURL else { return }
 
-        Task { await TrackDownload.transfer(remoteURL, to: destinationURL) }
+        Task { await TrackDownload.transfer(remoteURL, to: destinationURL, metadata: exportMetadata) }
     }
 
     func removeFromCache(_ song: SubsonicSong) async {
@@ -89,6 +96,8 @@ extension AppState {
             guard AudioFileValidator.isValidAudioFile(at: temp) else {
                 throw CocoaError(.fileReadCorruptFile)
             }
+            let meta = AudioTagMetadata(song: song, coverArtData: coverArtData(for: song))
+            try? await AudioMetadataWriter.inject(meta, into: temp)
             try await cache.moveFile(from: temp, to: .streams, key: key)
             downloadProgress.removeValue(forKey: song.id)
             cancelledDownloads.remove(song.id)
@@ -157,14 +166,30 @@ extension AppState {
         if downloadedSongs.contains(where: { $0.id == song.id }) { return }
         downloadedSongs.insert(song, at: 0)
     }
+
+    func coverArtData(for song: SubsonicSong) -> Data? {
+        guard let coverArt = song.coverArt, let cache else { return nil }
+        for size in [0, 1200, 720, 360, 240] {
+            let key = CacheManager.coverKey(coverArt: coverArt, size: size)
+            let fileURL = cache.fileURL(for: .covers, key: key)
+            if let data = try? Data(contentsOf: fileURL), !data.isEmpty {
+                return data
+            }
+        }
+        return nil
+    }
 }
 
 enum TrackDownload {
     private static let disallowedFilenameCharacters = CharacterSet(charactersIn: "/\\:")
 
-    static func transfer(_ remoteURL: URL, to destinationURL: URL) async {
+    static func transfer(
+        _ remoteURL: URL,
+        to destinationURL: URL,
+        metadata: AudioTagMetadata? = nil
+    ) async {
         do {
-            try await transferFile(remoteURL, to: destinationURL)
+            try await transferFile(remoteURL, to: destinationURL, metadata: metadata)
         } catch {
             let log = Logger(subsystem: "app.klopydrome", category: "track-download")
             log.error("download failed: \(String(describing: error), privacy: .public)")
@@ -172,7 +197,11 @@ enum TrackDownload {
         }
     }
 
-    static func transferFile(_ remoteURL: URL, to destinationURL: URL) async throws {
+    static func transferFile(
+        _ remoteURL: URL,
+        to destinationURL: URL,
+        metadata: AudioTagMetadata? = nil
+    ) async throws {
         let log = Logger(subsystem: "app.klopydrome", category: "track-download")
         let progress = Progress()
         progress.kind = .file
@@ -215,7 +244,21 @@ enum TrackDownload {
         guard AudioFileValidator.isValidAudioFile(at: destinationURL) else {
             throw CocoaError(.fileReadCorruptFile)
         }
+        await injectMetadataIfNeeded(metadata, into: destinationURL, log: log)
         log.info("download finished: \(written) bytes")
+    }
+
+    private static func injectMetadataIfNeeded(
+        _ metadata: AudioTagMetadata?,
+        into destinationURL: URL,
+        log: Logger
+    ) async {
+        guard let metadata else { return }
+        do {
+            try await AudioMetadataWriter.inject(metadata, into: destinationURL)
+        } catch {
+            log.error("failed injecting metadata: \(String(describing: error), privacy: .public)")
+        }
     }
 
     static func streamToFile(

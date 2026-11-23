@@ -17,6 +17,7 @@ final class TrackFileExporter: Sendable {
         var allowsNetworkRequests: Bool
         var configuredFormat: String?
         var maxBitRate: Int
+        var metadataResolver: (@Sendable (String) async -> AudioTagMetadata?)?
     }
 
     static let shared = TrackFileExporter()
@@ -68,7 +69,9 @@ final class TrackFileExporter: Sendable {
               let remoteURL = downloadRemoteURL(for: songID) else {
             throw TrackFileExportError.unavailable
         }
-        try await TrackDownload.transferFile(remoteURL, to: destinationURL)
+        let env = environment.withLock { $0 }
+        let metadata = await env?.metadataResolver?(songID)
+        try await TrackDownload.transferFile(remoteURL, to: destinationURL, metadata: metadata)
     }
 
     func exportSingleTrack(for payload: TrackDragPayload) async throws -> SentTransferredFile {
@@ -87,8 +90,9 @@ final class TrackFileExporter: Sendable {
 
         Self.pruneExpiredDirectories(in: rootDirectory, olderThan: ttl)
         try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        let metadata = await env.metadataResolver?(songID)
         do {
-            try await Self.materialize(source: source, to: stagedURL)
+            try await Self.materialize(source: source, to: stagedURL, metadata: metadata)
         } catch {
             try? FileManager.default.removeItem(at: stagingDir)
             throw error
@@ -193,12 +197,19 @@ final class TrackFileExporter: Sendable {
         return url.deletingPathExtension().appendingPathExtension(ext).lastPathComponent
     }
 
-    private static func materialize(source: ExportSource, to destination: URL) async throws {
+    private static func materialize(
+        source: ExportSource,
+        to destination: URL,
+        metadata: AudioTagMetadata?
+    ) async throws {
         switch source {
         case .cached(let cachedURL, _):
             try FileManager.default.copyItem(at: cachedURL, to: destination)
+            if let metadata {
+                try? await AudioMetadataWriter.inject(metadata, into: destination)
+            }
         case .remote(let remoteURL, _):
-            try await TrackDownload.transferFile(remoteURL, to: destination)
+            try await TrackDownload.transferFile(remoteURL, to: destination, metadata: metadata)
         }
     }
 

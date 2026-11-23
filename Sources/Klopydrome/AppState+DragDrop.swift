@@ -64,8 +64,18 @@ extension AppState {
             client: client,
             allowsNetworkRequests: allowsNetworkRequests,
             configuredFormat: serverConfig.format,
-            maxBitRate: serverConfig.maxBitRate
+            maxBitRate: serverConfig.maxBitRate,
+            metadataResolver: { [weak self] songID in
+                await MainActor.run { [weak self] in
+                    self?.tagMetadata(for: songID)
+                }
+            }
         )
+    }
+
+    func tagMetadata(for songID: String) -> AudioTagMetadata? {
+        guard let song = resolveSongs(byIDs: [songID]).first else { return nil }
+        return AudioTagMetadata(song: song, coverArtData: coverArtData(for: song))
     }
 
     func exportInfo(for song: SubsonicSong, allowRemote: Bool = true) -> TrackDragPayload.ExportInfo {
