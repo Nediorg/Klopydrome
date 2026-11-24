@@ -39,8 +39,6 @@ jobs:
         with:
           path: vendor/MPVKit-Audio/dist
           key: libmpv-${{ runner.os }}-${{ hashFiles('scripts/build-mpvkit-audio.sh', 'vendor/MPVKit-Audio/mpv.sh', 'vendor/MPVKit-Audio/Makefile', 'vendor/MPVKit-Audio/Package.swift', 'vendor/MPVKit-Audio/Sources/BuildScripts/**') }}
-          restore-keys: |
-            libmpv-${{ runner.os }}-
       - name: Verify cached engine
         id: mpvverify
         # A failed engine build must never poison the cache: the artifacts
